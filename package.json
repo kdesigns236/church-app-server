@@ -1,0 +1,18 @@
+{
+  "name": "cogel-sync-server",
+  "version": "1.0.0",
+  "description": "Real-time sync server for Church of God Evening Light",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
