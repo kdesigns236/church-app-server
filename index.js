@@ -48,7 +48,8 @@ let dataStore = {
   announcements: [],
   events: [],
   siteContent: {},
-  prayerRequests: []
+  prayerRequests: [],
+  chatMessages: []
 };
 
 // Load existing data on startup
@@ -65,6 +66,7 @@ function loadData() {
   } catch (error) {
     console.error('[Server] Error loading data:', error);
   }
+  return dataStore;
 }
 
 // Save data to file
@@ -276,7 +278,7 @@ app.post('/api/sync/push', verifyAdmin, (req, res) => {
       saveData(currentData);
       
       // Broadcast update to all connected clients
-      broadcast({ type, data: newData });
+      broadcastUpdate({ type, data: newData });
       
       console.log(`[Server] Data pushed: ${type}`);
       res.json({ success: true });
