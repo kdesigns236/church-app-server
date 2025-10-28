@@ -195,17 +195,6 @@ function applyUpdate(syncData) {
   saveData();
 }
 
-// Get latest data endpoint
-app.get('/api/sync/:type', (req, res) => {
-  const { type } = req.params;
-  
-  if (!dataStore.hasOwnProperty(type)) {
-    return res.status(404).json({ error: 'Data type not found' });
-  }
-
-  res.json(dataStore[type]);
-});
-
 // File upload endpoint
 app.post('/api/upload', verifyAdmin, upload.single('file'), (req, res) => {
   try {
@@ -254,7 +243,11 @@ app.delete('/api/upload/:filename', verifyAdmin, (req, res) => {
   }
 });
 
-// Sync endpoint - Get all data
+// ========================================
+// IMPORTANT: Specific routes BEFORE parameterized routes!
+// ========================================
+
+// Sync endpoint - Get all data (SPECIFIC ROUTE FIRST!)
 app.get('/api/sync/data', (req, res) => {
   try {
     const data = loadData();
@@ -264,6 +257,17 @@ app.get('/api/sync/data', (req, res) => {
     console.error('[Server] Sync data error:', error);
     res.status(500).json({ error: 'Failed to load data' });
   }
+});
+
+// Get latest data endpoint (PARAMETERIZED ROUTE AFTER!)
+app.get('/api/sync/:type', (req, res) => {
+  const { type } = req.params;
+  
+  if (!dataStore.hasOwnProperty(type)) {
+    return res.status(404).json({ error: 'Data type not found' });
+  }
+
+  res.json(dataStore[type]);
 });
 
 // Push data endpoint - Admin updates
