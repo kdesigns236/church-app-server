@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const cloudinary = require('./config/cloudinary');
+const { splitVideo, cleanupSegments } = require('./utils/videoSplitter');
 
 const app = express();
 const server = http.createServer(app);
@@ -344,6 +345,96 @@ app.post('/api/sermons/upload-video', cloudinaryUpload.single('video'), async (r
 
     res.status(500).json({ 
       error: 'Video upload failed',
+      details: error.message 
+    });
+  }
+});
+
+// Split and upload long video as multiple reels
+app.post('/api/sermons/upload-video-split', cloudinaryUpload.single('video'), async (req, res) => {
+  let segmentFiles = [];
+  
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+
+    const { sermonTitle, pastor, scripture, date } = req.body;
+    
+    console.log('[VideoSplit] Received video:', req.file.originalname);
+    console.log('[VideoSplit] Sermon details:', { sermonTitle, pastor, scripture, date });
+
+    // Split video into 10-minute segments
+    console.log('[VideoSplit] Splitting video into 10-minute reels...');
+    segmentFiles = await splitVideo(req.file.path, 600); // 600 seconds = 10 minutes
+    
+    console.log(`[VideoSplit] Created ${segmentFiles.length} segments`);
+
+    // Upload each segment to Cloudinary
+    const uploadedSegments = [];
+    
+    for (let i = 0; i < segmentFiles.length; i++) {
+      const segmentPath = segmentFiles[i];
+      const episodeNumber = i + 1;
+      
+      console.log(`[VideoSplit] Uploading episode ${episodeNumber}/${segmentFiles.length}...`);
+      
+      try {
+        const result = await cloudinary.uploader.upload(segmentPath, {
+          resource_type: 'video',
+          folder: 'church-sermons',
+          public_id: `sermon-${Date.now()}-ep${episodeNumber}`,
+          transformation: [
+            { quality: 'auto' },
+            { fetch_format: 'auto' }
+          ],
+        });
+
+        uploadedSegments.push({
+          episodeNumber,
+          videoUrl: result.secure_url,
+          publicId: result.public_id,
+          duration: result.duration,
+          format: result.format,
+          title: `${sermonTitle} - Episode ${episodeNumber}`,
+          pastor,
+          scripture,
+          date
+        });
+
+        console.log(`[VideoSplit] ✅ Episode ${episodeNumber} uploaded:`, result.secure_url);
+        
+      } catch (uploadError) {
+        console.error(`[VideoSplit] ❌ Failed to upload episode ${episodeNumber}:`, uploadError);
+        throw uploadError;
+      }
+    }
+
+    // Clean up temporary files
+    fs.unlinkSync(req.file.path); // Original file
+    cleanupSegments(segmentFiles); // Segment files
+
+    console.log(`[VideoSplit] ✅ Successfully uploaded ${uploadedSegments.length} episodes`);
+
+    res.json({ 
+      success: true,
+      segments: uploadedSegments,
+      totalEpisodes: uploadedSegments.length
+    });
+
+  } catch (error) {
+    console.error('[VideoSplit] ❌ Error:', error);
+    
+    // Clean up temp files on error
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    if (segmentFiles.length > 0) {
+      cleanupSegments(segmentFiles);
+    }
+
+    res.status(500).json({ 
+      error: 'Video split and upload failed',
       details: error.message 
     });
   }
