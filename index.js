@@ -2,11 +2,22 @@
 // This server broadcasts admin changes to all connected clients
 
 const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+
 const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*", // Allow all origins for development
+    methods: ["GET", "POST"]
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 
 // Middleware
@@ -49,7 +60,8 @@ let dataStore = {
   events: [],
   siteContent: {},
   prayerRequests: [],
-  chatMessages: []
+  chatMessages: [],
+  users: []
 };
 
 // Load existing data on startup
@@ -82,8 +94,8 @@ function saveData() {
 // Load data on startup
 loadData();
 
-// Store active SSE connections
-const clients = new Set();
+// Store active Socket.io connections
+const connectedClients = new Map(); // socket.id -> socket
 
 // Middleware to verify admin (simple token check)
 const verifyAdmin = (req, res, next) => {
@@ -96,42 +108,27 @@ const verifyAdmin = (req, res, next) => {
   }
 };
 
-// Server-Sent Events endpoint for real-time updates
-app.get('/api/sync/stream', (req, res) => {
-  // Set headers for SSE
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+// Socket.io connection handling for real-time updates
+io.on('connection', (socket) => {
+  console.log(`[Socket.io] Client connected: ${socket.id}. Total clients: ${connectedClients.size + 1}`);
+  connectedClients.set(socket.id, socket);
 
-  // Send initial connection message
-  res.write(`data: ${JSON.stringify({ type: 'connected', message: 'Connected to sync stream' })}\n\n`);
+  // Send initial connection confirmation
+  socket.emit('connected', { message: 'Connected to sync server' });
 
-  // Add client to set
-  clients.add(res);
-  console.log(`[Sync] Client connected. Total clients: ${clients.size}`);
-
-  // Remove client on disconnect
-  req.on('close', () => {
-    clients.delete(res);
-    console.log(`[Sync] Client disconnected. Total clients: ${clients.size}`);
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    connectedClients.delete(socket.id);
+    console.log(`[Socket.io] Client disconnected: ${socket.id}. Total clients: ${connectedClients.size}`);
   });
 });
 
-// Broadcast update to all connected clients
+// Broadcast update to all connected clients via Socket.io
 function broadcastUpdate(syncData) {
-  const message = `data: ${JSON.stringify(syncData)}\n\n`;
+  // Emit to all connected clients
+  io.emit('sync_update', syncData);
   
-  clients.forEach(client => {
-    try {
-      client.write(message);
-    } catch (error) {
-      console.error('[Sync] Error broadcasting to client:', error);
-      clients.delete(client);
-    }
-  });
-
-  console.log(`[Sync] Broadcasted ${syncData.type} ${syncData.action} to ${clients.size} clients`);
+  console.log(`[Socket.io] Broadcasted ${syncData.type} ${syncData.action} to ${connectedClients.size} clients`);
 }
 
 // Push update endpoint (called by admin)
@@ -195,6 +192,17 @@ function applyUpdate(syncData) {
   saveData();
 }
 
+// Get latest data endpoint
+app.get('/api/sync/:type', (req, res) => {
+  const { type } = req.params;
+  
+  if (!dataStore.hasOwnProperty(type)) {
+    return res.status(404).json({ error: 'Data type not found' });
+  }
+
+  res.json(dataStore[type]);
+});
+
 // File upload endpoint
 app.post('/api/upload', verifyAdmin, upload.single('file'), (req, res) => {
   try {
@@ -243,11 +251,7 @@ app.delete('/api/upload/:filename', verifyAdmin, (req, res) => {
   }
 });
 
-// ========================================
-// IMPORTANT: Specific routes BEFORE parameterized routes!
-// ========================================
-
-// Sync endpoint - Get all data (SPECIFIC ROUTE FIRST!)
+// Sync endpoint - Get all data
 app.get('/api/sync/data', (req, res) => {
   try {
     const data = loadData();
@@ -257,17 +261,6 @@ app.get('/api/sync/data', (req, res) => {
     console.error('[Server] Sync data error:', error);
     res.status(500).json({ error: 'Failed to load data' });
   }
-});
-
-// Get latest data endpoint (PARAMETERIZED ROUTE AFTER!)
-app.get('/api/sync/:type', (req, res) => {
-  const { type } = req.params;
-  
-  if (!dataStore.hasOwnProperty(type)) {
-    return res.status(404).json({ error: 'Data type not found' });
-  }
-
-  res.json(dataStore[type]);
 });
 
 // Push data endpoint - Admin updates
@@ -282,7 +275,7 @@ app.post('/api/sync/push', verifyAdmin, (req, res) => {
       saveData(currentData);
       
       // Broadcast update to all connected clients
-      broadcastUpdate({ type, data: newData });
+      broadcast({ type, data: newData });
       
       console.log(`[Server] Data pushed: ${type}`);
       res.json({ success: true });
@@ -299,20 +292,26 @@ app.post('/api/sync/push', verifyAdmin, (req, res) => {
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
-    clients: clients.size,
+    clients: connectedClients.size,
     timestamp: Date.now()
   });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server with Socket.io
+server.listen(PORT, () => {
   console.log(`[Server] Sync server running on port ${PORT}`);
-  console.log(`[Server] SSE endpoint: http://localhost:${PORT}/api/sync/stream`);
+  console.log(`[Server] Socket.io endpoint: http://localhost:${PORT}`);
+  console.log(`[Server] WebSocket support enabled`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('[Server] SIGTERM received, closing server...');
-  clients.forEach(client => client.end());
-  process.exit(0);
+  io.close(() => {
+    console.log('[Server] Socket.io connections closed');
+  });
+  server.close(() => {
+    console.log('[Server] HTTP server closed');
+    process.exit(0);
+  });
 });
