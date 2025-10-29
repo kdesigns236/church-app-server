@@ -8,6 +8,7 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const cloudinary = require('./config/cloudinary');
 
 const app = express();
 const server = http.createServer(app);
@@ -31,6 +32,12 @@ if (!fs.existsSync(UPLOADS_DIR)) {
   fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 }
 
+// Create temp directory for Cloudinary uploads
+const TEMP_DIR = path.join(__dirname, 'uploads', 'temp');
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR, { recursive: true });
+}
+
 // Serve uploaded files statically
 app.use('/uploads', express.static(UPLOADS_DIR));
 
@@ -48,6 +55,12 @@ const storage = multer.diskStorage({
 const upload = multer({ 
   storage: storage,
   limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
+
+// Multer config for Cloudinary (temp storage)
+const cloudinaryUpload = multer({
+  dest: TEMP_DIR,
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit for videos
 });
 
 // Data file path
@@ -285,6 +298,76 @@ app.post('/api/sync/push', verifyAdmin, (req, res) => {
   } catch (error) {
     console.error('[Server] Push error:', error);
     res.status(500).json({ error: 'Push failed' });
+  }
+});
+
+// Cloudinary video upload endpoint
+app.post('/api/sermons/upload-video', cloudinaryUpload.single('video'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No video file provided' });
+    }
+
+    console.log('[Cloudinary] Uploading video:', req.file.originalname);
+
+    // Upload to Cloudinary
+    const result = await cloudinary.uploader.upload(req.file.path, {
+      resource_type: 'video',
+      folder: 'church-sermons',
+      public_id: `sermon-${Date.now()}`,
+      transformation: [
+        { quality: 'auto' },
+        { fetch_format: 'auto' }
+      ],
+    });
+
+    // Delete temporary file
+    fs.unlinkSync(req.file.path);
+
+    console.log('[Cloudinary] ✅ Video uploaded successfully:', result.secure_url);
+
+    res.json({ 
+      success: true,
+      videoUrl: result.secure_url,
+      publicId: result.public_id,
+      duration: result.duration,
+      format: result.format,
+    });
+
+  } catch (error) {
+    console.error('[Cloudinary] ❌ Upload error:', error);
+    
+    // Clean up temp file on error
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({ 
+      error: 'Video upload failed',
+      details: error.message 
+    });
+  }
+});
+
+// Delete video from Cloudinary
+app.delete('/api/sermons/delete-video', async (req, res) => {
+  try {
+    const { publicId } = req.body;
+    
+    if (!publicId) {
+      return res.status(400).json({ error: 'Public ID required' });
+    }
+
+    await cloudinary.uploader.destroy(publicId, { 
+      resource_type: 'video' 
+    });
+
+    console.log('[Cloudinary] ✅ Video deleted:', publicId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Cloudinary] ❌ Delete error:', error);
+    res.status(500).json({ error: 'Delete failed' });
   }
 });
 
