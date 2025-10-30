@@ -16,9 +16,36 @@ const createEmailTransporter = () => {
     auth: {
       user: process.env.EMAIL_USER || 'your-email@gmail.com',
       pass: process.env.EMAIL_PASSWORD || 'your-app-password'
+    },
+    tls: {
+      rejectUnauthorized: false // Allow self-signed certificates
     }
   });
 };
+
+// Test email endpoint
+router.get('/test-email', async (req, res) => {
+  try {
+    const transporter = createEmailTransporter();
+    
+    console.log('[Auth] Testing email with:', {
+      user: process.env.EMAIL_USER,
+      hasPassword: !!process.env.EMAIL_PASSWORD
+    });
+    
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_USER, // Send to yourself
+      subject: 'Test Email - Church App',
+      text: 'If you receive this, email is working!'
+    });
+    
+    res.json({ success: true, message: 'Test email sent!' });
+  } catch (error) {
+    console.error('[Auth] Email test failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Middleware to verify JWT token
 const verifyToken = (req, res, next) => {
@@ -71,11 +98,32 @@ const sendVerificationEmail = async (email, code, name) => {
   };
 
   try {
+    // In development mode, just log the code instead of sending email
+    if (process.env.NODE_ENV === 'development') {
+      console.log('\n========================================');
+      console.log('📧 DEVELOPMENT MODE - EMAIL NOT SENT');
+      console.log('========================================');
+      console.log('To:', email);
+      console.log('Verification Code:', code);
+      console.log('========================================\n');
+      return true;
+    }
+    
     await transporter.sendMail(mailOptions);
     console.log('[Auth] Verification email sent to:', email);
     return true;
   } catch (error) {
     console.error('[Auth] Error sending email:', error);
+    // In development, still return true and log the code
+    if (process.env.NODE_ENV === 'development') {
+      console.log('\n========================================');
+      console.log('⚠️  EMAIL FAILED - SHOWING CODE ANYWAY');
+      console.log('========================================');
+      console.log('To:', email);
+      console.log('Verification Code:', code);
+      console.log('========================================\n');
+      return true;
+    }
     return false;
   }
 };
@@ -108,11 +156,32 @@ const sendPasswordResetEmail = async (email, code, name) => {
   };
 
   try {
+    // In development mode, just log the code instead of sending email
+    if (process.env.NODE_ENV === 'development') {
+      console.log('\n========================================');
+      console.log('🔑 DEVELOPMENT MODE - PASSWORD RESET');
+      console.log('========================================');
+      console.log('To:', email);
+      console.log('Reset Code:', code);
+      console.log('========================================\n');
+      return true;
+    }
+    
     await transporter.sendMail(mailOptions);
     console.log('[Auth] Password reset email sent to:', email);
     return true;
   } catch (error) {
     console.error('[Auth] Error sending email:', error);
+    // In development, still return true and log the code
+    if (process.env.NODE_ENV === 'development') {
+      console.log('\n========================================');
+      console.log('⚠️  EMAIL FAILED - SHOWING RESET CODE');
+      console.log('========================================');
+      console.log('To:', email);
+      console.log('Reset Code:', code);
+      console.log('========================================\n');
+      return true;
+    }
     return false;
   }
 };
@@ -152,11 +221,7 @@ router.post('/register', async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Generate verification code
-    const verificationCode = generateVerificationCode();
-    const verificationExpiry = Date.now() + 15 * 60 * 1000; // 15 minutes
-
-    // Create user object
+    // Create user object (auto-verified, no email verification needed)
     const newUser = {
       id: `user-${Date.now()}`,
       name,
@@ -165,9 +230,7 @@ router.post('/register', async (req, res) => {
       profilePicture,
       phone: phone || '',
       role: 'member',
-      isEmailVerified: false,
-      verificationCode,
-      verificationExpiry,
+      isEmailVerified: true, // Auto-verify
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -176,20 +239,22 @@ router.post('/register', async (req, res) => {
     dataStore.users.push(newUser);
     req.app.locals.saveData();
 
-    // Send verification email
-    const emailSent = await sendVerificationEmail(email, verificationCode, name);
+    // Generate JWT token for immediate login
+    const token = jwt.sign(
+      { userId: newUser.id, email: newUser.email },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
 
-    if (!emailSent) {
-      console.warn('[Auth] Failed to send verification email, but user created');
-    }
+    // Return user data (without password) and token
+    const { password: _, ...userWithoutPassword } = newUser;
 
-    // Return user data (without password)
-    const { password: _, verificationCode: __, ...userWithoutSensitiveData } = newUser;
+    console.log('[Auth] User registered and logged in:', email);
 
     res.status(201).json({
-      message: 'Registration successful! Please check your email for verification code.',
-      user: userWithoutSensitiveData,
-      emailSent
+      message: 'Registration successful!',
+      token,
+      user: userWithoutPassword
     });
 
   } catch (error) {
@@ -314,15 +379,6 @@ router.post('/login', async (req, res) => {
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
-    }
-
-    // Check if email is verified
-    if (!user.isEmailVerified) {
-      return res.status(403).json({ 
-        error: 'Email not verified',
-        message: 'Please verify your email before logging in',
-        requiresVerification: true
-      });
     }
 
     // Verify password

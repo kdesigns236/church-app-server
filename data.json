@@ -5,5 +5,35 @@
   "siteContent": {},
   "prayerRequests": [],
   "chatMessages": [],
-  "users": []
+  "users": [
+    {
+      "id": "user-1761829459656",
+      "name": "kevin simiyu",
+      "email": "mark37898408@gmail.com",
+      "password": "$2b$10$PT.cMho.lXm7ZNnIK1ITPe3RoltQndBMr72QqnVui4jnP2tFxotyS",
+      "profilePicture": "https://res.cloudinary.com/de0zuglgd/image/upload/v1761829457/church-profiles/t27eq6nyxzdlpsjjm3yp.png",
+      "phone": "",
+      "role": "member",
+      "isEmailVerified": false,
+      "verificationCode": "371062",
+      "verificationExpiry": 1761830359656,
+      "createdAt": "2025-10-30T13:04:19.656Z",
+      "updatedAt": "2025-10-30T13:04:19.656Z",
+      "lastLogin": "2025-10-30T14:09:11.568Z"
+    },
+    {
+      "id": "user-1761829851112",
+      "name": "kevin simiyu",
+      "email": "ksimiyu236@gmail.com",
+      "password": "$2b$10$.VT3DkgdMh3VXLAbA6OMkO.VMzNw133.d/74R.BZ.0ILn9tncX1q6",
+      "profilePicture": "https://res.cloudinary.com/de0zuglgd/image/upload/v1761829850/church-profiles/x3thqajc5samerpfacyq.png",
+      "phone": "",
+      "role": "member",
+      "isEmailVerified": false,
+      "verificationCode": "775172",
+      "verificationExpiry": 1761831589104,
+      "createdAt": "2025-10-30T13:10:51.112Z",
+      "updatedAt": "2025-10-30T13:24:49.104Z"
+    }
+  ]
 }
