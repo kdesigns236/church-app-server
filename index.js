@@ -9,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const cloudinary = require('./config/cloudinary');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 const server = http.createServer(app);
@@ -106,6 +107,13 @@ function saveData() {
 
 // Load data on startup
 loadData();
+
+// Make dataStore and saveData available to routes
+app.locals.dataStore = dataStore;
+app.locals.saveData = saveData;
+
+// Mount auth routes
+app.use('/api/auth', authRoutes);
 
 // Store active Socket.io connections
 const connectedClients = new Map(); // socket.id -> socket
