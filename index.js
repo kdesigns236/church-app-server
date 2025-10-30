@@ -216,6 +216,42 @@ app.get('/api/sync/:type', (req, res) => {
   res.json(dataStore[type]);
 });
 
+// Get all sermons (for initial data load)
+app.get('/api/sermons', (req, res) => {
+  console.log('[Server] Fetching all sermons:', dataStore.sermons.length);
+  res.json(dataStore.sermons || []);
+});
+
+// Get all announcements (for initial data load)
+app.get('/api/announcements', (req, res) => {
+  console.log('[Server] Fetching all announcements:', dataStore.announcements.length);
+  res.json(dataStore.announcements || []);
+});
+
+// Get all events (for initial data load)
+app.get('/api/events', (req, res) => {
+  console.log('[Server] Fetching all events:', dataStore.events.length);
+  res.json(dataStore.events || []);
+});
+
+// Get all site content (for initial data load)
+app.get('/api/site-content', (req, res) => {
+  console.log('[Server] Fetching site content');
+  res.json(dataStore.siteContent || {});
+});
+
+// Get all prayer requests (for initial data load)
+app.get('/api/prayer-requests', (req, res) => {
+  console.log('[Server] Fetching all prayer requests:', dataStore.prayerRequests.length);
+  res.json(dataStore.prayerRequests || []);
+});
+
+// Get all chat messages (for initial data load)
+app.get('/api/chat-messages', (req, res) => {
+  console.log('[Server] Fetching all chat messages:', dataStore.chatMessages.length);
+  res.json(dataStore.chatMessages || []);
+});
+
 // File upload endpoint
 app.post('/api/upload', verifyAdmin, upload.single('file'), (req, res) => {
   try {
