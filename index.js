@@ -213,6 +213,12 @@ function applyUpdate(syncData) {
   saveData();
 }
 
+// Get all data endpoint (for initial sync)
+app.get('/api/sync/data', (req, res) => {
+  console.log('[Server] Fetching all data for sync');
+  res.json(dataStore);
+});
+
 // Get latest data endpoint
 app.get('/api/sync/:type', (req, res) => {
   const { type } = req.params;
