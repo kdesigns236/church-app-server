@@ -1,11 +1,72 @@
 {
-  "sermons": [],
-  "announcements": [],
-  "events": [],
+  "sermons": [
+    {
+      "title": "s",
+      "pastor": "ss",
+      "scripture": "",
+      "videoUrl": "https://res.cloudinary.com/de0zuglgd/video/upload/v1761839847/church-sermons/sermon-1761839834317.mp4",
+      "videoPublicId": "church-sermons/sermon-1761839834317",
+      "id": "1761839867573",
+      "date": "2025-10-30",
+      "likes": 0,
+      "comments": [],
+      "isLiked": false,
+      "isSaved": false
+    }
+  ],
+  "announcements": [
+    {
+      "priority": "Low",
+      "title": "s",
+      "category": "s",
+      "content": "s",
+      "id": 1,
+      "date": "2025-10-30"
+    }
+  ],
+  "events": [
+    {
+      "category": "Community",
+      "date": "2025-10-30",
+      "title": "d",
+      "time": "10:00 AM",
+      "location": "d",
+      "description": "d",
+      "id": "1761840432079"
+    }
+  ],
   "siteContent": {},
   "prayerRequests": [],
-  "chatMessages": [],
+  "chatMessages": [
+    {
+      "id": "1761839514588",
+      "userId": "admin-user-001",
+      "senderName": "Admin",
+      "content": "hi",
+      "timestamp": "6:51 PM"
+    },
+    {
+      "id": "1761839525309",
+      "userId": "user-1761829459656",
+      "senderName": "kevin simiyu",
+      "content": "poa",
+      "timestamp": "6:52 PM"
+    }
+  ],
   "users": [
+    {
+      "id": "admin-user-001",
+      "name": "Admin",
+      "email": "admin@church.com",
+      "password": "$2b$10$uPq2tU44O2dO/ceYHZe7G.PjESD0UbRfMPmMRN5q.yBjoVJpEaSYG",
+      "profilePicture": "https://res.cloudinary.com/de0zuglgd/image/upload/v1761829850/church-profiles/x3thqajc5samerpfacyq.png",
+      "phone": "",
+      "role": "admin",
+      "isEmailVerified": true,
+      "createdAt": "2025-10-30T15:13:00.000Z",
+      "updatedAt": "2025-10-30T15:13:00.000Z",
+      "lastLogin": "2025-10-30T15:25:48.303Z"
+    },
     {
       "id": "user-1761829459656",
       "name": "kevin simiyu",
@@ -19,7 +80,7 @@
       "verificationExpiry": 1761830359656,
       "createdAt": "2025-10-30T13:04:19.656Z",
       "updatedAt": "2025-10-30T13:04:19.656Z",
-      "lastLogin": "2025-10-30T14:09:11.568Z"
+      "lastLogin": "2025-10-30T15:51:29.751Z"
     },
     {
       "id": "user-1761829851112",
@@ -34,6 +95,18 @@
       "verificationExpiry": 1761831589104,
       "createdAt": "2025-10-30T13:10:51.112Z",
       "updatedAt": "2025-10-30T13:24:49.104Z"
+    },
+    {
+      "id": "user-1761839957862",
+      "name": "kevin simiyu",
+      "email": "kevindesigns236@gmail.com",
+      "password": "$2b$10$q7fPjy8WcNT/ww0ZaYVr2ePFlf7tCXia0bdezyhMRoHg132YY7mZ.",
+      "profilePicture": "https://res.cloudinary.com/de0zuglgd/image/upload/v1761839956/church-profiles/jxwjo18txsk47gciundy.jpg",
+      "phone": "",
+      "role": "member",
+      "isEmailVerified": true,
+      "createdAt": "2025-10-30T15:59:17.862Z",
+      "updatedAt": "2025-10-30T15:59:17.862Z"
     }
   ]
 }

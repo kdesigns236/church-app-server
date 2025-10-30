@@ -1,6 +1,7 @@
 // Simple Express server for real-time data synchronization
 // This server broadcasts admin changes to all connected clients
 
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -359,6 +360,16 @@ app.post('/api/sermons/upload-video', cloudinaryUpload.single('video'), async (r
     }
 
     console.log('[Cloudinary] Uploading video:', req.file.originalname);
+    console.log('[Cloudinary] File saved to:', req.file.path);
+    console.log('[Cloudinary] File size:', req.file.size, 'bytes');
+
+    // Ensure the file exists before uploading
+    if (!fs.existsSync(req.file.path)) {
+      console.error('[Cloudinary] ❌ File not found at path:', req.file.path);
+      return res.status(500).json({ error: 'File not found after upload' });
+    }
+
+    console.log('[Cloudinary] ✅ File exists, starting Cloudinary upload...');
 
     // Upload to Cloudinary
     const result = await cloudinary.uploader.upload(req.file.path, {
@@ -386,10 +397,17 @@ app.post('/api/sermons/upload-video', cloudinaryUpload.single('video'), async (r
 
   } catch (error) {
     console.error('[Cloudinary] ❌ Upload error:', error);
+    console.error('[Cloudinary] ❌ Error details:', error.message);
+    console.error('[Cloudinary] ❌ Error stack:', error.stack);
     
     // Clean up temp file on error
     if (req.file?.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
+      try {
+        fs.unlinkSync(req.file.path);
+        console.log('[Cloudinary] Cleaned up temp file');
+      } catch (cleanupError) {
+        console.error('[Cloudinary] Failed to cleanup temp file:', cleanupError);
+      }
     }
 
     res.status(500).json({ 
