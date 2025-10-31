@@ -75,6 +75,7 @@ let dataStore = {
   events: [],
   siteContent: {},
   prayerRequests: [],
+  bibleStudies: [],
   chatMessages: [],
   users: []
 };
@@ -259,6 +260,12 @@ app.get('/api/site-content', (req, res) => {
 app.get('/api/prayer-requests', (req, res) => {
   console.log('[Server] Fetching all prayer requests:', dataStore.prayerRequests.length);
   res.json(dataStore.prayerRequests || []);
+});
+
+// Get all bible studies (for initial data load)
+app.get('/api/bible-studies', (req, res) => {
+  console.log('[Server] Fetching all bible studies:', dataStore.bibleStudies?.length || 0);
+  res.json(dataStore.bibleStudies || []);
 });
 
 // Get all chat messages (for initial data load)
