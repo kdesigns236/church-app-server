@@ -462,6 +462,11 @@ server.listen(PORT, () => {
   console.log(`[Server] WebSocket support enabled`);
 });
 
+// Remove server timeout - let uploads take as long as needed (only size limit: 100MB)
+server.timeout = 0; // No timeout
+server.keepAliveTimeout = 0;
+server.headersTimeout = 0;
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   console.log('[Server] SIGTERM received, closing server...');
