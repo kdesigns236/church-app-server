@@ -1,0 +1,8 @@
+{
+  "name": "Church of God Evening Light",
+  "description": "A sophisticated, professional church application with modern features, elegant design, and spiritual elements that reflect the church's mission and values. Features include sermon viewing, event calendars, Bible study tools, and an AI Christian Assistant.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "prompt": ""
+}

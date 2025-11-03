@@ -1,0 +1,153 @@
+
+import React, { useState, useRef, useEffect } from 'react';
+import { SermonReel } from '../components/sermons/SermonReel';
+import { useAppContext } from '../context/AppContext';
+import { useAuth } from '../hooks/useAuth';
+import { CommentModal } from '../components/sermons/CommentModal';
+import { ShareModal } from '../components/sermons/ShareModal';
+import { Sermon } from '../types';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeftIcon } from '../constants/icons';
+
+const SermonsPage: React.FC = () => {
+  const { sermons, handleSermonInteraction, addSermonComment } = useAppContext();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  
+  const [activeSermon, setActiveSermon] = useState<Sermon | null>(null);
+  const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Track current visible sermon
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleScroll = () => {
+      const scrollTop = container.scrollTop;
+      const height = window.innerHeight;
+      const index = Math.round(scrollTop / height);
+      setCurrentIndex(Math.max(0, Math.min(index, sermons.length - 1)));
+    };
+
+    container.addEventListener('scroll', handleScroll, { passive: true });
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [sermons.length]); // Global mute state for all videos
+
+  const handleOpenComments = (sermon: Sermon) => {
+    setActiveSermon(sermon);
+    setIsCommentModalOpen(true);
+  };
+  
+  const handleAddComment = (sermonId: string, content: string) => {
+    if (user) {
+        addSermonComment(sermonId, content, user);
+    }
+  };
+
+  const handleShare = async (sermon: Sermon) => {
+    setActiveSermon(sermon);
+    const shareData = {
+      title: sermon.title,
+      text: `Watch this sermon from Church of God Evening Light: "${sermon.title}" by ${sermon.pastor}.`,
+      url: window.location.href, // In a real app, this would be a deep link to the sermon
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (error) {
+        console.error('Error sharing:', error);
+        // Fallback to modal if user cancels share
+        setIsShareModalOpen(true);
+      }
+    } else {
+      // Fallback for browsers that don't support Web Share API
+      setIsShareModalOpen(true);
+    }
+  };
+
+  return (
+    <>
+      {/* Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        className="fixed top-5 left-5 z-50 p-2.5 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-black/70 transition-all duration-300 shadow-xl active:scale-95"
+        aria-label="Go back"
+      >
+        <ArrowLeftIcon className="w-6 h-6" />
+      </button>
+
+      {/* Sermon Counter */}
+      {sermons.length > 0 && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-sm font-bold shadow-xl">
+          {currentIndex + 1} / {sermons.length}
+        </div>
+      )}
+
+      {/* Reels Container */}
+      <div 
+        ref={containerRef}
+        className="reel-container h-screen w-screen bg-black overflow-y-scroll snap-y snap-mandatory scrollbar-hide" 
+        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch' }}
+      >
+        {sermons.length > 0 ? (
+          sermons.map((sermon, index) => (
+            <SermonReel
+              key={sermon.id}
+              sermon={sermon}
+              onLike={() => handleSermonInteraction(sermon.id, 'like')}
+              onComment={() => handleOpenComments(sermon)}
+              onShare={() => handleShare(sermon)}
+              onSave={() => handleSermonInteraction(sermon.id, 'save')}
+              isMuted={isMuted}
+              onToggleMute={() => setIsMuted(!isMuted)}
+              isActive={index === currentIndex}
+            />
+          ))
+        ) : (
+          <div className="h-screen flex items-center justify-center text-white">
+            <div className="text-center px-6">
+              <div className="w-20 h-20 mx-auto mb-4 text-gray-500">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-xl font-bold mb-2">No Sermons Yet</h3>
+              <p className="text-gray-400 text-sm">Check back later for new content</p>
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <CommentModal 
+        isOpen={isCommentModalOpen}
+        onClose={() => setIsCommentModalOpen(false)}
+        sermon={activeSermon}
+        onAddComment={handleAddComment}
+      />
+
+      <ShareModal
+        isOpen={isShareModalOpen}
+        onClose={() => setIsShareModalOpen(false)}
+        url={window.location.href}
+        title={activeSermon?.title || 'Check out this sermon'}
+      />
+
+      <style>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
+    </>
+  );
+};
+
+export default SermonsPage;

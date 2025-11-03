@@ -1,0 +1,19 @@
+🔧 TEMPORARY FIX: Use Local Server
+
+Your Render server might be cached. To test locally:
+
+1. Edit .env file:
+   Change: VITE_API_URL=https://church-app-server.onrender.com/api
+   To: VITE_API_URL=http://localhost:3001/api
+
+2. Restart your frontend (it should auto-reload)
+
+3. Test chat - should work with local server!
+
+4. To fix Render:
+   - Go to: https://dashboard.render.com
+   - Click "Manual Deploy" → "Clear build cache & deploy"
+   - Wait 2-3 minutes
+   - Change .env back to: VITE_API_URL=https://church-app-server.onrender.com/api
+
+Your local server is already running on port 3001!

@@ -1,0 +1,48 @@
+{
+  "name": "Church of God Evening Light",
+  "short_name": "COGEL",
+  "description": "Connect with the Church of God Evening Light community",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a365d",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "social"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Bible",
+      "short_name": "Bible",
+      "description": "Read the Holy Bible",
+      "url": "/#/bible",
+      "icons": [{ "src": "/favicon.ico", "sizes": "64x64" }]
+    },
+    {
+      "name": "Sermons",
+      "short_name": "Sermons",
+      "description": "Watch sermons",
+      "url": "/#/sermons",
+      "icons": [{ "src": "/favicon.ico", "sizes": "64x64" }]
+    },
+    {
+      "name": "GoLive Chat",
+      "short_name": "Chat",
+      "description": "Join the community chat",
+      "url": "/#/golive",
+      "icons": [{ "src": "/favicon.ico", "sizes": "64x64" }]
+    }
+  ]
+}

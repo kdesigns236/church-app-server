@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Unregister Service Worker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #c82333;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-left: 4px solid #2196F3;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Service Worker Cleanup</h1>
+        <p>This page will help you unregister the service worker and clear the cache.</p>
+        
+        <div class="info">
+            <strong>Why?</strong> The service worker is interfering with development mode.
+            We need to remove it so the app works properly.
+        </div>
+
+        <button onclick="unregisterServiceWorker()">1. Unregister Service Worker</button>
+        <button onclick="clearAllCaches()">2. Clear All Caches</button>
+        <button onclick="clearLocalStorage()">3. Clear LocalStorage</button>
+        <button onclick="doAll()">Do All Steps</button>
+
+        <div id="status" style="margin-top: 20px;"></div>
+
+        <div class="info" style="margin-top: 30px;">
+            <strong>After clicking "Do All Steps":</strong><br>
+            1. Close this tab<br>
+            2. Close ALL browser tabs for localhost:3000<br>
+            3. Reopen http://localhost:3000/<br>
+            4. The app should work without errors!
+        </div>
+    </div>
+
+    <script>
+        const status = document.getElementById('status');
+
+        async function unregisterServiceWorker() {
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (let registration of registrations) {
+                    await registration.unregister();
+                    log('✅ Service worker unregistered');
+                }
+                if (registrations.length === 0) {
+                    log('ℹ️ No service workers found');
+                }
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+
+        async function clearAllCaches() {
+            try {
+                const cacheNames = await caches.keys();
+                for (let cacheName of cacheNames) {
+                    await caches.delete(cacheName);
+                    log('✅ Deleted cache: ' + cacheName);
+                }
+                if (cacheNames.length === 0) {
+                    log('ℹ️ No caches found');
+                }
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+
+        function clearLocalStorage() {
+            try {
+                localStorage.clear();
+                sessionStorage.clear();
+                log('✅ LocalStorage and SessionStorage cleared');
+            } catch (error) {
+                log('❌ Error: ' + error.message);
+            }
+        }
+
+        async function doAll() {
+            status.innerHTML = '<h3>Working...</h3>';
+            await unregisterServiceWorker();
+            await clearAllCaches();
+            clearLocalStorage();
+            status.innerHTML += '<h3 class="success">✅ All Done!</h3>';
+            status.innerHTML += '<p>Now close this tab and reopen the app.</p>';
+        }
+
+        function log(message) {
+            status.innerHTML += '<p>' + message + '</p>';
+        }
+
+        // Auto-run on page load
+        window.addEventListener('load', () => {
+            log('Page loaded. Click "Do All Steps" to clean up.');
+        });
+    </script>
+</body>
+</html>
