@@ -57,7 +57,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, pass: string): Promise<void> => {
     try {
-      const apiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001/api';
+      // Use relative URL in development so Vite proxy works
+      const apiUrl = (import.meta as any).env.VITE_API_URL || '/api';
       const response = await fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
