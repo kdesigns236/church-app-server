@@ -3,6 +3,7 @@ import { HashRouter as Router, Routes, Route, useLocation, Navigate } from 'reac
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import UpdateNotification from './components/UpdateNotification';
 import HomePage from './pages/HomePage';
 import SermonsPage from './pages/SermonsPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
@@ -118,6 +119,8 @@ const App: React.FC = () => {
 
     return (
       <Router>
+        <UpdateNotification />
+        <OfflineIndicator />
         {isAuthenticated ? <ProtectedRoutes /> : <AuthRoutes />}
       </Router>
     );
