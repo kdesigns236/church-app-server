@@ -52,7 +52,7 @@
     <style>
       /* Safe area for mobile devices */
       body {
-        padding-top: env(safe-area-inset-top);
+        padding-top: max(env(safe-area-inset-top), 24px);
         padding-bottom: env(safe-area-inset-bottom);
         padding-left: env(safe-area-inset-left);
         padding-right: env(safe-area-inset-right);
@@ -62,6 +62,7 @@
       #root {
         min-height: 100vh;
         min-height: -webkit-fill-available;
+        padding-top: 24px; /* Extra padding for status bar */
       }
       
       /* Only prevent overscroll on reel pages */

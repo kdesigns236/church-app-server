@@ -57,8 +57,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, pass: string): Promise<void> => {
     try {
-      // Use relative URL in development so Vite proxy works
-      const apiUrl = (import.meta as any).env.VITE_API_URL || '/api';
+      // Use environment variable or fallback to production URL
+      const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+      console.log('[AuthContext] Login API URL:', apiUrl);
       const response = await fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,7 +121,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const profilePictureUrl = cloudinaryData.secure_url;
 
         // Register user with backend
-        const apiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001/api';
+        const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
         const response = await fetch(`${apiUrl}/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
