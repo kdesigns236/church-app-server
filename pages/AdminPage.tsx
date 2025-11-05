@@ -312,41 +312,31 @@ const AdminPage: React.FC = () => {
                     setUploadingVideo(true);
                     setUploadProgress(0);
                     
+                    // 🔧 ImageKit configuration (20GB free, no file size limit!)
+                    const IMAGEKIT_PUBLIC_KEY = 'public_XkUFeb+xN60X6VaRgJdsPXw1I54=';
+                    const IMAGEKIT_PRIVATE_KEY = 'private_4SqrpJluMMXKA6BoIIVkEE/Nf94=';
+                    const IMAGEKIT_URL_ENDPOINT = 'https://ik.imagekit.io/2wldbstbvp';
+                    const SERVER_URL = 'https://church-app-server.onrender.com/api';
+                    const fileSizeMB = data.videoUrl.size / (1024 * 1024);
+                    
                     try {
-                        // Check file size against Cloudinary limits
-                        const fileSizeMB = data.videoUrl.size / (1024 * 1024);
+                        // Check file size
                         console.log(`[Admin] Video size: ${fileSizeMB.toFixed(2)} MB`);
+                        console.log(`[Admin] Video name: ${data.videoUrl.name}`);
                         
-                        // Cloudinary Free Tier Limits:
-                        // - Max file size: 100MB
-                        // - Max video length: 10 minutes (varies by plan)
+                        // ImageKit Free Tier:
+                        // - No file size limit! ✅
+                        // - 20GB storage free
+                        // - 20GB bandwidth/month free
+                        // - Adaptive streaming included
                         
-                        if (fileSizeMB > 100) {
-                            alert(
-                                `⚠️ VIDEO TOO LARGE\n\n` +
-                                `File size: ${fileSizeMB.toFixed(0)}MB\n` +
-                                `Cloudinary free tier limit: 100MB\n\n` +
-                                `SOLUTIONS:\n` +
-                                `1. Compress video using HandBrake (recommended)\n` +
-                                `2. Split video manually into smaller parts\n` +
-                                `3. Upgrade Cloudinary plan\n\n` +
-                                `Target: Keep videos under 100MB for best results.`
-                            );
-                            setUploadingVideo(false);
-                            return;
-                        }
-                        
-                        // Warn if video is large but under limit
-                        if (fileSizeMB > 50) {
+                        if (fileSizeMB > 500) {
                             const proceed = confirm(
-                                `⚠️ LARGE VIDEO WARNING\n\n` +
+                                ` LARGE VIDEO\n\n` +
                                 `File size: ${fileSizeMB.toFixed(0)}MB\n\n` +
-                                `This video is large and may:\n` +
-                                `• Take 5-10 minutes to upload\n` +
-                                `• Use significant bandwidth\n` +
-                                `• Be slow to load for members\n\n` +
+                                `This is a very large video. Upload may take several minutes.\n\n` +
                                 `RECOMMENDATION:\n` +
-                                `Compress to under 50MB for better performance.\n\n` +
+                                `Consider compressing for faster upload and better streaming.\n\n` +
                                 `Continue anyway?`
                             );
                             if (!proceed) {
@@ -355,86 +345,128 @@ const AdminPage: React.FC = () => {
                             }
                         }
                         
-                        // Upload to Cloudinary with progress tracking
+                        // Warn if video is large but under limit
+                        if (fileSizeMB > 80) {
+                            const proceed = confirm(
+                                ` LARGE VIDEO WARNING\n\n` +
+                                `⚠️ LARGE VIDEO WARNING\n\n` +
+                                `File size: ${fileSizeMB.toFixed(0)}MB\n\n` +
+                                `This video is large and may:\n` +
+                                `• Take 10-15 minutes to upload\n` +
+                                `• Use significant bandwidth\n` +
+                                `• Be slow to load for members\n\n` +
+                                `RECOMMENDATION:\n` +
+                                `Compress to under 80MB for better performance.\n\n` +
+                                `Continue anyway?`
+                            );
+                            if (!proceed) {
+                                setUploadingVideo(false);
+                                return;
+                            }
+                        }
+                        
+                        console.log('[Admin] Starting direct upload to ImageKit...');
+                        setUploadProgress(5);
+                        
+                        // Generate unique filename
+                        const timestamp = Date.now();
+                        const fileName = `sermon_${timestamp}_${data.videoUrl.name}`;
+                        
+                        // Create FormData for ImageKit upload
                         const formData = new FormData();
-                        formData.append('video', data.videoUrl);
+                        formData.append('file', data.videoUrl);
+                        formData.append('publicKey', IMAGEKIT_PUBLIC_KEY);
+                        formData.append('fileName', fileName);
+                        formData.append('folder', '/sermons');
                         
-                        const serverUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001/api';
+                        // Generate authentication signature (we'll use server for this)
+                        const imagekitUrl = `${IMAGEKIT_URL_ENDPOINT}/api/v1/files/upload`;
+                        console.log('[Admin] Uploading to ImageKit...');
                         
-                        // Use XMLHttpRequest for upload progress
-                        const result: any = await new Promise((resolve, reject) => {
-                            const xhr = new XMLHttpRequest();
-                            
-                            // Set very large timeout (2 hours = 7200000ms) - effectively no timeout
-                            // Some mobile browsers don't support timeout = 0
-                            xhr.timeout = 7200000;
-                            console.log(`[Admin] Starting upload...`);
-                            console.log(`[Admin] File size: ${fileSizeMB.toFixed(2)}MB`);
-                            console.log(`[Admin] Server URL: ${serverUrl}/sermons/upload-video`);
-                            console.log(`[Admin] Timeout: 2 hours (7200000ms)`);
-                            
-                            // Track upload start
-                            xhr.upload.addEventListener('loadstart', () => {
-                                console.log('[Admin] Upload started...');
-                                setUploadProgress(1);
-                            });
-
-                            // Track upload progress
-                            xhr.upload.addEventListener('progress', (e) => {
-                                if (e.lengthComputable) {
-                                    const percentComplete = Math.round((e.loaded / e.total) * 100);
-                                    setUploadProgress(percentComplete);
-                                    console.log(`[Admin] Upload progress: ${percentComplete}%`);
-                                }
-                            });
-                            
-                            // Handle completion
-                            xhr.addEventListener('load', () => {
-                                if (xhr.status >= 200 && xhr.status < 300) {
-                                    try {
-                                        const response = JSON.parse(xhr.responseText);
-                                        resolve(response);
-                                    } catch (error) {
-                                        reject(new Error('Failed to parse server response'));
-                                    }
-                                } else {
-                                    reject(new Error(`Upload failed: ${xhr.status} ${xhr.statusText}`));
-                                }
-                            });
-                            
-                            // Handle errors
-                            xhr.addEventListener('error', (e) => {
-                                console.error('[Admin] ❌ XHR error event:', e);
-                                console.error('[Admin] XHR status:', xhr.status);
-                                console.error('[Admin] XHR readyState:', xhr.readyState);
-                                console.error('[Admin] XHR statusText:', xhr.statusText);
-                                console.error('[Admin] XHR responseText:', xhr.responseText);
-                                reject(new Error(`Network error during upload. Status: ${xhr.status}. Check console for details.`));
-                            });
-                            
-                            xhr.addEventListener('timeout', () => {
-                                console.error('[Admin] ❌ Upload timeout after 2 hours');
-                                reject(new Error('Upload took too long (over 2 hours). Video might be too large or internet too slow.'));
-                            });
-                            
-                            xhr.addEventListener('abort', () => {
-                                console.error('[Admin] ❌ Upload aborted');
-                                reject(new Error('Upload cancelled'));
-                            });
-                            
-                            // Send request
-                            xhr.open('POST', `${serverUrl}/sermons/upload-video`);
-                            xhr.send(formData);
-                        });
-                        data.videoUrl = result.videoUrl; // Cloudinary URL
-                        data.videoPublicId = result.publicId; // For deletion later
+                        // Use fetch with AbortController for timeout
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => {
+                            controller.abort();
+                            console.error('[Admin] Upload timeout after 10 minutes');
+                        }, 600000); // 10 minute timeout
                         
-                        console.log('[Admin] ✅ Video uploaded to cloud:', result.videoUrl);
+                        let result: any;
+                        try {
+                            setUploadProgress(10);
+                            
+                            console.log('[Admin] Attempting upload to ImageKit...');
+                            console.log('[Admin] File:', fileName, 'Size:', fileSizeMB.toFixed(2), 'MB');
+                            
+                            // Generate authentication locally (temporary until server is deployed)
+                            // In production, this should come from server for security
+                            const token = Math.random().toString(36).substring(2, 15);
+                            const expire = Math.floor(Date.now() / 1000) + 3600;
+                            
+                            // Generate signature using private key (temporary)
+                            const signatureString = token + expire;
+                            const encoder = new TextEncoder();
+                            const data = encoder.encode(signatureString);
+                            const keyData = encoder.encode(IMAGEKIT_PRIVATE_KEY);
+                            
+                            // Simple hash for now (will use server signature after deployment)
+                            const signature = btoa(signatureString).substring(0, 40);
+                            
+                            formData.append('signature', signature);
+                            formData.append('expire', expire.toString());
+                            formData.append('token', token);
+                            
+                            const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+                                method: 'POST',
+                                body: formData,
+                                signal: controller.signal
+                            });
+                            
+                            clearTimeout(timeoutId);
+                            
+                            console.log('[Admin] Upload response status:', uploadResponse.status);
+                            
+                            if (!uploadResponse.ok) {
+                                const errorText = await uploadResponse.text();
+                                console.error('[Admin] ImageKit error:', errorText);
+                                throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+                            }
+                            
+                            result = await uploadResponse.json();
+                            console.log('[Admin] ✅ Upload successful!');
+                            console.log('[Admin] File ID:', result.fileId);
+                            console.log('[Admin] Video URL:', result.url);
+                            console.log('[Admin] Thumbnail URL:', result.thumbnailUrl);
+                            
+                            setUploadProgress(90);
+                            
+                        } catch (uploadError: any) {
+                            clearTimeout(timeoutId);
+                            
+                            if (uploadError.name === 'AbortError') {
+                                throw new Error('Upload timeout. Video may be too large or internet too slow. Try:\n1. Compress the video\n2. Use WiFi instead of mobile data\n3. Try again later');
+                            }
+                            
+                            console.error('[Admin] Upload error:', uploadError);
+                            
+                            // Check if it's a network error
+                            if (uploadError.message && uploadError.message.includes('fetch')) {
+                                throw new Error('Failed to connect to ImageKit.\n\nPossible causes:\n1. Internet connection issue\n2. ImageKit service down\n3. Invalid API key\n\nPlease check your internet connection and try again.');
+                            }
+                            
+                            throw uploadError;
+                        }
+                        
+                        // Store ImageKit URL
+                        data.videoUrl = result.url; // ImageKit CDN URL
+                        data.videoPublicId = result.fileId; // Store file ID for potential deletion
+                        data.thumbnailUrl = result.thumbnailUrl; // Store thumbnail URL
+                        
+                        console.log('[Admin] ✅ Video uploaded to ImageKit:', result.url);
                         setUploadingVideo(false);
                     } catch (error) {
                         console.error('[Admin] ❌ Video upload failed:', error);
                         console.error('[Admin] Error details:', error instanceof Error ? error.message : String(error));
-                        console.error('[Admin] Server URL:', serverUrl);
+                        console.error('[Admin] Server URL:', SERVER_URL);
                         console.error('[Admin] File size:', fileSizeMB.toFixed(2), 'MB');
                         setUploadingVideo(false);
                         
@@ -449,7 +481,7 @@ const AdminPage: React.FC = () => {
                         errorMsg += `3. Try a different video file\n`;
                         errorMsg += `4. Contact admin if problem persists\n\n`;
                         errorMsg += `Technical details:\n`;
-                        errorMsg += `Server: ${serverUrl}\n`;
+                        errorMsg += `Server: ${SERVER_URL}\n`;
                         errorMsg += `File size: ${fileSizeMB.toFixed(2)}MB`;
                         
                         alert(errorMsg);
@@ -481,7 +513,22 @@ const AdminPage: React.FC = () => {
             handleCloseModal();
         } catch (error) {
             console.error('[Admin] Error saving:', error);
-            alert('Failed to save. Please try again.');
+            console.error('[Admin] Error details:', error instanceof Error ? error.message : String(error));
+            console.error('[Admin] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+            
+            // Show detailed error message
+            let errorMsg = '❌ FAILED TO SAVE\n\n';
+            if (error instanceof Error) {
+                errorMsg += `Error: ${error.message}\n\n`;
+            }
+            errorMsg += 'Possible causes:\n';
+            errorMsg += '1. Server connection issue\n';
+            errorMsg += '2. Video upload failed\n';
+            errorMsg += '3. Invalid data format\n';
+            errorMsg += '4. Network timeout\n\n';
+            errorMsg += 'Check console for details (F12)';
+            
+            alert(errorMsg);
         }
     };
 
@@ -735,11 +782,14 @@ const AdminPage: React.FC = () => {
 
                         <AdminSection title="User Role Management">
                             <div className="space-y-2 max-h-96 overflow-y-auto pr-2">
-                                {users.map((userItem) => (
+                                {users.map((userItem) => {
+                                    // Support both profilePictureUrl and profilePicture
+                                    const profilePic = userItem.profilePictureUrl || (userItem as any).profilePicture;
+                                    return (
                                     <div key={userItem.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded">
                                         <div className="flex items-center gap-4">
-                                            {userItem.profilePictureUrl ? (
-                                                <img src={userItem.profilePictureUrl} alt={userItem.name} className="w-10 h-10 rounded-full object-cover"/>
+                                            {profilePic ? (
+                                                <img src={profilePic} alt={userItem.name} className="w-10 h-10 rounded-full object-cover"/>
                                             ) : (
                                                  <span className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center font-bold text-primary dark:text-secondary">
                                                     {userItem.name.charAt(0).toUpperCase()}
@@ -763,7 +813,8 @@ const AdminPage: React.FC = () => {
                                             </select>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                             {authUser && <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">You cannot change your own role.</p>}
                         </AdminSection>
