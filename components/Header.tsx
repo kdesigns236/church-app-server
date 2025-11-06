@@ -18,17 +18,22 @@ const navLinks = [
   { name: 'Contact', path: '/contact', icon: MailIcon },
 ];
 
-const UserAvatar: React.FC<{ user: NonNullable<ReturnType<typeof useAuth>['user']> }> = ({ user }) => (
-    <>
-        {user.profilePictureUrl ? (
-            <img src={user.profilePictureUrl} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
-        ) : (
-            <span className="w-8 h-8 rounded-full bg-secondary text-primary flex items-center justify-center font-bold text-sm">
-                {user.name.charAt(0).toUpperCase()}
-            </span>
-        )}
-    </>
-);
+const UserAvatar: React.FC<{ user: NonNullable<ReturnType<typeof useAuth>['user']> }> = ({ user }) => {
+    // Support both profilePictureUrl and profilePicture field names
+    const profilePic = user.profilePictureUrl || (user as any).profilePicture;
+    
+    return (
+        <>
+            {profilePic ? (
+                <img src={profilePic} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+            ) : (
+                <span className="w-8 h-8 rounded-full bg-secondary text-primary flex items-center justify-center font-bold text-sm">
+                    {user.name.charAt(0).toUpperCase()}
+                </span>
+            )}
+        </>
+    );
+};
 
 
 export const Header: React.FC = () => {

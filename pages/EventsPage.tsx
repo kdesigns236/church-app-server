@@ -2,6 +2,7 @@ import React from 'react';
 import { EventsIcon, LocationMarkerIcon } from '../constants/icons';
 import { useAppContext } from '../context/AppContext';
 import { Event } from '../types';
+import { linkifyWithLineBreaks } from '../utils/linkify';
 
 const categoryColors: Record<Event['category'], string> = {
     Worship: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
@@ -36,7 +37,9 @@ const EventCard: React.FC<{ event: Event }> = ({ event }) => {
                             <LocationMarkerIcon className="w-4 h-4" /> {event.location}
                         </span>
                     </div>
-                    <p className="text-text-main dark:text-gray-300 mt-3 text-sm">{event.description}</p>
+                    <p className="text-text-main dark:text-gray-300 mt-3 text-sm whitespace-pre-wrap">
+                        {linkifyWithLineBreaks(event.description)}
+                    </p>
                 </div>
             </div>
         </div>

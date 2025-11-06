@@ -194,6 +194,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             playsInline
             muted={isMuted}
             src={videoSrc}
+            preload="auto"
+            crossOrigin="anonymous"
             aria-label={`Sermon titled ${sermon.title}`}
             onError={(e) => {
               console.error('Video load error:', e);

@@ -210,7 +210,13 @@ const PastorAiPage: React.FC = () => {
             className={`p-3 rounded-full transition-colors ${isListening ? 'bg-red-600 text-white animate-pulse' : 'text-gray-500 hover:bg-gray-200 dark:hover:bg-gray-700'}`}
             aria-label={isListening ? 'Stop listening' : 'Start listening'}
           >
-            <MicrophoneIcon className="w-5 h-5" />
+            {isListening ? (
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            ) : (
+              <MicrophoneIcon className="w-5 h-5" />
+            )}
           </button>
           <input
             type="text"

@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test ImageKit Upload</title>
+</head>
+<body>
+    <h1>Test ImageKit Upload</h1>
+    <input type="file" id="fileInput" accept="video/*">
+    <button onclick="testUpload()">Upload</button>
+    <div id="result"></div>
+
+    <script>
+        async function testUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Testing...';
+
+            try {
+                // Step 1: Get auth from server
+                console.log('Getting auth...');
+                const authResponse = await fetch('https://church-app-server.onrender.com/api/imagekit-auth');
+                const authData = await authResponse.json();
+                console.log('Auth data:', authData);
+                resultDiv.innerHTML += '<br>✅ Auth received';
+
+                // Step 2: Upload to ImageKit
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('publicKey', 'public_XkUFeb+xN60X6VaRgJdsPXw1I54=');
+                formData.append('fileName', `test_${Date.now()}_${file.name}`);
+                formData.append('folder', '/sermons');
+                formData.append('signature', authData.signature);
+                formData.append('expire', authData.expire.toString());
+                formData.append('token', authData.token);
+
+                console.log('Uploading to ImageKit...');
+                const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                console.log('Upload response:', uploadResponse.status);
+                
+                if (!uploadResponse.ok) {
+                    const errorText = await uploadResponse.text();
+                    console.error('Error:', errorText);
+                    resultDiv.innerHTML += '<br>❌ Upload failed: ' + errorText;
+                    return;
+                }
+
+                const result = await uploadResponse.json();
+                console.log('Success:', result);
+                resultDiv.innerHTML += '<br>✅ Upload successful!';
+                resultDiv.innerHTML += '<br>URL: ' + result.url;
+
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML += '<br>❌ Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

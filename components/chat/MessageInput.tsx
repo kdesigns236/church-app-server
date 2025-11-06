@@ -70,14 +70,17 @@ export const MessageInput: React.FC<MessageInputProps> = ({ text, media, isRecor
                  ) : (
                     <button
                         type="button"
-                        onMouseDown={onStartRecording}
-                        onMouseUp={onStopRecording}
-                        onTouchStart={onStartRecording}
-                        onTouchEnd={onStopRecording}
-                        className={`w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full text-white hover:bg-red-700 transition-all ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-secondary'}`}
+                        onClick={isRecording ? onStopRecording : onStartRecording}
+                        className={`w-11 h-11 flex-shrink-0 flex items-center justify-center rounded-full text-white transition-all ${isRecording ? 'bg-red-600 animate-pulse' : 'bg-secondary hover:bg-gold-light'}`}
                         aria-label={isRecording ? "Stop recording" : "Start recording"}
                     >
-                        <MicrophoneIcon className="w-6 h-6" />
+                        {isRecording ? (
+                            <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                                <rect x="6" y="6" width="12" height="12" rx="2" />
+                            </svg>
+                        ) : (
+                            <MicrophoneIcon className="w-6 h-6" />
+                        )}
                     </button>
                  )}
             </form>

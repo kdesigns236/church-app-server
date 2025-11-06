@@ -41,14 +41,25 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const APP_VERSION = '2.0.0'; // Increment this to clear all localStorage
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    // Clear old localStorage data if app version changed
+    // Clear old localStorage data if app version changed (but preserve user auth)
     React.useEffect(() => {
       const storedVersion = localStorage.getItem('appVersion');
       if (storedVersion !== APP_VERSION) {
         console.log('[AppContext] 🔄 New app version detected, clearing old data...');
+        
+        // Preserve user authentication data
+        const authUser = localStorage.getItem('authUser');
+        const authToken = localStorage.getItem('authToken');
+        
+        // Clear everything
         localStorage.clear();
+        
+        // Restore user auth
+        if (authUser) localStorage.setItem('authUser', authUser);
+        if (authToken) localStorage.setItem('authToken', authToken);
+        
         localStorage.setItem('appVersion', APP_VERSION);
-        console.log('[AppContext] ✅ Old data cleared, starting fresh!');
+        console.log('[AppContext] ✅ Old data cleared, user auth preserved!');
       }
     }, []);
 
@@ -162,32 +173,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           
           console.log('[AppContext] 📡 Fetching from server (last sync was more than 30 seconds ago)...');
           
+          // Add 10-second timeout to prevent app from hanging
+          const fetchWithTimeout = (url: string, timeout = 10000) => {
+            return Promise.race([
+              fetch(url),
+              new Promise<Response>((_, reject) => 
+                setTimeout(() => reject(new Error('Request timeout')), timeout)
+              )
+            ]);
+          };
+          
           const [sermonsRes, announcementsRes, eventsRes, siteContentRes, prayerRequestsRes, bibleStudiesRes, chatMessagesRes] = await Promise.all([
-            fetch(`${apiUrl}/sermons`).catch(err => {
+            fetchWithTimeout(`${apiUrl}/sermons`).catch(err => {
               console.error('[AppContext] Error fetching sermons:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
-            fetch(`${apiUrl}/announcements`).catch(err => {
+            fetchWithTimeout(`${apiUrl}/announcements`).catch(err => {
               console.error('[AppContext] Error fetching announcements:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
-            fetch(`${apiUrl}/events`).catch(err => {
+            fetchWithTimeout(`${apiUrl}/events`).catch(err => {
               console.error('[AppContext] Error fetching events:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
-            fetch(`${apiUrl}/site-content`).catch(err => {
+            fetchWithTimeout(`${apiUrl}/site-content`).catch(err => {
               console.error('[AppContext] Error fetching site content:', err);
               return { ok: false, json: () => Promise.resolve({}) };
             }),
-            fetch(`${apiUrl}/prayer-requests`).catch(err => {
+            fetchWithTimeout(`${apiUrl}/prayer-requests`).catch(err => {
               console.error('[AppContext] Error fetching prayer requests:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
-            fetch(`${apiUrl}/bible-studies`).catch(err => {
+            fetchWithTimeout(`${apiUrl}/bible-studies`).catch(err => {
               console.error('[AppContext] Error fetching bible studies:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
-            fetch(`${apiUrl}/chat-messages`).catch(err => {
+            fetchWithTimeout(`${apiUrl}/chat-messages`).catch(err => {
               console.error('[AppContext] Error fetching chat messages:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
@@ -211,39 +232,69 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             chatMessages: chatMessagesData.length,
           });
 
-          // Update state with server data (always update, even if empty)
-          if (Array.isArray(sermonsData)) {
+          // Only update if we got valid data (not empty from failed fetch)
+          // This prevents clearing localStorage when offline
+          if (Array.isArray(sermonsData) && sermonsData.length > 0) {
             setSermons(sermonsData);
             localStorage.setItem('sermons', JSON.stringify(sermonsData));
+          } else if (sermonsRes.ok && Array.isArray(sermonsData) && sermonsData.length === 0) {
+            // Server explicitly returned empty array (data was deleted)
+            setSermons([]);
+            localStorage.setItem('sermons', JSON.stringify([]));
           }
-          if (Array.isArray(announcementsData)) {
+          
+          if (Array.isArray(announcementsData) && announcementsData.length > 0) {
             setAnnouncements(announcementsData);
             localStorage.setItem('announcements', JSON.stringify(announcementsData));
+          } else if (announcementsRes.ok && Array.isArray(announcementsData) && announcementsData.length === 0) {
+            setAnnouncements([]);
+            localStorage.setItem('announcements', JSON.stringify([]));
           }
-          if (Array.isArray(eventsData)) {
+          
+          if (Array.isArray(eventsData) && eventsData.length > 0) {
             setEvents(eventsData);
             localStorage.setItem('events', JSON.stringify(eventsData));
+          } else if (eventsRes.ok && Array.isArray(eventsData) && eventsData.length === 0) {
+            setEvents([]);
+            localStorage.setItem('events', JSON.stringify([]));
           }
-          if (siteContentData) {
+          
+          if (siteContentData && Object.keys(siteContentData).length > 0) {
             setSiteContent(siteContentData);
             localStorage.setItem('siteContent', JSON.stringify(siteContentData));
           }
-          if (Array.isArray(prayerRequestsData)) {
+          
+          if (Array.isArray(prayerRequestsData) && prayerRequestsData.length > 0) {
             setPrayerRequests(prayerRequestsData);
             localStorage.setItem('prayerRequests', JSON.stringify(prayerRequestsData));
-          }
-          if (Array.isArray(bibleStudiesData)) {
-            setBibleStudies(bibleStudiesData);
-            localStorage.setItem('bibleStudies', JSON.stringify(bibleStudiesData));
-          }
-          if (Array.isArray(chatMessagesData)) {
-            setChatMessages(chatMessagesData);
-            localStorage.setItem('chatMessages', JSON.stringify(chatMessagesData));
+          } else if (prayerRequestsRes.ok && Array.isArray(prayerRequestsData) && prayerRequestsData.length === 0) {
+            setPrayerRequests([]);
+            localStorage.setItem('prayerRequests', JSON.stringify([]));
           }
           
-          // Update last sync timestamp
-          localStorage.setItem('lastSyncTime', Date.now().toString());
-          console.log('[AppContext] ✅ Data synced successfully from server');
+          if (Array.isArray(bibleStudiesData) && bibleStudiesData.length > 0) {
+            setBibleStudies(bibleStudiesData);
+            localStorage.setItem('bibleStudies', JSON.stringify(bibleStudiesData));
+          } else if (bibleStudiesRes.ok && Array.isArray(bibleStudiesData) && bibleStudiesData.length === 0) {
+            setBibleStudies([]);
+            localStorage.setItem('bibleStudies', JSON.stringify([]));
+          }
+          
+          if (Array.isArray(chatMessagesData) && chatMessagesData.length > 0) {
+            setChatMessages(chatMessagesData);
+            localStorage.setItem('chatMessages', JSON.stringify(chatMessagesData));
+          } else if (chatMessagesRes.ok && Array.isArray(chatMessagesData) && chatMessagesData.length === 0) {
+            setChatMessages([]);
+            localStorage.setItem('chatMessages', JSON.stringify([]));
+          }
+          
+          // Update last sync timestamp only if we successfully fetched
+          if (sermonsRes.ok || announcementsRes.ok || eventsRes.ok) {
+            localStorage.setItem('lastSyncTime', Date.now().toString());
+            console.log('[AppContext] ✅ Data synced successfully from server');
+          } else {
+            console.log('[AppContext] ⚠️ No successful fetches, keeping cached data');
+          }
           
         } catch (error) {
           console.error('[AppContext] ❌ Error fetching initial data:', error);

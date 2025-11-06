@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext traffic for all domains (development) -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Explicitly allow Cloudinary -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">cloudinary.com</domain>
+        <domain includeSubdomains="true">api.cloudinary.com</domain>
+        <domain includeSubdomains="true">res.cloudinary.com</domain>
+    </domain-config>
+    
+    <!-- Allow your server -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">church-app-server.onrender.com</domain>
+    </domain-config>
+    
+    <!-- Allow ImageKit -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">imagekit.io</domain>
+        <domain includeSubdomains="true">upload.imagekit.io</domain>
+        <domain includeSubdomains="true">ik.imagekit.io</domain>
+    </domain-config>
+</network-security-config>

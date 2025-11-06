@@ -14,12 +14,22 @@ const SermonsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
-  const [activeSermon, setActiveSermon] = useState<Sermon | null>(null);
+  const [activeSermonId, setActiveSermonId] = useState<string | null>(null);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false); // Start unmuted by default
   const [currentIndex, setCurrentIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Sort sermons by date - newest first
+  const sortedSermons = [...sermons].sort((a, b) => {
+    const dateA = new Date(a.date).getTime();
+    const dateB = new Date(b.date).getTime();
+    return dateB - dateA; // Newest first
+  });
+  
+  // Get active sermon from sermons array (always up-to-date)
+  const activeSermon = activeSermonId ? sortedSermons.find(s => s.id === activeSermonId) || null : null;
 
   // Track current visible sermon
   useEffect(() => {
@@ -30,15 +40,15 @@ const SermonsPage: React.FC = () => {
       const scrollTop = container.scrollTop;
       const height = window.innerHeight;
       const index = Math.round(scrollTop / height);
-      setCurrentIndex(Math.max(0, Math.min(index, sermons.length - 1)));
+      setCurrentIndex(Math.max(0, Math.min(index, sortedSermons.length - 1)));
     };
 
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
-  }, [sermons.length]); // Global mute state for all videos
+  }, [sortedSermons.length]); // Global mute state for all videos
 
   const handleOpenComments = (sermon: Sermon) => {
-    setActiveSermon(sermon);
+    setActiveSermonId(sermon.id);
     setIsCommentModalOpen(true);
   };
   
@@ -49,7 +59,7 @@ const SermonsPage: React.FC = () => {
   };
 
   const handleShare = async (sermon: Sermon) => {
-    setActiveSermon(sermon);
+    setActiveSermonId(sermon.id);
     const shareData = {
       title: sermon.title,
       text: `Watch this sermon from Church of God Evening Light: "${sermon.title}" by ${sermon.pastor}.`,
@@ -82,9 +92,9 @@ const SermonsPage: React.FC = () => {
       </button>
 
       {/* Sermon Counter */}
-      {sermons.length > 0 && (
+      {sortedSermons.length > 0 && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-sm font-bold shadow-xl">
-          {currentIndex + 1} / {sermons.length}
+          {currentIndex + 1} / {sortedSermons.length}
         </div>
       )}
 
@@ -94,8 +104,8 @@ const SermonsPage: React.FC = () => {
         className="reel-container h-screen w-screen bg-black overflow-y-scroll snap-y snap-mandatory scrollbar-hide" 
         style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch' }}
       >
-        {sermons.length > 0 ? (
-          sermons.map((sermon, index) => (
+        {sortedSermons.length > 0 ? (
+          sortedSermons.map((sermon, index) => (
             <SermonReel
               key={sermon.id}
               sermon={sermon}

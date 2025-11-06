@@ -4,6 +4,7 @@ import { ChatMessage } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
 import { ReplyIcon, CloseIcon } from '../../constants/icons';
 import { AudioPlayer } from './AudioPlayer';
+import { linkifyWithLineBreaks } from '../../utils/linkify';
 
 interface MessageBubbleProps {
     message: ChatMessage;
@@ -77,7 +78,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, 
                 
                 {message.content && (
                     <p className="text-sm leading-relaxed px-3 pb-1 pt-2" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {message.content}
+                        {linkifyWithLineBreaks(message.content)}
                     </p>
                 )}
                 

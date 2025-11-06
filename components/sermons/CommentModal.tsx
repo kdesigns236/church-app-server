@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Sermon } from '../../types';
 import { CloseIcon, SendIcon } from '../../constants/icons';
 import { useAuth } from '../../hooks/useAuth';
+import { linkifyWithLineBreaks } from '../../utils/linkify';
 
 interface CommentModalProps {
   isOpen: boolean;
@@ -50,7 +51,9 @@ export const CommentModal: React.FC<CommentModalProps> = ({ isOpen, onClose, ser
                     <p className="font-bold text-primary dark:text-secondary">{comment.user.name}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">{comment.timestamp}</p>
                   </div>
-                  <p className="text-text-main dark:text-gray-200 mt-1">{comment.content}</p>
+                  <p className="text-text-main dark:text-gray-200 mt-1 whitespace-pre-wrap">
+                    {linkifyWithLineBreaks(comment.content)}
+                  </p>
                 </div>
               </div>
             ))

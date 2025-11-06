@@ -121,6 +121,11 @@ const ChatPage: React.FC = () => {
         }
     };
 
+    const handleStartVideoCall = () => {
+        // Navigate to our built-in video call page
+        navigate('/video-call');
+    };
+
 
     return (
         <div 
@@ -130,15 +135,26 @@ const ChatPage: React.FC = () => {
                 backgroundRepeat: 'repeat',
             }}
         >
-            <header className="flex-shrink-0 bg-primary dark:bg-gray-900 text-white shadow-md p-4 flex items-center gap-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
-                <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/10">
-                    <ArrowLeftIcon className="w-6 h-6" />
-                </button>
-                <ChatBubbleIcon className="h-8 w-8 text-secondary" />
-                <div>
-                    <h1 className="text-xl font-bold font-serif">Community Chat</h1>
-                    <p className="text-sm text-gray-300">Mary, Joseph, Faith, and you</p>
+            <header className="flex-shrink-0 bg-primary dark:bg-gray-900 text-white shadow-md p-4 flex items-center justify-between gap-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/10">
+                        <ArrowLeftIcon className="w-6 h-6" />
+                    </button>
+                    <ChatBubbleIcon className="h-8 w-8 text-secondary" />
+                    <div>
+                        <h1 className="text-xl font-bold font-serif">Community Chat</h1>
+                        <p className="text-sm text-gray-300">Mary, Joseph, Faith, and you</p>
+                    </div>
                 </div>
+                <button 
+                    onClick={handleStartVideoCall}
+                    className="p-2.5 rounded-full bg-secondary hover:bg-gold-light transition-colors"
+                    aria-label="Start video call"
+                >
+                    <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                </button>
             </header>
 
             <MessageList onReply={setReplyingTo} />

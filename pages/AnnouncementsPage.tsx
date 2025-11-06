@@ -3,6 +3,7 @@ import React from 'react';
 import { AnnouncementsIcon } from '../constants/icons';
 import { Announcement, Priority } from '../types';
 import { useAppContext } from '../context/AppContext';
+import { linkifyWithLineBreaks } from '../utils/linkify';
 
 const priorityStyles: Record<Priority, string> = {
     High: 'border-red-500',
@@ -22,7 +23,9 @@ const AnnouncementCard: React.FC<{ announcement: Announcement }> = ({ announceme
                 </div>
                 <span className="text-sm text-gray-500 dark:text-gray-400">{new Date(announcement.date).toLocaleDateString()}</span>
             </div>
-            <p className="text-text-main dark:text-gray-300 mt-4">{announcement.content}</p>
+            <p className="text-text-main dark:text-gray-300 mt-4 whitespace-pre-wrap">
+                {linkifyWithLineBreaks(announcement.content)}
+            </p>
         </div>
     </div>
 );

@@ -20,9 +20,12 @@ class WebSocketService {
 
   constructor() {
     // @ts-ignore - Vite env variable
-    this.apiUrl = import.meta.env?.VITE_API_URL || 'http://localhost:3001/api';
+    // Use production URL as fallback for mobile builds
+    this.apiUrl = import.meta.env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
     // Remove /api suffix for Socket.io connection (Socket.io uses its own /socket.io/ path)
     this.serverUrl = this.apiUrl.replace('/api', '');
+    console.log('[WebSocket] API URL:', this.apiUrl);
+    console.log('[WebSocket] Server URL:', this.serverUrl);
   }
 
   // Connect to WebSocket server
@@ -141,22 +144,42 @@ class WebSocketService {
     };
 
     try {
+      const token = localStorage.getItem('authToken');
+      
+      if (!token) {
+        console.error('[WebSocket] ❌ No auth token found! User might not be logged in.');
+        throw new Error('Authentication required. Please log in again.');
+      }
+
+      console.log(`[WebSocket] Pushing ${syncData.type} update to server...`);
+      console.log(`[WebSocket] API URL: ${this.apiUrl}/sync/push`);
+      console.log(`[WebSocket] Has token: ${!!token}`);
+
       const response = await fetch(`${this.apiUrl}/sync/push`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('authToken') || 'dev-token'}`
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify(dataWithTimestamp)
       });
 
       if (!response.ok) {
-        throw new Error(`Push failed: ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`[WebSocket] ❌ Server error: ${response.status} ${response.statusText}`);
+        console.error(`[WebSocket] ❌ Error details: ${errorText}`);
+        
+        if (response.status === 401) {
+          throw new Error('Authentication failed. Please log in again.');
+        }
+        
+        throw new Error(`Server error: ${response.status} - ${errorText || response.statusText}`);
       }
 
-      console.log(`[WebSocket] Update pushed successfully: ${syncData.type}`);
+      console.log(`[WebSocket] ✅ Update pushed successfully: ${syncData.type}`);
     } catch (error) {
-      console.error('[WebSocket] Push failed:', error);
+      console.error('[WebSocket] ❌ Push failed:', error);
+      console.error('[WebSocket] ❌ Error details:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -244,6 +267,14 @@ class WebSocketService {
   // Check if connected
   isConnected(): boolean {
     return this.socket?.connected || false;
+  }
+
+  // Get socket instance for direct access (for WebRTC signaling)
+  getSocket(): Socket {
+    if (!this.socket) {
+      this.connect();
+    }
+    return this.socket!;
   }
 }
 

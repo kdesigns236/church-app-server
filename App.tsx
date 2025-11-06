@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, lazy, Suspense, useEffect } from 'react';
 import { HashRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
@@ -18,8 +18,11 @@ import GoLivePage from './pages/GoLivePage';
 import ProfilePage from './pages/ProfilePage';
 import PastorAiPage from './pages/PastorAiPage';
 import JsonConverterPage from './pages/JsonConverterPage';
+import VideoCallPage from './pages/VideoCallPage';
 import { useAuth } from './hooks/useAuth';
 import { LoadingScreen } from './components/LoadingScreen';
+import { localNotificationService } from './services/localNotificationService';
+import { websocketService } from './services/websocketService';
 
 // Lazy load the Bible page because of its large data dependency
 const BiblePage = lazy(() => import('./pages/BiblePage'));
@@ -34,7 +37,7 @@ const LoadingFallback: React.FC = () => (
 
 const PageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const location = useLocation();
-    const showFooter = !['/sermons', '/admin', '/chat', '/bible', '/giving', '/pastor-ai'].includes(location.pathname);
+    const showFooter = !['/sermons', '/admin', '/chat', '/bible', '/giving', '/pastor-ai', '/video-call'].includes(location.pathname);
     
     return (
         <div className="flex flex-col min-h-screen">
@@ -57,7 +60,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const ProtectedRoutes: React.FC = () => {
     const location = useLocation();
 
-    const showHeader = !['/sermons', '/chat', '/pastor-ai'].includes(location.pathname);
+    const showHeader = !['/sermons', '/chat', '/pastor-ai', '/video-call'].includes(location.pathname);
 
     return (
         <>
@@ -78,6 +81,7 @@ const ProtectedRoutes: React.FC = () => {
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/profile" element={<ProfilePage />} />
                         <Route path="/pastor-ai" element={<PastorAiPage />} />
+                        <Route path="/video-call" element={<VideoCallPage />} />
                         <Route path="/admin/json-converter" element={
                             <AdminRoute>
                                 <JsonConverterPage />
@@ -111,7 +115,39 @@ const AuthRoutes: React.FC = () => (
 
 
 const App: React.FC = () => {
-    const { isLoading, isAuthenticated } = useAuth();
+    const { isLoading, isAuthenticated, user } = useAuth();
+    const [meetingNotification, setMeetingNotification] = useState<{ userName: string; roomId: string; message: string } | null>(null);
+    
+    // Initialize Local Notifications when user logs in
+    useEffect(() => {
+        if (user) {
+            localNotificationService.initialize();
+            localNotificationService.setupNotificationHandlers();
+        }
+    }, [user]);
+
+    // Listen for meeting notifications
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const handleMeetingNotification = (data: { userName: string; roomId: string; message: string }) => {
+            console.log('[App] Meeting notification:', data);
+            setMeetingNotification(data);
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                setMeetingNotification(null);
+            }, 10000);
+        };
+
+        // Subscribe to meeting notifications via websocket
+        const socket = websocketService.getSocket();
+        socket.on('meeting-notification', handleMeetingNotification);
+        
+        return () => {
+            socket.off('meeting-notification', handleMeetingNotification);
+        };
+    }, [isAuthenticated]);
     
     if (isLoading) {
         return <LoadingScreen />;
@@ -121,6 +157,29 @@ const App: React.FC = () => {
       <Router>
         <UpdateNotification />
         <OfflineIndicator />
+        
+        {/* Meeting Notification Banner */}
+        {meetingNotification && (
+          <a
+            href="/#/video-call"
+            onClick={() => setMeetingNotification(null)}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 animate-slide-down cursor-pointer"
+          >
+            <div className="bg-secondary text-primary rounded-lg shadow-2xl p-4 flex items-center gap-3 hover:bg-gold-light transition-colors">
+              <svg className="w-10 h-10 text-primary animate-pulse flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+              <div className="flex-1">
+                <p className="font-bold text-lg">{meetingNotification.userName} is in a meeting</p>
+                <p className="text-sm opacity-90">Tap anywhere to join!</p>
+              </div>
+              <svg className="w-6 h-6 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </a>
+        )}
+        
         {isAuthenticated ? <ProtectedRoutes /> : <AuthRoutes />}
       </Router>
     );

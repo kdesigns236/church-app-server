@@ -2,6 +2,7 @@
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User } from '../types';
+import { apiClient } from '../utils/apiClient';
 import { websocketService } from '../services/websocketService';
 
 export interface AuthContextType {
@@ -39,7 +40,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         // Check for a currently logged-in user
         const storedUser = localStorage.getItem('authUser');
         if (storedUser) {
-          setUser(JSON.parse(storedUser));
+          const parsedUser = JSON.parse(storedUser);
+          // Map backend field to frontend if needed
+          const mappedUser = {
+            ...parsedUser,
+            profilePictureUrl: parsedUser.profilePicture || parsedUser.profilePictureUrl
+          };
+          setUser(mappedUser);
         }
       } catch (error) {
         console.error("Failed to parse data from localStorage", error);
@@ -60,9 +67,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Use environment variable or fallback to production URL
       const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
       console.log('[AuthContext] Login API URL:', apiUrl);
-      const response = await fetch(`${apiUrl}/auth/login`, {
+      const response = await apiClient.fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pass })
       });
 
@@ -75,12 +81,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('[AuthContext] Login response:', data);
       console.log('[AuthContext] User role:', data.user?.role);
 
+      // Map backend field names to frontend (profilePicture -> profilePictureUrl)
+      const mappedUser = {
+        ...data.user,
+        profilePictureUrl: data.user.profilePicture || data.user.profilePictureUrl
+      };
+
       // Save token and user data
       localStorage.setItem('authToken', data.token);
-      localStorage.setItem('authUser', JSON.stringify(data.user));
-      setUser(data.user);
+      localStorage.setItem('authUser', JSON.stringify(mappedUser));
+      setUser(mappedUser);
       
-      console.log('[AuthContext] User set in state:', data.user);
+      console.log('[AuthContext] User set in state:', mappedUser);
 
     } catch (error) {
       throw error;
@@ -122,9 +134,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // Register user with backend
         const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
-        const response = await fetch(`${apiUrl}/auth/register`, {
+        const response = await apiClient.fetch(`${apiUrl}/auth/register`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             name,
             email,

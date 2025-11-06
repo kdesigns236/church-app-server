@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { PrayerRequestForm } from '../components/PrayerRequestForm';
 import { SermonsIcon, EventsIcon, BibleIcon, GivingIcon } from '../constants/icons';
 import { useAppContext } from '../context/AppContext';
+import { linkifyWithLineBreaks } from '../utils/linkify';
 
 const QuickAccessCard: React.FC<{ icon: React.ElementType; title: string; description: string; to: string; }> = ({ icon: Icon, title, description, to }) => (
     <Link to={to} className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col items-center text-center animate-slide-in-up">
@@ -88,7 +89,9 @@ const HomePage: React.FC = () => {
                                 announcements.slice(0, 2).map((announcement, index) => (
                                     <div key={announcement.id} className={index > 0 ? "border-t border-gray-200 dark:border-gray-700 pt-4" : ""}>
                                         <h4 className="font-bold text-primary dark:text-secondary">{announcement.title}</h4>
-                                        <p className="text-sm text-text-main dark:text-gray-300">{announcement.content}</p>
+                                        <p className="text-sm text-text-main dark:text-gray-300 whitespace-pre-wrap">
+                                            {linkifyWithLineBreaks(announcement.content)}
+                                        </p>
                                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{announcement.date}</p>
                                     </div>
                                 ))

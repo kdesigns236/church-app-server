@@ -3,6 +3,7 @@ import type { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStud
 import { CloseIcon, UsersIcon, SermonsIcon, EventsIcon, GivingIcon } from '../constants/icons';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
+import { CapacitorHttp } from '@capacitor/core';
 import { uploadService } from '../services/uploadService';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
@@ -312,11 +313,9 @@ const AdminPage: React.FC = () => {
                     setUploadingVideo(true);
                     setUploadProgress(0);
                     
-                    // 🔧 ImageKit configuration (20GB free, no file size limit!)
-                    const IMAGEKIT_PUBLIC_KEY = 'public_XkUFeb+xN60X6VaRgJdsPXw1I54=';
-                    const IMAGEKIT_PRIVATE_KEY = 'private_4SqrpJluMMXKA6BoIIVkEE/Nf94=';
-                    const IMAGEKIT_URL_ENDPOINT = 'https://ik.imagekit.io/2wldbstbvp';
-                    const SERVER_URL = 'https://church-app-server.onrender.com/api';
+                    // 🔧 Cloudinary configuration with optimization
+                    const CLOUDINARY_CLOUD_NAME = 'de0zuglgd';
+                    const CLOUDINARY_UPLOAD_PRESET = 'church_sermons';
                     const fileSizeMB = data.videoUrl.size / (1024 * 1024);
                     
                     try {
@@ -324,64 +323,18 @@ const AdminPage: React.FC = () => {
                         console.log(`[Admin] Video size: ${fileSizeMB.toFixed(2)} MB`);
                         console.log(`[Admin] Video name: ${data.videoUrl.name}`);
                         
-                        // ImageKit Free Tier:
-                        // - No file size limit! ✅
-                        // - 20GB storage free
-                        // - 20GB bandwidth/month free
-                        // - Adaptive streaming included
-                        
-                        if (fileSizeMB > 500) {
-                            const proceed = confirm(
-                                ` LARGE VIDEO\n\n` +
-                                `File size: ${fileSizeMB.toFixed(0)}MB\n\n` +
-                                `This is a very large video. Upload may take several minutes.\n\n` +
-                                `RECOMMENDATION:\n` +
-                                `Consider compressing for faster upload and better streaming.\n\n` +
-                                `Continue anyway?`
-                            );
-                            if (!proceed) {
-                                setUploadingVideo(false);
-                                return;
-                            }
-                        }
-                        
-                        // Warn if video is large but under limit
-                        if (fileSizeMB > 80) {
-                            const proceed = confirm(
-                                ` LARGE VIDEO WARNING\n\n` +
-                                `⚠️ LARGE VIDEO WARNING\n\n` +
-                                `File size: ${fileSizeMB.toFixed(0)}MB\n\n` +
-                                `This video is large and may:\n` +
-                                `• Take 10-15 minutes to upload\n` +
-                                `• Use significant bandwidth\n` +
-                                `• Be slow to load for members\n\n` +
-                                `RECOMMENDATION:\n` +
-                                `Compress to under 80MB for better performance.\n\n` +
-                                `Continue anyway?`
-                            );
-                            if (!proceed) {
-                                setUploadingVideo(false);
-                                return;
-                            }
-                        }
-                        
-                        console.log('[Admin] Starting direct upload to ImageKit...');
+                        // Cloudinary accepts videos up to 100MB on free tier
+                        // We'll upload and let Cloudinary handle optimization
+                        console.log('[Admin] Starting upload to Cloudinary...');
                         setUploadProgress(5);
                         
-                        // Generate unique filename
-                        const timestamp = Date.now();
-                        const fileName = `sermon_${timestamp}_${data.videoUrl.name}`;
-                        
-                        // Create FormData for ImageKit upload
+                        // Create FormData
                         const formData = new FormData();
                         formData.append('file', data.videoUrl);
-                        formData.append('publicKey', IMAGEKIT_PUBLIC_KEY);
-                        formData.append('fileName', fileName);
-                        formData.append('folder', '/sermons');
-                        
-                        // Generate authentication signature (we'll use server for this)
-                        const imagekitUrl = `${IMAGEKIT_URL_ENDPOINT}/api/v1/files/upload`;
-                        console.log('[Admin] Uploading to ImageKit...');
+                        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+                        formData.append('folder', 'church-sermons');
+                        // Add transformation for better streaming
+                        formData.append('eager', 'q_auto,f_auto');
                         
                         // Use fetch with AbortController for timeout
                         const controller = new AbortController();
@@ -392,81 +345,54 @@ const AdminPage: React.FC = () => {
                         
                         let result: any;
                         try {
-                            setUploadProgress(10);
+                            setUploadProgress(20);
                             
-                            console.log('[Admin] Attempting upload to ImageKit...');
-                            console.log('[Admin] File:', fileName, 'Size:', fileSizeMB.toFixed(2), 'MB');
+                            console.log('[Admin] Uploading to Cloudinary...');
                             
-                            // Generate authentication locally (temporary until server is deployed)
-                            // In production, this should come from server for security
-                            const token = Math.random().toString(36).substring(2, 15);
-                            const expire = Math.floor(Date.now() / 1000) + 3600;
+                            // Simulate progress
+                            const progressInterval = setInterval(() => {
+                                setUploadProgress(prev => prev < 80 ? prev + 5 : prev);
+                            }, 1000);
                             
-                            // Generate signature using private key (temporary)
-                            const signatureString = token + expire;
-                            const encoder = new TextEncoder();
-                            const data = encoder.encode(signatureString);
-                            const keyData = encoder.encode(IMAGEKIT_PRIVATE_KEY);
-                            
-                            // Simple hash for now (will use server signature after deployment)
-                            const signature = btoa(signatureString).substring(0, 40);
-                            
-                            formData.append('signature', signature);
-                            formData.append('expire', expire.toString());
-                            formData.append('token', token);
-                            
-                            const uploadResponse = await fetch('https://upload.imagekit.io/api/v1/files/upload', {
+                            // Simple fetch (works on mobile)
+                            const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`, {
                                 method: 'POST',
                                 body: formData,
                                 signal: controller.signal
                             });
                             
+                            clearInterval(progressInterval);
                             clearTimeout(timeoutId);
-                            
-                            console.log('[Admin] Upload response status:', uploadResponse.status);
                             
                             if (!uploadResponse.ok) {
                                 const errorText = await uploadResponse.text();
-                                console.error('[Admin] ImageKit error:', errorText);
-                                throw new Error(`Upload failed: ${uploadResponse.status} - ${errorText}`);
+                                console.error('[Admin] Cloudinary error:', errorText);
+                                throw new Error(`Upload failed: ${uploadResponse.status}`);
                             }
                             
                             result = await uploadResponse.json();
                             console.log('[Admin] ✅ Upload successful!');
-                            console.log('[Admin] File ID:', result.fileId);
-                            console.log('[Admin] Video URL:', result.url);
-                            console.log('[Admin] Thumbnail URL:', result.thumbnailUrl);
+                            console.log('[Admin] Public ID:', result.public_id);
+                            console.log('[Admin] Video URL:', result.secure_url);
                             
                             setUploadProgress(90);
                             
                         } catch (uploadError: any) {
                             clearTimeout(timeoutId);
                             
-                            if (uploadError.name === 'AbortError') {
-                                throw new Error('Upload timeout. Video may be too large or internet too slow. Try:\n1. Compress the video\n2. Use WiFi instead of mobile data\n3. Try again later');
-                            }
-                            
                             console.error('[Admin] Upload error:', uploadError);
-                            
-                            // Check if it's a network error
-                            if (uploadError.message && uploadError.message.includes('fetch')) {
-                                throw new Error('Failed to connect to ImageKit.\n\nPossible causes:\n1. Internet connection issue\n2. ImageKit service down\n3. Invalid API key\n\nPlease check your internet connection and try again.');
-                            }
-                            
                             throw uploadError;
                         }
                         
-                        // Store ImageKit URL
-                        data.videoUrl = result.url; // ImageKit CDN URL
-                        data.videoPublicId = result.fileId; // Store file ID for potential deletion
-                        data.thumbnailUrl = result.thumbnailUrl; // Store thumbnail URL
+                        // Store Cloudinary URL
+                        data.videoUrl = result.secure_url;
+                        data.videoPublicId = result.public_id;
                         
-                        console.log('[Admin] ✅ Video uploaded to ImageKit:', result.url);
+                        console.log('[Admin] ✅ Video uploaded to Cloudinary:', result.secure_url);
                         setUploadingVideo(false);
                     } catch (error) {
                         console.error('[Admin] ❌ Video upload failed:', error);
                         console.error('[Admin] Error details:', error instanceof Error ? error.message : String(error));
-                        console.error('[Admin] Server URL:', SERVER_URL);
                         console.error('[Admin] File size:', fileSizeMB.toFixed(2), 'MB');
                         setUploadingVideo(false);
                         
@@ -481,7 +407,7 @@ const AdminPage: React.FC = () => {
                         errorMsg += `3. Try a different video file\n`;
                         errorMsg += `4. Contact admin if problem persists\n\n`;
                         errorMsg += `Technical details:\n`;
-                        errorMsg += `Server: ${SERVER_URL}\n`;
+                        errorMsg += `Server: https://church-app-server.onrender.com/api\n`;
                         errorMsg += `File size: ${fileSizeMB.toFixed(2)}MB`;
                         
                         alert(errorMsg);
