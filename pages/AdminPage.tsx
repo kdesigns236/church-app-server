@@ -5,6 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
 import { CapacitorHttp } from '@capacitor/core';
 import { uploadService } from '../services/uploadService';
+import { uploadSermonWithVideo } from '../services/firebaseUploadService';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex items-center gap-4 animate-slide-in-up">
@@ -270,6 +271,10 @@ const AdminPage: React.FC = () => {
         bibleStudies, addBibleStudy, updateBibleStudy, deleteBibleStudy
     } = useAppContext();
     const { users, user: authUser, updateUserRole } = useAuth();
+    
+    // Debug: Log sermons count
+    console.log('[AdminPage] Sermons count:', sermons?.length || 0);
+    console.log('[AdminPage] Sermons:', sermons);
 
     const [modalConfig, setModalConfig] = useState<ModalConfig>({ isOpen: false, type: null, item: null });
     const [editableSiteContent, setEditableSiteContent] = useState<SiteContent>({
@@ -307,111 +312,72 @@ const AdminPage: React.FC = () => {
                 console.log('[Admin] Video URL type:', typeof data.videoUrl, 'Is File:', data.videoUrl instanceof File);
                 
                 if (typeof data.videoUrl === 'object' && data.videoUrl instanceof File) {
-                    console.log('[Admin] Uploading video to Cloudinary...');
+                    console.log('[Admin] 🔥 Uploading video to Firebase Storage...');
                     console.log('[Admin] Video file:', data.videoUrl.name, 'Size:', data.videoUrl.size);
                     
                     setUploadingVideo(true);
                     setUploadProgress(0);
                     
-                    // 🔧 Cloudinary configuration with optimization
-                    const CLOUDINARY_CLOUD_NAME = 'de0zuglgd';
-                    const CLOUDINARY_UPLOAD_PRESET = 'church_sermons';
                     const fileSizeMB = data.videoUrl.size / (1024 * 1024);
+                    console.log(`[Admin] Video size: ${fileSizeMB.toFixed(2)} MB`);
                     
                     try {
-                        // Check file size
-                        console.log(`[Admin] Video size: ${fileSizeMB.toFixed(2)} MB`);
-                        console.log(`[Admin] Video name: ${data.videoUrl.name}`);
-                        
-                        // Cloudinary accepts videos up to 100MB on free tier
-                        // We'll upload and let Cloudinary handle optimization
-                        console.log('[Admin] Starting upload to Cloudinary...');
-                        setUploadProgress(5);
-                        
-                        // Create FormData
-                        const formData = new FormData();
-                        formData.append('file', data.videoUrl);
-                        formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
-                        formData.append('folder', 'church-sermons');
-                        // Add transformation for better streaming
-                        formData.append('eager', 'q_auto,f_auto');
-                        
-                        // Use fetch with AbortController for timeout
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => {
-                            controller.abort();
-                            console.error('[Admin] Upload timeout after 10 minutes');
-                        }, 600000); // 10 minute timeout
-                        
-                        let result: any;
-                        try {
-                            setUploadProgress(20);
-                            
-                            console.log('[Admin] Uploading to Cloudinary...');
-                            
-                            // Simulate progress
-                            const progressInterval = setInterval(() => {
-                                setUploadProgress(prev => prev < 80 ? prev + 5 : prev);
-                            }, 1000);
-                            
-                            // Simple fetch (works on mobile)
-                            const uploadResponse = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/video/upload`, {
-                                method: 'POST',
-                                body: formData,
-                                signal: controller.signal
-                            });
-                            
-                            clearInterval(progressInterval);
-                            clearTimeout(timeoutId);
-                            
-                            if (!uploadResponse.ok) {
-                                const errorText = await uploadResponse.text();
-                                console.error('[Admin] Cloudinary error:', errorText);
-                                throw new Error(`Upload failed: ${uploadResponse.status}`);
+                        // Upload to Firebase Storage
+                        const result = await uploadSermonWithVideo(
+                            {
+                                title: data.title,
+                                pastor: data.pastor,
+                                scripture: data.scripture,
+                                date: data.date
+                            },
+                            data.videoUrl,
+                            (progress) => {
+                                setUploadProgress(progress);
+                                console.log(`[Admin] Upload progress: ${progress.toFixed(1)}%`);
                             }
-                            
-                            result = await uploadResponse.json();
-                            console.log('[Admin] ✅ Upload successful!');
-                            console.log('[Admin] Public ID:', result.public_id);
-                            console.log('[Admin] Video URL:', result.secure_url);
-                            
-                            setUploadProgress(90);
-                            
-                        } catch (uploadError: any) {
-                            clearTimeout(timeoutId);
-                            
-                            console.error('[Admin] Upload error:', uploadError);
-                            throw uploadError;
+                        );
+                        
+                        if (!result.success) {
+                            throw new Error(result.error || 'Upload failed');
                         }
                         
-                        // Store Cloudinary URL
-                        data.videoUrl = result.secure_url;
-                        data.videoPublicId = result.public_id;
-                        
-                        console.log('[Admin] ✅ Video uploaded to Cloudinary:', result.secure_url);
+                        console.log('[Admin] ✅ Video uploaded and saved to database!');
                         setUploadingVideo(false);
+                        setUploadProgress(100);
+                        
+                        // Show success message
+                        alert('✅ Sermon uploaded successfully!\n\nThe page will refresh to show the new sermon.');
+                        
+                        // Close modal and reload page to show new sermon
+                        handleCloseModal();
+                        window.location.reload();
+                        return; // Exit early since Firebase service already saved to database
+                        
                     } catch (error) {
-                        console.error('[Admin] ❌ Video upload failed:', error);
-                        console.error('[Admin] Error details:', error instanceof Error ? error.message : String(error));
-                        console.error('[Admin] File size:', fileSizeMB.toFixed(2), 'MB');
+                        console.error('[Admin] ❌ Firebase upload failed:', error);
+                        console.error('[Admin] Full error:', JSON.stringify(error, null, 2));
                         setUploadingVideo(false);
+                        setUploadProgress(0);
                         
-                        // More detailed error message
-                        let errorMsg = 'Failed to upload video.\n\n';
+                        // Detailed error message with full error details
+                        let errorMsg = '🔥 Firebase Upload Failed\n\n';
                         if (error instanceof Error) {
-                          errorMsg += `Error: ${error.message}\n\n`;
+                            errorMsg += `Error: ${error.message}\n\n`;
+                            if (error.stack) {
+                                errorMsg += `Stack: ${error.stack.substring(0, 200)}\n\n`;
+                            }
+                        } else {
+                            errorMsg += `Error: ${JSON.stringify(error)}\n\n`;
                         }
                         errorMsg += `Troubleshooting:\n`;
-                        errorMsg += `1. Check your internet connection\n`;
-                        errorMsg += `2. Make sure video is under 100MB\n`;
-                        errorMsg += `3. Try a different video file\n`;
-                        errorMsg += `4. Contact admin if problem persists\n\n`;
-                        errorMsg += `Technical details:\n`;
-                        errorMsg += `Server: https://church-app-server.onrender.com/api\n`;
+                        errorMsg += `1. Check Firebase Console for errors\n`;
+                        errorMsg += `2. Verify Storage Rules are set\n`;
+                        errorMsg += `3. Verify Anonymous Auth is enabled\n`;
+                        errorMsg += `4. Check internet connection\n\n`;
                         errorMsg += `File size: ${fileSizeMB.toFixed(2)}MB`;
                         
                         alert(errorMsg);
-                        return; // Don't save sermon if video upload failed
+                        return; // Don't continue if upload failed
                     }
                 } else {
                     console.log('[Admin] Video URL is not a File object, using existing URL');
@@ -764,7 +730,7 @@ const AdminPage: React.FC = () => {
                             </span>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-2">
-                            {uploadProgress < 100 ? 'Uploading to Cloudinary...' : 'Processing video...'}
+                            {uploadProgress < 100 ? 'Uploading to Firebase Storage...' : 'Processing video...'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-500 text-center">
                             Please don't close this page.

@@ -471,35 +471,63 @@ const VideoCallPage: React.FC = () => {
 
   const flipCamera = async () => {
     try {
+      console.log('[VideoCall] 🔄 Attempting to flip camera...');
+      
       // Check if device has multiple cameras
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === 'videoinput');
       
+      console.log(`[VideoCall] Found ${videoDevices.length} video devices:`, videoDevices.map(d => d.label));
+      
       if (videoDevices.length < 2) {
+        console.warn('[VideoCall] Only one camera available');
         alert('Your device only has one camera.');
         return;
       }
       
       const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
-      console.log(`[VideoCall] Flipping camera to: ${newFacingMode}`);
+      console.log(`[VideoCall] Switching from ${facingMode} to ${newFacingMode}`);
       
-      // Remember current video state
+      // Remember current states
       const wasVideoOff = isVideoOff;
+      const wasMuted = isMuted;
       
       // Stop current stream
       if (localStreamRef.current) {
-        localStreamRef.current.getTracks().forEach(track => track.stop());
+        localStreamRef.current.getTracks().forEach(track => {
+          console.log(`[VideoCall] Stopping ${track.kind} track`);
+          track.stop();
+        });
       }
       
-      // Get new stream with flipped camera
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: { exact: newFacingMode },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: true
-      });
+      // Try with ideal facingMode first (more flexible)
+      let stream: MediaStream | null = null;
+      
+      try {
+        console.log(`[VideoCall] Requesting camera with facingMode: ${newFacingMode}`);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            facingMode: newFacingMode, // Use ideal, not exact
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: true
+        });
+      } catch (error) {
+        console.error('[VideoCall] Failed with ideal facingMode, trying without constraints:', error);
+        // Fallback: try without facingMode constraint
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
+          audio: true
+        });
+      }
+      
+      if (!stream) {
+        throw new Error('Failed to get media stream');
+      }
       
       localStreamRef.current = stream;
       setFacingMode(newFacingMode);
@@ -513,36 +541,72 @@ const VideoCallPage: React.FC = () => {
       // Restore mute state
       const audioTrack = stream.getAudioTracks()[0];
       if (audioTrack) {
-        audioTrack.enabled = !isMuted;
+        audioTrack.enabled = !wasMuted;
+        console.log(`[VideoCall] Audio track enabled: ${!wasMuted}`);
       }
+      
+      console.log(`[VideoCall] Video track enabled: ${!wasVideoOff}`);
       
       // Update local video element
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
         await localVideoRef.current.play();
+        console.log('[VideoCall] Local video element updated');
       }
       
+      // Update participants list with new stream
+      setParticipants(prev => 
+        prev.map(p => p.id === 'local' ? { ...p, stream } : p)
+      );
+      
       // Replace tracks in all peer connections
-      peerConnectionsRef.current.forEach((peerConnection) => {
+      console.log(`[VideoCall] Updating ${peerConnectionsRef.current.size} peer connections...`);
+      peerConnectionsRef.current.forEach((peerConnection, peerId) => {
         const senders = peerConnection.getSenders();
         
         // Replace video track
         const videoSender = senders.find(s => s.track?.kind === 'video');
         if (videoSender && videoTrack) {
           videoSender.replaceTrack(videoTrack);
+          console.log(`[VideoCall] Replaced video track for peer ${peerId}`);
         }
         
         // Replace audio track
         const audioSender = senders.find(s => s.track?.kind === 'audio');
         if (audioSender && audioTrack) {
           audioSender.replaceTrack(audioTrack);
+          console.log(`[VideoCall] Replaced audio track for peer ${peerId}`);
         }
       });
       
-      console.log('[VideoCall] ✅ Camera flipped successfully');
+      console.log('[VideoCall] ✅ Camera flipped successfully to:', newFacingMode);
     } catch (error) {
-      console.error('[VideoCall] Error flipping camera:', error);
-      alert('Could not flip camera. Make sure your device has multiple cameras.');
+      console.error('[VideoCall] ❌ Error flipping camera:', error);
+      
+      // Try to restore previous stream if flip failed
+      if (localStreamRef.current) {
+        console.log('[VideoCall] Attempting to restore previous stream...');
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({
+            video: { 
+              facingMode: facingMode,
+              width: { ideal: 1280 },
+              height: { ideal: 720 }
+            },
+            audio: true
+          });
+          localStreamRef.current = fallbackStream;
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = fallbackStream;
+            await localVideoRef.current.play();
+          }
+          console.log('[VideoCall] ✅ Restored previous stream');
+        } catch (restoreError) {
+          console.error('[VideoCall] Failed to restore stream:', restoreError);
+        }
+      }
+      
+      alert(`Could not flip camera: ${error instanceof Error ? error.message : 'Unknown error'}\n\nMake sure your device has multiple cameras and permissions are granted.`);
     }
   };
 

@@ -21,6 +21,7 @@
     "@capawesome/capacitor-live-update": "^7.2.2",
     "@google/genai": "^1.11.0",
     "browser-image-compression": "^2.0.2",
+    "firebase": "^12.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",

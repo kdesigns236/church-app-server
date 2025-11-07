@@ -7,9 +7,9 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: 'https',
     cleartext: true,
-    // Live reload - comment out for production builds
-    // url: 'http://192.168.0.102:3000',
-    // hostname: '192.168.0.102'
+    // Live reload - DISABLED (use production build)
+    // url: 'http://192.168.0.101:3000',
+    // hostname: '192.168.0.101'
   },
   android: {
     buildOptions: {
@@ -27,6 +27,11 @@ const config: CapacitorConfig = {
       style: 'dark',
       backgroundColor: '#1B365D',
       overlaysWebView: false
+    },
+    LiveUpdate: {
+      appId: 'church-app',
+      autoDeleteBundles: true,
+      readyTimeout: 10000
     }
   }
 };
