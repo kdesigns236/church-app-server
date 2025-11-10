@@ -20,8 +20,8 @@ class WebSocketService {
 
   constructor() {
     // @ts-ignore - Vite env variable
-    // Use production URL as fallback for mobile builds
-    this.apiUrl = import.meta.env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+    // Use localhost for testing
+    this.apiUrl = import.meta.env?.VITE_API_URL || 'http://localhost:3001/api';
     // Remove /api suffix for Socket.io connection (Socket.io uses its own /socket.io/ path)
     this.serverUrl = this.apiUrl.replace('/api', '');
     console.log('[WebSocket] API URL:', this.apiUrl);

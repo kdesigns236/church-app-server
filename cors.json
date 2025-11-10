@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:3000", "https://church-app-35f50.web.app", "https://church-app-35f50.firebaseapp.com"],
+    "method": ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Content-Length", "Content-Range", "Content-Encoding", "Accept-Ranges", "X-Firebase-Storage-Version", "Access-Control-Allow-Origin"]
+  }
+]

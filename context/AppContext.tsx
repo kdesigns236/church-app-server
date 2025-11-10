@@ -156,7 +156,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const fetchInitialData = async () => {
         try {
           console.log('[AppContext] 🔄 Fetching fresh data from server...');
-          const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+          const apiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001/api';
           
           // Check last sync time to avoid excessive fetching
           const lastSync = localStorage.getItem('lastSyncTime');

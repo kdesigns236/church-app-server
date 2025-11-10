@@ -684,7 +684,7 @@ const AdminPage: React.FC = () => {
                                                 <img src={profilePic} alt={userItem.name} className="w-10 h-10 rounded-full object-cover"/>
                                             ) : (
                                                  <span className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center font-bold text-primary dark:text-secondary">
-                                                    {userItem.name.charAt(0).toUpperCase()}
+                                                    {(userItem.name || '?').charAt(0).toUpperCase()}
                                                  </span>
                                             )}
                                             <div>

@@ -4,6 +4,9 @@ import { Sermon } from '../../types';
 import { PlayIcon, SoundOnIcon, SoundOffIcon } from '../../constants/icons';
 import { SermonOverlay } from './SermonOverlay';
 import { videoStorageService } from '../../services/videoStorageService';
+import { auth, storage } from '../../config/firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { signInAnonymously } from 'firebase/auth';
 
 interface SermonReelProps {
   sermon: Sermon;
@@ -34,12 +37,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [rotation, setRotation] = useState(0);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isMountedRef = useRef(true);
 
   // Load video from cloud or IndexedDB
   useEffect(() => {
     let objectUrl: string | null = null;
-    let isMounted = true;
-    
+        
     const loadVideo = async () => {
       if (!sermon.videoUrl) {
         setVideoSrc('');
@@ -51,7 +54,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         if (typeof sermon.videoUrl === 'string' && 
             (sermon.videoUrl.startsWith('http://') || sermon.videoUrl.startsWith('https://'))) {
           console.log('[SermonReel] Loading video from cloud:', sermon.videoUrl);
-          if (isMounted) setVideoSrc(sermon.videoUrl);
+          // For all URLs (Firebase and Cloudinary)
+                      if (isMountedRef.current) setVideoSrc(url);
           return;
         }
 
@@ -65,7 +69,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             await videoStorageService.initialize();
             
             const url = await videoStorageService.getVideoUrl(sermonId);
-            if (url && isMounted) {
+                  if (url && isMountedRef.current) {
               objectUrl = url;
               setVideoSrc(url);
               console.log('[SermonReel] Video loaded from IndexedDB (legacy)');
@@ -100,7 +104,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     loadVideo();
 
     return () => {
-      isMounted = false;
+      isMountedRef.current = false;
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
@@ -197,9 +201,26 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             preload="auto"
             crossOrigin="anonymous"
             aria-label={`Sermon titled ${sermon.title}`}
-            onError={(e) => {
+            onError={async (e) => {
               console.error('Video load error:', e);
               console.log('Video URL:', videoSrc);
+              
+              // If it's a Firebase URL and auth is required, try to get a fresh URL
+              if (videoSrc.includes('firebasestorage.googleapis.com')) {
+                try {
+                  // Re-attempt anonymous sign in
+                  await signInAnonymously(auth);
+                  
+                  // Get a fresh URL with the new auth token
+                  const storagePath = decodeURIComponent(videoSrc.split('/o/')[1].split('?')[0]);
+                  const storageRef = ref(storage, storagePath);
+                  const freshUrl = await getDownloadURL(storageRef);
+                  
+                  if (isMountedRef.current) setVideoSrc(freshUrl);
+                } catch (authError) {
+                  console.error('Failed to refresh video URL:', authError);
+                }
+              }
             }}
           />
         </div>

@@ -19,7 +19,7 @@ export interface AuthContextType {
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const defaultAdminUser: User = { id: 'admin_user', name: 'Admin', email: 'admin@church.com', role: 'admin', profilePictureUrl: '/admin.png' };
+const defaultAdminUser: User = { id: 'admin-user-001', name: 'Admin', email: 'admin@church.com', role: 'admin', profilePictureUrl: 'https://res.cloudinary.com/de0zuglgd/image/upload/v1761829850/church-profiles/x3thqajc5samerpfacyq.png' };
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -53,10 +53,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         localStorage.removeItem('authUser');
         localStorage.removeItem('churchUserList');
       } finally {
-        // Simulate initial loading time for splash screen
-        setTimeout(() => {
-          setIsLoading(false);
-        }, 3000);
+        // Remove artificial delay
+        setIsLoading(false);
       }
     };
     initializeAuth();
@@ -64,8 +62,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (email: string, pass: string): Promise<void> => {
     try {
+      console.log('[AuthContext] Starting login process...');
       // Use environment variable or fallback to production URL
-      const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+      const apiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001/api';
       console.log('[AuthContext] Login API URL:', apiUrl);
       const response = await apiClient.fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
@@ -75,7 +74,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const data = await response.json();
 
       if (!response.ok) {
+        console.error('[AuthContext] Login failed:', data);
         throw new Error(data.error || 'Login failed');
+      }
+
+      if (!data.token || !data.user) {
+        console.error('[AuthContext] Invalid login response:', data);
+        throw new Error('Invalid server response');
       }
 
       console.log('[AuthContext] Login response:', data);

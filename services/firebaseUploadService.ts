@@ -106,11 +106,16 @@ export async function uploadVideoToFirebase(
         // Success callback
         async () => {
           try {
-            // Get download URL
+            // Get signed download URL with custom metadata
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
             
+            // Add CORS query parameter to URL
+            const urlWithCors = new URL(downloadURL);
+            urlWithCors.searchParams.append('alt', 'media');
+            urlWithCors.searchParams.append('cors', '*');
+            
             console.log('[Firebase] ✅ Upload successful!');
-            console.log('[Firebase] Video URL:', downloadURL);
+            console.log('[Firebase] Video URL:', urlWithCors.toString());
             
             resolve({
               success: true,
@@ -174,8 +179,8 @@ export async function uploadSermonWithVideo(
     console.log('[Firebase] Video uploaded, saving to database...');
 
     // 2. Save sermon data with Firebase video URL to database
-    // Use Render for production
-    const apiUrl = import.meta.env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+    // Use localhost for testing while Render is down
+    const apiUrl = import.meta.env?.VITE_API_URL || 'http://localhost:3001/api';
     
     // Get auth token from localStorage
     const token = localStorage.getItem('authToken');

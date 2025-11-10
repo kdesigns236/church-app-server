@@ -81,7 +81,7 @@ export const SermonOverlay: React.FC<SermonOverlayProps> = ({ sermon, onLike, on
           />
           <ActionButton
             icon={CommentIcon}
-            label={sermon.comments.length}
+            label={sermon.comments?.length || 0}
             onClick={onComment}
           />
           <ActionButton
