@@ -1,0 +1,1115 @@
+// Simple Express server for real-time data synchronization
+// This server broadcasts admin changes to all connected clients
+
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const { Readable } = require('stream');
+const multer = require('multer');
+const cloudinary = require('./config/cloudinary');
+const authRoutes = require('./routes/auth');
+const proxyRoutes = require('./proxy');
+const database = require('./database');
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*", // Allow all origins for development
+    methods: ["GET", "POST"]
+  }
+});
+
+const PORT = process.env.PORT || 3001;
+
+// Video call rooms and user data
+const videoCallRooms = new Map(); // roomId -> Set of socket IDs
+const socketUserData = new Map(); // socketId -> { roomId, userName }
+
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: '50mb' })); // Increase limit for base64 files
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Create uploads directory if it doesn't exist
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
+// Create temp directory for Cloudinary uploads
+const TEMP_DIR = path.join(__dirname, 'uploads', 'temp');
+if (!fs.existsSync(TEMP_DIR)) {
+  fs.mkdirSync(TEMP_DIR, { recursive: true });
+}
+
+// Serve uploaded files statically
+app.use('/uploads', express.static(UPLOADS_DIR));
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
+
+// Multer config for Cloudinary (temp storage - for backward compatibility)
+const cloudinaryUpload = multer({
+  dest: TEMP_DIR,
+  limits: { fileSize: 500 * 1024 * 1024 } // 500MB limit for videos
+});
+
+// Multer config for streaming uploads (memory storage - more efficient)
+const streamingUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
+
+// Data file path (fallback if no DATABASE_URL)
+const DATA_FILE = path.join(__dirname, 'data.json');
+
+// In-memory data store
+let dataStore = {
+  sermons: [],
+  announcements: [],
+  events: [],
+  siteContent: {},
+  prayerRequests: [],
+  bibleStudies: [],
+  chatMessages: [],
+  users: []
+};
+
+let useDatabase = false;
+
+// Load data from file (fallback)
+function loadDataFromFile() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      const fileData = fs.readFileSync(DATA_FILE, 'utf8');
+      dataStore = JSON.parse(fileData);
+      console.log('[Server] Loaded existing data from file');
+    } else {
+      console.log('[Server] No existing data file, starting fresh');
+      saveDataToFile();
+    }
+  } catch (error) {
+    console.error('[Server] Error loading data:', error);
+  }
+  return dataStore;
+}
+
+// Save data to file (fallback)
+function saveDataToFile() {
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(dataStore, null, 2), 'utf8');
+    console.log('[Server] Data saved to file');
+  } catch (error) {
+    console.error('[Server] Error saving data:', error);
+  }
+}
+
+// Initialize data storage (database or file)
+async function initializeData() {
+  try {
+    useDatabase = await database.initDatabase();
+    
+    if (useDatabase) {
+      // Load data from PostgreSQL
+      dataStore = await database.getAllData();
+      console.log('[Server] Using PostgreSQL for data storage');
+    } else {
+      // Load data from file
+      loadDataFromFile();
+      console.log('[Server] Using data.json for data storage');
+    }
+  
+    // Update app.locals after loading data
+    app.locals.dataStore = dataStore;
+    console.log('[Server] DataStore initialized with', dataStore.users?.length || 0, 'users');
+
+    // Create default admin user if no users exist
+    if (!dataStore.users || dataStore.users.length === 0) {
+      console.log('[Server] No users found, creating default admin user...');
+      const bcrypt = require('bcrypt');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const adminUser = {
+        id: 'user-admin-default',
+        name: 'Admin',
+        email: 'admin@church.com',
+        password: hashedPassword,
+        profilePicture: 'https://res.cloudinary.com/de0zuglgd/image/upload/v1/default-avatar.png',
+        phone: '',
+        role: 'admin',
+        isEmailVerified: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      dataStore.users = [adminUser];
+      app.locals.dataStore = dataStore;
+      await saveData();
+      console.log('[Server] ✅ Default admin user created: admin@church.com / admin123');
+    }
+  } catch (error) {
+    console.error('[Server] Error initializing data:', error);
+    throw error;
+  }
+}
+}
+
+// Save data (to database or file)
+async function saveData() {
+  if (useDatabase) {
+    // Save all data to PostgreSQL
+    for (const [key, value] of Object.entries(dataStore)) {
+      await database.setData(key, value);
+    }
+  } else {
+    saveDataToFile();
+  }
+}
+
+// Make dataStore and saveData available to routes
+app.locals.dataStore = dataStore;
+app.locals.saveData = saveData;
+
+// Mount auth routes
+app.use('/api/auth', authRoutes);
+
+// Mount proxy routes
+app.use('/proxy', proxyRoutes);
+
+// Store active Socket.io connections
+const connectedClients = new Map(); // socket.id -> socket
+
+// Middleware to verify admin (simple token check)
+const verifyAdmin = (req, res, next) => {
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  // In production, verify JWT token
+  if (token) {
+    next();
+  } else {
+    res.status(401).json({ error: 'Unauthorized' });
+  }
+};
+
+// Socket.io connection handling for real-time updates AND video calls
+io.on('connection', (socket) => {
+  console.log(`[Socket.io] Client connected: ${socket.id}. Total clients: ${connectedClients.size + 1}`);
+  connectedClients.set(socket.id, socket);
+
+  // Send initial connection confirmation
+  socket.emit('connected', { message: 'Connected to sync server' });
+
+  // ==================== VIDEO CALL HANDLERS ====================
+  // Join a video call room
+  socket.on('join-room', ({ roomId, userName }) => {
+    console.log(`[VideoCall] ${userName} (${socket.id}) joining room: ${roomId}`);
+    
+    // Create room if it doesn't exist
+    if (!videoCallRooms.has(roomId)) {
+      videoCallRooms.set(roomId, new Set());
+      console.log(`[VideoCall] Created new room: ${roomId}`);
+    }
+    
+    const room = videoCallRooms.get(roomId);
+    console.log(`[VideoCall] Current participants in room before join:`, room.size);
+    
+    // Send list of existing participants to new user FIRST
+    const existingParticipants = Array.from(room)
+      .filter(id => id !== socket.id)
+      .map(id => ({
+        userId: id,
+        userName: socketUserData.get(id)?.userName || 'Unknown'
+      }));
+    
+    console.log(`[VideoCall] Sending ${existingParticipants.length} existing participants to ${userName}`);
+    socket.emit('existing-participants', existingParticipants);
+    
+    // Notify existing participants about new user
+    room.forEach(participantId => {
+      console.log(`[VideoCall] Notifying ${participantId} about new user ${userName}`);
+      io.to(participantId).emit('user-joined', {
+        userId: socket.id,
+        userName: userName
+      });
+    });
+    
+    // Add user to room
+    room.add(socket.id);
+    socket.join(roomId);
+    socketUserData.set(socket.id, { roomId, userName });
+    
+    console.log(`[VideoCall] Room ${roomId} now has ${room.size} participants`);
+    console.log(`[VideoCall] Participants:`, Array.from(room).map(id => socketUserData.get(id)?.userName));
+  });
+
+  // WebRTC signaling: offer
+  socket.on('offer', ({ offer, targetUserId }) => {
+    console.log(`[VideoCall] Forwarding offer from ${socket.id} to ${targetUserId}`);
+    io.to(targetUserId).emit('offer', {
+      offer,
+      fromUserId: socket.id,
+      fromUserName: socketUserData.get(socket.id)?.userName || 'Unknown'
+    });
+  });
+
+  // WebRTC signaling: answer
+  socket.on('answer', ({ answer, targetUserId }) => {
+    console.log(`[VideoCall] Forwarding answer from ${socket.id} to ${targetUserId}`);
+    io.to(targetUserId).emit('answer', {
+      answer,
+      fromUserId: socket.id
+    });
+  });
+
+  // WebRTC signaling: ICE candidate
+  socket.on('ice-candidate', ({ candidate, targetUserId }) => {
+    console.log(`[VideoCall] Forwarding ICE candidate from ${socket.id} to ${targetUserId}`);
+    io.to(targetUserId).emit('ice-candidate', {
+      candidate,
+      fromUserId: socket.id
+    });
+  });
+
+  // Meeting started notification
+  socket.on('meeting-started', ({ userName, roomId }) => {
+    console.log(`[VideoCall] ${userName} started a meeting in ${roomId}`);
+    
+    // Broadcast to all connected clients except sender
+    socket.broadcast.emit('meeting-notification', {
+      userName,
+      roomId,
+      message: `${userName} is in a meeting. Join now!`
+    });
+    
+    // Send native push notification to all clients
+    socket.broadcast.emit('native-push-notification', {
+      title: 'Meeting Started',
+      body: `${userName} is in a meeting. Join now!`,
+      data: {
+        type: 'meeting',
+        roomId: roomId,
+        userName: userName,
+        route: '/video-call'
+      }
+    });
+    
+    console.log(`[VideoCall] 📢 Push notification sent for ${userName}'s meeting`);
+  });
+
+  // Leave room
+  socket.on('leave-room', () => {
+    handleUserLeave(socket);
+  });
+
+  // Handle disconnect
+  socket.on('disconnect', () => {
+    connectedClients.delete(socket.id);
+    console.log(`[Socket.io] Client disconnected: ${socket.id}. Total clients: ${connectedClients.size}`);
+    handleUserLeave(socket);
+  });
+});
+
+// Broadcast update to all connected clients via Socket.io
+function broadcastUpdate(syncData) {
+  // Emit to all connected clients
+  io.emit('sync_update', syncData);
+  
+  console.log(`[Socket.io] Broadcasted ${syncData.type} ${syncData.action} to ${connectedClients.size} clients`);
+}
+
+// Push update endpoint (called by admin)
+app.post('/api/sync/push', verifyAdmin, (req, res) => {
+  const syncData = req.body;
+  
+  // Validate sync data
+  if (!syncData.type || !syncData.action) {
+    return res.status(400).json({ error: 'Invalid sync data' });
+  }
+
+  // Apply update to in-memory store
+  applyUpdate(syncData);
+
+  // Broadcast to all connected clients
+  broadcastUpdate(syncData);
+
+  res.json({ success: true, timestamp: syncData.timestamp });
+});
+
+// Apply update to in-memory store and save to file
+function applyUpdate(syncData) {
+  const { type, action, data } = syncData;
+
+  if (action === 'clear') {
+    if (type === 'siteContent') {
+      dataStore[type] = {};
+    } else {
+      dataStore[type] = [];
+    }
+    saveData(); // Save to file
+    return;
+  }
+
+  switch (action) {
+    case 'add':
+      if (Array.isArray(dataStore[type])) {
+        dataStore[type].push(data);
+      } else {
+        dataStore[type] = data;
+      }
+      break;
+    case 'update':
+      if (Array.isArray(dataStore[type])) {
+        const index = dataStore[type].findIndex(item => item.id === data.id);
+        if (index !== -1) {
+          dataStore[type][index] = data;
+        }
+      } else {
+        dataStore[type] = { ...dataStore[type], ...data };
+      }
+      break;
+    case 'delete':
+      if (Array.isArray(dataStore[type])) {
+        dataStore[type] = dataStore[type].filter(item => item.id !== data.id);
+      }
+      break;
+  }
+  
+  // Save to file after every change
+  saveData();
+}
+
+// Get all data endpoint (for initial sync)
+app.get('/api/sync/data', (req, res) => {
+  console.log('[Server] Fetching all data for sync');
+  res.json(dataStore);
+});
+
+// Get latest data endpoint
+app.get('/api/sync/:type', (req, res) => {
+  const { type } = req.params;
+  
+  if (!dataStore.hasOwnProperty(type)) {
+    return res.status(404).json({ error: 'Data type not found' });
+  }
+
+  res.json(dataStore[type]);
+});
+
+// Get all sermons (for initial data load)
+app.get('/api/sermons', (req, res) => {
+  console.log('[Server] Fetching all sermons:', dataStore.sermons.length);
+  res.json(dataStore.sermons || []);
+});
+
+// Get all announcements (for initial data load)
+app.get('/api/announcements', (req, res) => {
+  console.log('[Server] Fetching all announcements:', dataStore.announcements.length);
+  res.json(dataStore.announcements || []);
+});
+
+// Get all events (for initial data load)
+app.get('/api/events', (req, res) => {
+  console.log('[Server] Fetching all events:', dataStore.events.length);
+  res.json(dataStore.events || []);
+});
+
+// Get all site content (for initial data load)
+app.get('/api/site-content', (req, res) => {
+  console.log('[Server] Fetching site content');
+  res.json(dataStore.siteContent || {});
+});
+
+// Get all prayer requests (for initial data load)
+app.get('/api/prayer-requests', (req, res) => {
+  console.log('[Server] Fetching all prayer requests:', dataStore.prayerRequests.length);
+  res.json(dataStore.prayerRequests || []);
+});
+
+// Get all bible studies (for initial data load)
+app.get('/api/bible-studies', (req, res) => {
+  console.log('[Server] Fetching all bible studies:', dataStore.bibleStudies?.length || 0);
+  res.json(dataStore.bibleStudies || []);
+});
+
+// Get all chat messages (for initial data load)
+app.get('/api/chat-messages', (req, res) => {
+  console.log('[Server] Fetching all chat messages:', dataStore.chatMessages.length);
+  res.json(dataStore.chatMessages || []);
+});
+
+// File upload endpoint
+app.post('/api/upload', verifyAdmin, upload.single('file'), (req, res) => {
+  try {
+    console.log('[Server] Upload request received');
+    console.log('[Server] File:', req.file);
+    
+    if (!req.file) {
+      console.error('[Server] No file in request');
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+    console.log(`[Server] File uploaded successfully: ${req.file.filename}`);
+    console.log(`[Server] File URL: ${fileUrl}`);
+
+    res.json({
+      success: true,
+      filename: req.file.filename,
+      url: fileUrl,
+      size: req.file.size,
+      mimetype: req.file.mimetype
+    });
+  } catch (error) {
+    console.error('[Server] Upload error:', error);
+    console.error('[Server] Error stack:', error.stack);
+    res.status(500).json({ error: 'Upload failed', details: error.message });
+  }
+});
+
+// Delete file endpoint
+app.delete('/api/upload/:filename', verifyAdmin, (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(UPLOADS_DIR, filename);
+
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      console.log(`[Server] File deleted: ${filename}`);
+      res.json({ success: true, message: 'File deleted' });
+    } else {
+      res.status(404).json({ error: 'File not found' });
+    }
+  } catch (error) {
+    console.error('[Server] Delete error:', error);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+// Sync endpoint - Get all data
+app.get('/api/sync/data', (req, res) => {
+  try {
+    const data = loadData();
+    console.log('[Server] Sync data requested');
+    res.json(data);
+  } catch (error) {
+    console.error('[Server] Sync data error:', error);
+    res.status(500).json({ error: 'Failed to load data' });
+  }
+});
+
+// Push data endpoint - Admin updates
+app.post('/api/sync/push', verifyAdmin, (req, res) => {
+  try {
+    const { type, data: newData } = req.body;
+    const currentData = loadData();
+    
+    // Update the specific data type
+    if (type && currentData[type]) {
+      currentData[type] = newData;
+      saveData(currentData);
+      
+      // Broadcast update to all connected clients
+      broadcast({ type, data: newData });
+      
+      console.log(`[Server] Data pushed: ${type}`);
+      res.json({ success: true });
+    } else {
+      res.status(400).json({ error: 'Invalid data type' });
+    }
+  } catch (error) {
+    console.error('[Server] Push error:', error);
+    res.status(500).json({ error: 'Push failed' });
+  }
+});
+
+// Create sermon with Firebase video URL
+app.post('/api/sermons', verifyAdmin, (req, res) => {
+  try {
+    const { title, pastor, scripture, date, videoUrl, uploadedAt } = req.body;
+    
+    console.log('[Server] Creating sermon:', title);
+    console.log('[Server] Request body:', JSON.stringify(req.body, null, 2));
+    console.log('[Server] Current sermons count:', dataStore.sermons?.length || 0);
+    
+    // Create new sermon
+    const newSermon = {
+      id: Date.now(),
+      title,
+      pastor,
+      scripture: scripture || '',
+      date: date || new Date().toISOString(),
+      videoUrl, // Firebase Storage URL
+      uploadedAt: uploadedAt || new Date().toISOString()
+    };
+    
+    console.log('[Server] New sermon:', JSON.stringify(newSermon, null, 2));
+    
+    // Add to sermons array in dataStore
+    dataStore.sermons = dataStore.sermons || [];
+    dataStore.sermons.unshift(newSermon);
+    
+    console.log('[Server] Saving data...');
+    // Save data to file
+    saveDataToFile();
+    
+    console.log('[Server] Broadcasting update...');
+    // Broadcast update to all connected clients
+    try {
+      broadcastUpdate({ type: 'sermons', action: 'add', data: dataStore.sermons });
+    } catch (broadcastError) {
+      console.error('[Server] Broadcast error (non-fatal):', broadcastError);
+    }
+    
+    console.log('[Server] ✅ Sermon created:', newSermon.id);
+    res.json({ success: true, sermon: newSermon });
+  } catch (error) {
+    console.error('[Server] Error creating sermon:', error);
+    console.error('[Server] Error stack:', error.stack);
+    res.status(500).json({ error: 'Failed to create sermon', details: error.message });
+  }
+});
+
+// Generate Cloudinary upload signature for direct client uploads
+app.post('/api/cloudinary/signature', (req, res) => {
+  try {
+    const timestamp = Math.round(Date.now() / 1000);
+    const folder = 'church-sermons';
+    const publicId = `sermon-${timestamp}`;
+    
+    // Generate signature for upload (signed upload - more secure)
+    const paramsToSign = {
+      timestamp: timestamp,
+      folder: folder,
+      public_id: publicId
+    };
+    
+    const signature = cloudinary.utils.api_sign_request(
+      paramsToSign,
+      process.env.CLOUDINARY_API_SECRET
+    );
+    
+    console.log('[Cloudinary] Generated upload signature');
+    
+    res.json({
+      signature: signature,
+      timestamp: timestamp,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY,
+      folder: folder,
+      publicId: publicId
+    });
+  } catch (error) {
+    console.error('[Cloudinary] Error generating signature:', error);
+    res.status(500).json({ error: 'Failed to generate upload signature' });
+  }
+});
+
+// Cloudinary video upload endpoint with streaming (optimized for mobile)
+app.post('/api/sermons/upload-video', streamingUpload.single('video'), async (req, res) => {
+  console.log('[Upload] Received video upload request');
+  console.log('[Upload] Headers:', req.headers);
+  console.log('[Upload] Body keys:', Object.keys(req.body));
+  
+  try {
+    if (!req.file) {
+      console.error('[Upload] No file in request');
+      console.error('[Upload] Request details:', {
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length'],
+        hasBody: !!req.body,
+        bodyKeys: Object.keys(req.body)
+      });
+      return res.status(400).json({ 
+        error: 'No video file provided',
+        details: 'Make sure the file field name is "video"',
+        received: Object.keys(req.body)
+      });
+    }
+
+    console.log('[Upload] File details:', {
+      filename: req.file.originalname,
+      size: `${(req.file.size / 1024 / 1024).toFixed(2)}MB`,
+      mimetype: req.file.mimetype,
+      fieldname: req.file.fieldname
+    });
+
+    // Upload to Cloudinary using stream (efficient for large files)
+    console.log('[Upload] Streaming to Cloudinary...');
+    
+    const uploadPromise = new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'video',
+          folder: 'church-sermons',
+          public_id: `sermon-${Date.now()}`,
+          chunk_size: 6000000, // 6MB chunks for better reliability
+          timeout: 300000 // 5 minute timeout
+        },
+        (error, result) => {
+          if (error) {
+            console.error('[Upload] Cloudinary error:', error);
+            reject(error);
+          } else {
+            console.log('[Upload] ✅ Upload successful:', result.secure_url);
+            resolve(result);
+          }
+        }
+      );
+
+      // Create readable stream from buffer
+      const bufferStream = Readable.from(req.file.buffer);
+      bufferStream.pipe(uploadStream);
+    });
+
+    const result = await uploadPromise;
+
+    res.json({
+      success: true,
+      videoUrl: result.secure_url,
+      publicId: result.public_id,
+      duration: result.duration,
+      format: result.format
+    });
+
+  } catch (error) {
+    console.error('[Upload] ❌ Error uploading video:', error);
+    
+    // Send appropriate error message
+    if (error.message && error.message.includes('timeout')) {
+      return res.status(504).json({ 
+        error: 'Upload timeout - video may be too large. Try a smaller file or better internet connection.' 
+      });
+    }
+    
+    if (error.message && error.message.includes('File size')) {
+      return res.status(413).json({ 
+        error: 'Video file too large. Maximum size is 100MB.' 
+      });
+    }
+    
+    // Clean up temp file on error
+    if (req.file?.path && fs.existsSync(req.file.path)) {
+      try {
+        fs.unlinkSync(req.file.path);
+        console.log('[Cloudinary] Cleaned up temp file');
+      } catch (cleanupError) {
+        console.error('[Cloudinary] Failed to cleanup temp file:', cleanupError);
+      }
+    }
+
+    // Provide helpful error messages
+    let errorMessage = 'Video upload failed';
+    let errorDetails = error.message;
+    
+    if (error.message.includes('timeout')) {
+      errorMessage = 'Upload timeout - video too large or slow connection';
+      errorDetails = 'Try compressing the video or using a faster connection';
+    } else if (error.message.includes('credentials')) {
+      errorMessage = 'Server configuration error';
+      errorDetails = 'Cloudinary credentials not configured';
+    } else if (error.message.includes('quota') || error.message.includes('limit')) {
+      errorMessage = 'Storage limit reached';
+      errorDetails = 'Please contact administrator';
+    }
+
+    res.status(500).json({ 
+      error: errorMessage,
+      details: errorDetails,
+      technical: error.message // For debugging
+    });
+  }
+});
+
+// Diagnostic endpoint to check Cloudinary configuration
+app.get('/api/sermons/check-cloudinary', (req, res) => {
+  const isConfigured = !!(process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET);
+  res.json({
+    configured: isConfigured,
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'Set' : 'Missing',
+    apiKey: process.env.CLOUDINARY_API_KEY ? 'Set' : 'Missing',
+    apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Set' : 'Missing',
+    message: isConfigured ? 'Cloudinary is properly configured' : 'Cloudinary credentials missing - video uploads will fail'
+  });
+});
+
+// Get Cloudinary upload signature for direct client uploads (bypasses server timeout)
+app.post('/api/sermons/upload-signature', (req, res) => {
+  try {
+    const timestamp = Math.round(new Date().getTime() / 1000);
+    const folder = 'church-sermons';
+    const publicId = `sermon-${timestamp}`;
+    
+    // Generate signature for client-side upload
+    const signature = cloudinary.utils.api_sign_request(
+      {
+        timestamp: timestamp,
+        folder: folder,
+        public_id: publicId,
+        resource_type: 'video'
+      },
+      process.env.CLOUDINARY_API_SECRET
+    );
+    
+    res.json({
+      signature: signature,
+      timestamp: timestamp,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+      apiKey: process.env.CLOUDINARY_API_KEY,
+      folder: folder,
+      publicId: publicId,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${process.env.CLOUDINARY_CLOUD_NAME}/video/upload`
+    });
+    
+    console.log('[Cloudinary] ✅ Upload signature generated for direct upload');
+  } catch (error) {
+    console.error('[Cloudinary] ❌ Error generating signature:', error);
+    res.status(500).json({ 
+      error: 'Failed to generate upload signature',
+      details: error.message 
+    });
+  }
+});
+
+// Delete video from Cloudinary
+app.delete('/api/sermons/delete-video', async (req, res) => {
+  try {
+    const { publicId } = req.body;
+    
+    if (!publicId) {
+      return res.status(400).json({ error: 'Public ID required' });
+    }
+
+    await cloudinary.uploader.destroy(publicId, { 
+      resource_type: 'video' 
+    });
+
+    console.log('[Cloudinary] ✅ Video deleted:', publicId);
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Cloudinary] ❌ Delete error:', error);
+    res.status(500).json({ error: 'Delete failed' });
+  }
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    clients: connectedClients.size,
+    timestamp: Date.now()
+  });
+});
+
+// ImageKit authentication endpoint
+app.get('/api/imagekit-auth', (req, res) => {
+  const crypto = require('crypto');
+  const privateKey = process.env.IMAGEKIT_PRIVATE_KEY || 'private_4SqrpJluMMXKA6BoIIVkEE/Nf94=';
+  
+  const token = crypto.randomBytes(16).toString('hex');
+  const expire = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+  const signature = crypto
+    .createHmac('sha1', privateKey)
+    .update(token + expire)
+    .digest('hex');
+  
+  res.json({
+    token,
+    expire,
+    signature
+  });
+});
+
+  // App version endpoint - for update notifications
+app.get('/api/app-version', (req, res) => {
+  res.json({
+    version: '2.1.0',
+    downloadUrl: 'https://limewire.com/d/PJeq5#4H9xD5UGAO',
+    releaseNotes: `✅ Admin auto-login - never lose access\n✅ Status bar fixed - no more squeezed header\n✅ Videos unmuted by default\n✅ Comments & likes update instantly\n✅ Profile pictures now display\n✅ Video uploads support any duration (under 100MB)\n✅ Offline support with full styling\n✅ Improved performance and stability`,
+    forceUpdate: true // Old versions MUST update to continue using the app
+  });
+});
+
+try {
+  // ==================== UI CONFIGURATION ENDPOINTS ====================// Theme configuration - update colors, fonts, etc. without app rebuild
+app.get('/api/ui/theme', (req, res) => {
+  res.json({
+    version: "1.0",
+    colors: {
+      primary: "#1a1a2e",
+      secondary: "#d4af37",
+      accent: "#16213e",
+      background: "#0f3460",
+      text: "#ffffff",
+      textSecondary: "#b0b0b0",
+      success: "#10b981",
+      error: "#ef4444",
+      warning: "#f59e0b"
+    },
+    fonts: {
+      heading: "Playfair Display",
+      body: "Inter",
+      sizes: {
+        xs: "12px",
+        sm: "14px",
+        base: "16px",
+        lg: "18px",
+        xl: "20px",
+        "2xl": "24px",
+        "3xl": "30px"
+      }
+    },
+    spacing: {
+      xs: "4px",
+      sm: "8px",
+      md: "16px",
+      lg: "24px",
+      xl: "32px"
+    },
+    borderRadius: {
+      sm: "4px",
+      md: "8px",
+      lg: "12px",
+      full: "9999px"
+    }
+  });
+});
+
+// Feature flags - enable/disable features remotely
+app.get('/api/ui/features', (req, res) => {
+  res.json({
+    version: "1.0",
+    features: {
+      videoCall: true,
+      liveStreaming: true,
+      donations: true,
+      chatEnabled: true,
+      aiPastor: true,
+      darkMode: true,
+      notifications: true,
+      offlineMode: true,
+      socialSharing: true,
+      comments: true,
+      likes: true,
+      prayerRequests: true,
+      events: true,
+      bibleStudy: true,
+      giving: true
+    },
+    limits: {
+      maxVideoUploadMB: 100,
+      maxImageUploadMB: 10,
+      maxMessageLength: 5000,
+      maxParticipantsInCall: 10
+    },
+    experimental: {
+      newVideoPlayer: false,
+      enhancedSearch: false,
+      voiceMessages: true
+    }
+  });
+});
+
+// Home screen layout configuration
+app.get('/api/ui/home-layout', (req, res) => {
+  res.json({
+    version: "1.0",
+    sections: [
+      {
+        type: "hero",
+        title: "Welcome to Church of God Evening Light",
+        subtitle: "Join us in worship and fellowship",
+        image: "https://images.unsplash.com/photo-1438232992991-995b7058bbb3?w=800",
+        action: {
+          type: "navigate",
+          target: "/sermons"
+        }
+      },
+      {
+        type: "quick-actions",
+        title: "Quick Access",
+        items: [
+          { icon: "video", label: "Sermons", route: "/sermons", color: "#d4af37" },
+          { icon: "calendar", label: "Events", route: "/events", color: "#10b981" },
+          { icon: "heart", label: "Giving", route: "/giving", color: "#ef4444" },
+          { icon: "chat", label: "Chat", route: "/chat", color: "#3b82f6" }
+        ]
+      },
+      {
+        type: "latest-sermon",
+        title: "Latest Sermon",
+        showThumbnail: true,
+        showDate: true
+      },
+      {
+        type: "upcoming-events",
+        title: "Upcoming Events",
+        limit: 3,
+        showImages: true
+      },
+      {
+        type: "announcements",
+        title: "Announcements",
+        limit: 2,
+        expandable: true
+      },
+      {
+        type: "prayer-requests",
+        title: "Prayer Requests",
+        limit: 5,
+        allowNew: true
+      }
+    ],
+    bottomNav: [
+      { icon: "home", label: "Home", route: "/" },
+      { icon: "video", label: "Sermons", route: "/sermons" },
+      { icon: "calendar", label: "Events", route: "/events" },
+      { icon: "chat", label: "Chat", route: "/chat" },
+      { icon: "user", label: "Profile", route: "/profile" }
+    ]
+  });
+});
+
+// Banner messages - show important announcements
+app.get('/api/ui/banners', (req, res) => {
+  res.json({
+    version: "1.0",
+    banners: [
+      {
+        id: "welcome-2024",
+        type: "info",
+        title: "Welcome!",
+        message: "Join us for Sunday service at 10 AM",
+        icon: "info",
+        dismissible: true,
+        priority: 1,
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        action: {
+          label: "View Events",
+          route: "/events"
+        }
+      }
+    ]
+  });
+});
+
+// Navigation configuration
+app.get('/api/ui/navigation', (req, res) => {
+  res.json({
+    version: "1.0",
+    header: {
+      logo: "https://your-cdn.com/logo.png",
+      showSearch: true,
+      showNotifications: true,
+      showProfile: true
+    },
+    mainMenu: [
+      { label: "Home", route: "/", icon: "home" },
+      { label: "Sermons", route: "/sermons", icon: "video" },
+      { label: "Events", route: "/events", icon: "calendar" },
+      { label: "Bible Study", route: "/bible-study", icon: "book" },
+      { label: "Giving", route: "/giving", icon: "heart" },
+      { label: "Chat", route: "/chat", icon: "chat" },
+      { label: "Pastor AI", route: "/pastor-ai", icon: "sparkles" }
+    ],
+    footer: {
+      showSocialLinks: true,
+      socialLinks: [
+        { platform: "facebook", url: "https://facebook.com/yourchurch" },
+        { platform: "instagram", url: "https://instagram.com/yourchurch" },
+        { platform: "youtube", url: "https://youtube.com/yourchurch" }
+      ],
+      copyright: "© 2024 Church of God Evening Light"
+    }
+  });
+});
+
+// Admin endpoint to update UI configurations (protected)
+app.post('/api/admin/ui-config', verifyAdmin, (req, res) => {
+  const { type, config } = req.body;
+  
+  // In production, save to database
+  // For now, we'll just acknowledge the update
+  console.log(`[Admin] UI config updated: ${type}`);
+  
+  res.json({ 
+    success: true, 
+    message: `${type} configuration updated successfully`,
+    timestamp: new Date().toISOString()
+  });
+});
+
+function handleUserLeave(socket) {
+  const userData = socketUserData.get(socket.id);
+  if (userData) {
+    const { roomId } = userData;
+    if (roomId && videoCallRooms.has(roomId)) {
+      const room = videoCallRooms.get(roomId);
+      room.delete(socket.id);
+      
+      // Notify others in room
+      socket.to(roomId).emit('user-left', {
+        userId: socket.id
+      });
+      
+      console.log(`[VideoCall] ${socket.id} left room ${roomId}. ${room.size} participants remaining`);
+      
+      // Clean up empty rooms
+      if (room.size === 0) {
+        videoCallRooms.delete(roomId);
+        console.log(`[VideoCall] Room ${roomId} deleted (empty)`);
+      }
+    }
+    
+    // Clean up user data
+    socketUserData.delete(socket.id);
+  }
+}
+
+// Start server with Socket.io
+server.listen(PORT, async () => {
+  // Initialize database or file storage
+  await initializeData();
+  
+  console.log(`[Server] Sync server running on port ${PORT}`);
+  console.log(`[Server] Socket.io endpoint: http://localhost:${PORT}`);
+  console.log(`[Server] WebSocket support enabled`);
+});
+
+// Remove server timeout - let uploads take as long as needed (only size limit: 100MB)
+server.timeout = 0; // No timeout
+server.keepAliveTimeout = 0;
+server.headersTimeout = 0;
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('[Server] SIGTERM received, closing server...');
+  
+  if (useDatabase) {
+    await database.closeDatabase();
+  }
+  
+  io.close(() => {
+    console.log('[Server] Socket.io connections closed');
+  });
+  server.close(() => {
+    console.log('[Server] HTTP server closed');
+    process.exit(0);
+  });
+});

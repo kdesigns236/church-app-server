@@ -1,0 +1,99 @@
+// Simple Express server for real-time data synchronization
+// This server broadcasts admin changes to all connected clients
+
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const { Readable } = require('stream');
+const multer = require('multer');
+const cloudinary = require('./config/cloudinary');
+const authRoutes = require('./routes/auth');
+const proxyRoutes = require('./proxy');
+const database = require('./database');
+
+const app = express();
+const server = http.createServer(app);
+const io = socketIo(server, {
+  cors: {
+    origin: "*", // Allow all origins for development
+    methods: ["GET", "POST"]
+  }
+});
+
+const PORT = process.env.PORT || 3001;
+
+// Video call rooms and user data
+const videoCallRooms = new Map(); // roomId -> Set of socket IDs
+const socketUserData = new Map(); // socketId -> { roomId, userName }
+
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: '50mb' })); // Increase limit for base64 files
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Initialize data storage (database or file)
+async function initializeData() {
+  try {
+    console.log('[Server] Starting data initialization...');
+    useDatabase = await database.initDatabase();
+    
+    if (useDatabase) {
+      // Load data from PostgreSQL
+      dataStore = await database.getAllData();
+      console.log('[Server] Using PostgreSQL for data storage');
+    } else {
+      // Load data from file
+      loadDataFromFile();
+      console.log('[Server] Using data.json for data storage');
+    }
+    
+    // Update app.locals after loading data
+    app.locals.dataStore = dataStore;
+    console.log('[Server] DataStore initialized with', dataStore.users?.length || 0, 'users');
+    
+    // Create default admin user if no users exist
+    if (!dataStore.users || dataStore.users.length === 0) {
+      console.log('[Server] No users found, creating default admin user...');
+      const bcrypt = require('bcrypt');
+      const hashedPassword = await bcrypt.hash('admin123', 10);
+      const adminUser = {
+        id: 'admin-user-001',
+        name: 'Admin',
+        email: 'admin@church.com',
+        password: hashedPassword,
+        profilePicture: 'https://res.cloudinary.com/de0zuglgd/image/upload/v1761829850/church-profiles/x3thqajc5samerpfacyq.png',
+        phone: '',
+        role: 'admin',
+        isEmailVerified: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      dataStore.users = [adminUser];
+      app.locals.dataStore = dataStore;
+      await saveData();
+      console.log('[Server] ✅ Default admin user created: admin@church.com / admin123');
+    }
+  } catch (error) {
+    console.error('[Server] Failed to initialize data:', error);
+    throw error;
+  }
+}
+
+// Start server with Socket.io
+server.listen(PORT, async () => {
+  try {
+    // Initialize database or file storage
+    await initializeData();
+    
+    console.log(`[Server] Sync server running on port ${PORT}`);
+    console.log(`[Server] Socket.io endpoint: http://localhost:${PORT}`);
+    console.log(`[Server] WebSocket support enabled`);
+  } catch (error) {
+    console.error('[Server] Failed to start server:', error);
+    process.exit(1);
+  }
+});

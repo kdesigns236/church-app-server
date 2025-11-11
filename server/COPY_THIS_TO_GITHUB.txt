@@ -1,0 +1,38 @@
+📋 INSTRUCTIONS: Copy the ENTIRE content of index.js and paste it to GitHub
+
+1. Go to: https://github.com/kdesigns236/church-app-server
+2. Click on "index.js"
+3. Click the pencil icon (Edit this file)
+4. DELETE ALL the old code
+5. Open: d:\church-of-god-evening-light\server\index.js
+6. Copy EVERYTHING (Ctrl+A, Ctrl+C)
+7. Paste into GitHub editor
+8. Commit message: "Add Socket.io WebSocket support"
+9. Click "Commit changes"
+10. Wait 2-3 minutes for Render to deploy
+11. Refresh your frontend - chat works! 🎉
+
+KEY DIFFERENCES TO VERIFY:
+
+✅ Line 5-6 should have:
+const http = require('http');
+const socketIo = require('socket.io');
+
+✅ Line 13-14 should have:
+const server = http.createServer(app);
+const io = socketIo(server, {
+
+✅ Line 112 should have:
+io.on('connection', (socket) => {
+
+✅ Line 301 should have:
+server.listen(PORT, () => {
+
+✅ Line 303 should say:
+console.log(`[Server] Socket.io endpoint: http://localhost:${PORT}`);
+console.log(`[Server] WebSocket support enabled`);
+
+❌ Should NOT have:
+- app.get('/api/sync/stream', ...)  (OLD SSE code)
+- const clients = new Set();  (OLD SSE code)
+- res.setHeader('Content-Type', 'text/event-stream');  (OLD SSE code)
