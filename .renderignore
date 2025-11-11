@@ -1,0 +1,10 @@
+dist/
+node_modules/
+src/
+public/
+*.tsx
+*.ts
+vite.config.ts
+index.tsx
+index.css
+tsconfig.json
