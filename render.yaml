@@ -3,8 +3,7 @@ services:
     name: church-app-server
     env: node
     plan: free
-    rootDir: ./
-    buildCommand: cd server && npm install
+    buildCommand: npm --prefix server install
     startCommand: node server/index.js
     healthCheckPath: /api/health
     envVars:
@@ -13,5 +12,4 @@ services:
       - key: PORT
         value: 10000
       - key: JWT_SECRET
-        fromDatabase:
-          name: JWT_SECRET
+        value: church-app-secret-key-change-in-production
