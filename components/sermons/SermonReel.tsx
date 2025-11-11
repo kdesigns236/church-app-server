@@ -55,7 +55,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             (sermon.videoUrl.startsWith('http://') || sermon.videoUrl.startsWith('https://'))) {
           console.log('[SermonReel] Loading video from cloud:', sermon.videoUrl);
           // For all URLs (Firebase and Cloudinary)
-                      if (isMountedRef.current) setVideoSrc(url);
+          if (isMountedRef.current) setVideoSrc(sermon.videoUrl);
           return;
         }
 
@@ -87,7 +87,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         // File object
         if (typeof sermon.videoUrl === 'object' && 'name' in sermon.videoUrl) {
           objectUrl = URL.createObjectURL(sermon.videoUrl as File);
-          if (isMounted) setVideoSrc(objectUrl);
+          if (isMountedRef.current) setVideoSrc(objectUrl);
           return;
         }
 
@@ -97,7 +97,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         
       } catch (error) {
         console.error('[SermonReel] Error loading video:', error);
-        if (isMounted) setVideoSrc('');
+        if (isMountedRef.current) setVideoSrc('');
       }
     };
 

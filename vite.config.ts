@@ -12,15 +12,15 @@ export default defineConfig(({ mode }) => {
         host: '0.0.0.0',
         proxy: {
           '/api': {
-            target: 'http://localhost:3001',
+            target: 'https://church-app-server.onrender.com',
             changeOrigin: true,
-            secure: false
+            secure: true
           },
           '/socket.io': {
-            target: 'http://localhost:3001',
+            target: 'https://church-app-server.onrender.com',
             ws: true,
             changeOrigin: true,
-            secure: false
+            secure: true
           },
         },
       },

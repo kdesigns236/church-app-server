@@ -2,7 +2,7 @@
 // Checks for new app versions and prompts users to update
 
 const CURRENT_APP_VERSION = '2.1.0'; // Update this when you release new version
-const UPDATE_CHECK_URL = 'https://church-app-server.onrender.com/api/app-version';
+const UPDATE_CHECK_URL = `${import.meta.env.VITE_API_URL || 'https://church-app-server.onrender.com/api'}/app-version`;
 
 interface AppVersion {
   version: string;

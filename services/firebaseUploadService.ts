@@ -179,8 +179,8 @@ export async function uploadSermonWithVideo(
     console.log('[Firebase] Video uploaded, saving to database...');
 
     // 2. Save sermon data with Firebase video URL to database
-    // Use localhost for testing while Render is down
-    const apiUrl = import.meta.env?.VITE_API_URL || 'http://localhost:3001/api';
+    // Use environment variable for API URL, fallback to localhost for development
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
     
     // Get auth token from localStorage
     const token = localStorage.getItem('authToken');
@@ -207,8 +207,14 @@ export async function uploadSermonWithVideo(
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Failed to save to database');
+      const text = await response.text();
+      console.error('[Firebase] Server response:', text);
+      try {
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.error || 'Failed to save to database');
+      } catch (e) {
+        throw new Error(`Server Error (${response.status}): ${text.substring(0, 100)}...`);
+      }
     }
 
     const result = await response.json();

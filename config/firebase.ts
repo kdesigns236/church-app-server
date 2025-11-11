@@ -8,16 +8,15 @@ import { initializeApp } from 'firebase/app';
 import { getStorage } from 'firebase/storage';
 import { getAuth, signInAnonymously } from 'firebase/auth';
 
-// Firebase Configuration - Church App
-// Project: church-app-35f50
+// Firebase Configuration from environment variables
 const firebaseConfig = {
-  apiKey: "AIzaSyDer6BoUDdL738WsLFl30dXg_D4qYsGy5k",
-  authDomain: "church-app-35f50.firebaseapp.com",
-  projectId: "church-app-35f50",
-  storageBucket: "church-app-35f50.firebasestorage.app",
-  messagingSenderId: "181002070231",
-  appId: "1:181002070231:web:599db5e8f6907fc406a892",
-  measurementId: "G-GPXT3MVGSW"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
 // Initialize Firebase
