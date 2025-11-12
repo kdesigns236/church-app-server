@@ -26,6 +26,24 @@ app.use(cors());
 app.use(express.json());
 
 // JWT Middleware
+// Verify token - allows both admin and member roles
+const verifyToken = (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    if (!token) {
+      return res.status(401).json({ error: 'No token provided' });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+    req.user = decoded;
+    next();
+  } catch (error) {
+    console.error('[Auth] Invalid token:', error);
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Verify admin role only
 const verifyAdmin = (req, res, next) => {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
@@ -158,6 +176,62 @@ function broadcastUpdate(syncData) {
 }
 
 // API Routes
+// Sync endpoint - receive updates from clients
+app.post('/api/sync/push', verifyToken, async (req, res) => {
+  try {
+    const syncData = req.body;
+    const { type, action, data } = syncData;
+
+    console.log(`[Server] Received sync update: ${type} ${action}`);
+
+    // Validate data type
+    if (!type || !dataStore.hasOwnProperty(type)) {
+      return res.status(400).json({ error: `Invalid data type: ${type}` });
+    }
+
+    // Process based on action
+    if (action === 'add') {
+      // Add new item
+      if (!Array.isArray(dataStore[type])) {
+        return res.status(400).json({ error: `${type} is not an array` });
+      }
+      dataStore[type].unshift(data);
+      console.log(`[Server] ✅ Added ${type}: ${data.id}`);
+    } else if (action === 'update') {
+      // Update existing item
+      if (Array.isArray(dataStore[type])) {
+        const index = dataStore[type].findIndex(item => item.id === data.id);
+        if (index !== -1) {
+          dataStore[type][index] = data;
+          console.log(`[Server] ✅ Updated ${type}: ${data.id}`);
+        } else {
+          console.warn(`[Server] Item not found for update: ${type} ${data.id}`);
+        }
+      }
+    } else if (action === 'delete') {
+      // Delete item
+      if (Array.isArray(dataStore[type])) {
+        const index = dataStore[type].findIndex(item => item.id === data.id);
+        if (index !== -1) {
+          dataStore[type].splice(index, 1);
+          console.log(`[Server] ✅ Deleted ${type}: ${data.id}`);
+        }
+      }
+    }
+
+    // Save to file
+    await saveDataToFile();
+
+    // Broadcast update to all connected clients
+    broadcastUpdate(syncData);
+
+    res.json({ success: true, message: `${action} ${type} completed` });
+  } catch (error) {
+    console.error('[Server] Error processing sync update:', error);
+    res.status(500).json({ error: 'Failed to process sync update', details: error.message });
+  }
+});
+
 app.get('/api/sync/data', (req, res) => {
   console.log('[Server] Fetching all data for sync');
   res.json(dataStore);
