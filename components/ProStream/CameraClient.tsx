@@ -86,7 +86,8 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
 
   useEffect(() => {
-    channelRef.current = new BroadcastChannel(sessionId);
+    const shortSessionId = (sessionId.split(':')[1] || sessionId).trim();
+    channelRef.current = new BroadcastChannel(shortSessionId);
 
 
     const handleMessage = async (event: MessageEvent) => {
