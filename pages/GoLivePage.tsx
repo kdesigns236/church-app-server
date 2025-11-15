@@ -73,7 +73,8 @@ const GoLivePage: React.FC = () => {
 
   if (displaySessionId) {
     const short = displaySessionId.split(':')[1] || displaySessionId;
-    const displayUrl = `http://localhost:5173/?role=display&session=${short}`;
+    const proStreamBaseUrl = import.meta.env.VITE_PRO_STREAM_URL || 'http://localhost:5173';
+    const displayUrl = `${proStreamBaseUrl}/?role=display&session=${short}`;
     return (
       <div className="h-screen w-screen bg-black relative overflow-hidden">
         <iframe

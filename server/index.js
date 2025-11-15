@@ -176,6 +176,90 @@ function broadcastUpdate(syncData) {
 }
 
 // API Routes
+
+// Auth: login existing user (admin or member)
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    const users = dataStore.users || [];
+    const user = users.find(u => u.email === email);
+
+    if (!user || !user.password) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const bcrypt = require('bcrypt');
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+      { expiresIn: '30d' }
+    );
+
+    // Do not expose password hash to client
+    const { password: _password, ...safeUser } = user;
+
+    res.json({ token, user: safeUser });
+  } catch (error) {
+    console.error('[Auth] Login error:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Auth: register new member user
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { name, email, password, profilePicture } = req.body;
+
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: 'Name, email and password are required' });
+    }
+
+    const users = dataStore.users || [];
+    if (users.find(u => u.email === email)) {
+      return res.status(400).json({ error: 'Email already in use' });
+    }
+
+    const bcrypt = require('bcrypt');
+    const hashedPassword = await bcrypt.hash(password, 8);
+
+    const newUser = {
+      id: `user-${Date.now()}`,
+      name,
+      email,
+      password: hashedPassword,
+      role: 'member',
+      profilePicture,
+      createdAt: new Date().toISOString()
+    };
+
+    dataStore.users = users.concat(newUser);
+    await saveDataToFile();
+
+    const token = jwt.sign(
+      { id: newUser.id, email: newUser.email, role: newUser.role },
+      process.env.JWT_SECRET || 'your-secret-key-change-in-production',
+      { expiresIn: '30d' }
+    );
+
+    const { password: _password, ...safeUser } = newUser;
+
+    res.json({ token, user: safeUser });
+  } catch (error) {
+    console.error('[Auth] Register error:', error);
+    res.status(500).json({ error: 'Registration failed' });
+  }
+});
+
 // Sync endpoint - receive updates from clients
 app.post('/api/sync/push', verifyToken, async (req, res) => {
   try {
