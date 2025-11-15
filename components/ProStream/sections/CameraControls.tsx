@@ -104,6 +104,17 @@ const CameraControls: React.FC<CameraControlsProps> = ({
                     <option key={device.id} value={device.id}>{device.label}</option>
                   ))}
                 </select>
+                <div className="mt-1 text-[11px] text-gray-400">
+                  {slot.status === 'connected' && slot.sourceType === 'remote' && (
+                    <span>Phone camera connected</span>
+                  )}
+                  {slot.status === 'connected' && slot.sourceType === 'local' && slot.device && (
+                    <span>Using local device: {slot.device.label}</span>
+                  )}
+                  {slot.status === 'disconnected' && (
+                    <span>No camera connected</span>
+                  )}
+                </div>
                 <div className="flex items-center space-x-2 mt-2">
                   <button 
                     onClick={() => setActiveCameraId(slot.id)}

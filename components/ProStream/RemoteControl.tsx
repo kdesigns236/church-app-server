@@ -2,7 +2,10 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './Sidebar';
 import { CameraSlot, CameraDevice, TransitionType, LowerThirdConfig, AnnouncementConfig, LyricsConfig, BibleVerseConfig } from './types';
 import { IconSettings, IconVideo, IconX } from './icons';
+import { io, Socket } from 'socket.io-client';
 
+
+const SIGNALING_URL = import.meta.env.VITE_SYNC_SERVER_URL || 'https://church-app-server.onrender.com';
 
 const RTC_CONFIGURATION = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
@@ -26,7 +29,8 @@ interface RemoteControlProps {
 
 
 const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
-  const channelRef = useRef<BroadcastChannel | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const shortSessionIdRef = useRef<string>('');
   const peerConnectionsRef = useRef<Map<number, RTCPeerConnection>>(new Map());
   const autoAssignedPrimaryRef = useRef(false);
 
@@ -161,28 +165,36 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
 
   useEffect(() => {
     const shortSessionId = (sessionId.split(':')[1] || sessionId).trim();
-    channelRef.current = new BroadcastChannel(shortSessionId);
-    
-    const handleMessage = async (event: MessageEvent) => {
-        const { type, slotId, payload } = event.data;
-        if (!type || !slotId) return;
-        
-        const numericSlotId = parseInt(slotId, 10);
+    shortSessionIdRef.current = shortSessionId;
+    const socket = io(SIGNALING_URL, { transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+    socket.emit('prostream:join', { sessionId: shortSessionId, role: 'controller' });
 
+    const handleSignal = async (message: any) => {
+        const { type, slotId, payload, target } = message;
+        if (!type || !slotId) return;
+        const numericSlotId = parseInt(String(slotId), 10);
 
         try {
             if (type === 'camera-disconnected') {
-                setCameraSlots(prev => prev.map(s => s.id === numericSlotId ? {...s, status: 'disconnected', sourceType: null, stream: null} : s));
+                setCameraSlots(prev => prev.map(s => s.id === numericSlotId ? { ...s, status: 'disconnected', sourceType: null, stream: null } : s));
                 peerConnectionsRef.current.get(numericSlotId)?.close();
                 peerConnectionsRef.current.delete(numericSlotId);
-            } else if (type === 'webrtc-offer') {
+            } else if (type === 'webrtc-offer' && (!target || target === 'controller')) {
                 const peerConnection = new RTCPeerConnection(RTC_CONFIGURATION);
                 peerConnectionsRef.current.set(numericSlotId, peerConnection);
 
-
                 peerConnection.onicecandidate = (e) => {
                     if (e.candidate) {
-                        channelRef.current?.postMessage({ type: 'webrtc-candidate', slotId: numericSlotId, payload: e.candidate, target: 'camera' });
+                        const s = socketRef.current;
+                        if (!s) return;
+                        s.emit('prostream:signal', {
+                            sessionId: shortSessionIdRef.current,
+                            type: 'webrtc-candidate',
+                            slotId: numericSlotId,
+                            payload: e.candidate,
+                            target: 'camera'
+                        });
                     }
                 };
                 
@@ -195,24 +207,33 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
                     setActiveCameraId(prevId => prevId === null ? numericSlotId : prevId);
                 };
 
-
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(payload));
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
-                channelRef.current?.postMessage({ type: 'webrtc-answer', slotId: numericSlotId, payload: answer, target: 'camera' });
-            } else if (type === 'webrtc-candidate' && event.data.target === 'controller') {
+                const s = socketRef.current;
+                if (s) {
+                    s.emit('prostream:signal', {
+                        sessionId: shortSessionIdRef.current,
+                        type: 'webrtc-answer',
+                        slotId: numericSlotId,
+                        payload: answer,
+                        target: 'camera'
+                    });
+                }
+            } else if (type === 'webrtc-candidate' && target === 'controller') {
                 await peerConnectionsRef.current.get(numericSlotId)?.addIceCandidate(new RTCIceCandidate(payload));
             }
         } catch (err) {
-            console.error(`Error handling message type ${type} for slot ${slotId}:`, err);
+            console.error(`Error handling ProStream signal type ${type} for slot ${slotId}:`, err);
         }
     };
-    
-    channelRef.current.onmessage = handleMessage;
-    
+
+    socket.on('prostream:signal', handleSignal);
+
     return () => {
         peerConnectionsRef.current.forEach(pc => pc.close());
-        channelRef.current?.close();
+        socket.off('prostream:signal', handleSignal);
+        socket.disconnect();
     };
   }, [sessionId]);
 
@@ -223,7 +244,10 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
         announcementConfig, lyricsConfig, bibleVerseConfig,
         cameraSlots: cameraSlots.map(s => ({...s, stream: null}))
     };
-    channelRef.current?.postMessage({
+    const socket = socketRef.current;
+    if (!socket || !shortSessionIdRef.current) return;
+    socket.emit('prostream:signal', {
+        sessionId: shortSessionIdRef.current,
         type: 'state-update',
         payload: getSerializableState(fullState)
     });

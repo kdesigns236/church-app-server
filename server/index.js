@@ -162,6 +162,31 @@ io.on('connection', (socket) => {
 
   socket.emit('connected', { message: 'Connected to sync server' });
 
+  // --- Pro Stream signaling support (controller / camera / display) ---
+  socket.on('prostream:join', ({ sessionId, role, slotId }) => {
+    try {
+      if (!sessionId) return;
+      const room = `prostream:${sessionId}`;
+      socket.join(room);
+      socket.data.proStream = { sessionId, role, slotId };
+      console.log(`[ProStream] ${role || 'client'} joined session ${sessionId} (slot ${slotId ?? 'n/a'})`);
+    } catch (err) {
+      console.error('[ProStream] Error joining session:', err);
+    }
+  });
+
+  socket.on('prostream:signal', (message) => {
+    try {
+      if (!message || !message.sessionId) return;
+      const room = `prostream:${message.sessionId}`;
+      // Relay to all other sockets in the same Pro Stream session
+      socket.to(room).emit('prostream:signal', message);
+    } catch (err) {
+      console.error('[ProStream] Error relaying signal:', err);
+    }
+  });
+  // --- End Pro Stream signaling support ---
+
   socket.on('disconnect', () => {
     connectedClients.delete(socket.id);
     console.log(`[Socket.io] Client disconnected: ${socket.id}`);

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import VideoPreview from './VideoPreview';
 import { IconSettings } from './icons';
 import { CameraSlot, LowerThirdConfig, AnnouncementConfig, LyricsConfig, BibleVerseConfig } from './types';
+import { io, Socket } from 'socket.io-client';
 
 
 interface DisplayProps {
@@ -19,6 +20,8 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const [announcementConfig, setAnnouncementConfig] = useState<AnnouncementConfig>({ isVisible: false, text: '', fontSize: '', fontFamily: '', textColor: '', textAlign: 'center', backgroundColor: '', backgroundOpacity: 0, animationStyle: 'fade', position: 'bottom' });
   const [lyricsConfig, setLyricsConfig] = useState<LyricsConfig>({ isVisible: false, song: null, verseIndex: 0, fontSize: '', fontFamily: '', textColor: '', textAlign: 'center', backgroundColor: '', backgroundOpacity: 0, animationStyle: 'fade', position: 'bottom' });
   const [bibleVerseConfig, setBibleVerseConfig] = useState<BibleVerseConfig>({ isVisible: false, text: '', reference: '', fontSize: '', fontFamily: '', textColor: '', textAlign: 'center', backgroundColor: '', backgroundOpacity: 0, animationStyle: 'fade', position: 'bottom' });
+  const socketRef = useRef<Socket | null>(null);
+  const shortSessionIdRef = useRef<string>('');
   
   // Start with the local default camera so the GoLive page shows a feed immediately
   useEffect(() => {
@@ -37,61 +40,68 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     if (!sessionId) return;
 
 
-    const channel = new BroadcastChannel(sessionId.split(':')[1]);
+    const shortSessionId = (sessionId.split(':')[1] || sessionId).trim();
+    shortSessionIdRef.current = shortSessionId;
+    const signalingUrl = import.meta.env.VITE_SYNC_SERVER_URL || 'https://church-app-server.onrender.com';
+    const socket = io(signalingUrl, { transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+    socket.emit('prostream:join', { sessionId: shortSessionId, role: 'display' });
 
 
-    const handleMessage = (event: MessageEvent) => {
-      const { type, payload } = event.data;
-      if (type === 'state-update') {
-        if (!isConnected) setIsConnected(true);
+    const handleSignal = (message: any) => {
+      const { type, payload } = message;
+      if (type !== 'state-update' || !payload) return;
 
 
-        setIsLive(payload.isLive);
-        setLowerThirdConfig(payload.lowerThirdConfig);
-        setLowerThirdAnimationKey(payload.lowerThirdAnimationKey);
-        setAnnouncementConfig(payload.announcementConfig);
-        setLyricsConfig(payload.lyricsConfig);
-        setBibleVerseConfig(payload.bibleVerseConfig);
-        
-        const activeSlot = payload.cameraSlots.find((s: CameraSlot) => s.id === payload.activeCameraId);
+      if (!isConnected) setIsConnected(true);
 
 
-        if (activeSlot && activeSlot.status === 'connected') {
-          if (activeSlot.sourceType === 'local' && activeSlot.device?.id) {
-            navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: activeSlot.device.id } } })
-              .then(stream => {
-                if (currentStreamRef.current && currentStreamRef.current !== stream) {
-                  currentStreamRef.current.getTracks().forEach(track => track.stop());
-                }
-                currentStreamRef.current = stream;
-                setActiveStream(stream);
-              })
-              .catch(err => console.error("Display error getting local stream:", err));
-          } else if (activeSlot.sourceType === 'remote') {
-            // Placeholder remote handling; keep a visible stream
-            navigator.mediaDevices.getUserMedia({ video: true })
-              .then(stream => {
-                if (currentStreamRef.current && currentStreamRef.current !== stream) {
-                  currentStreamRef.current.getTracks().forEach(track => track.stop());
-                }
-                currentStreamRef.current = stream;
-                setActiveStream(stream);
-              })
-              .catch(err => console.error("Display error getting remote placeholder:", err));
-          }
-          // If activeSlot is connected but unknown type, do not clear the current local fallback
-        } else {
-          // No active slot chosen by controller: keep existing local fallback stream if any
+      setIsLive(payload.isLive);
+      setLowerThirdConfig(payload.lowerThirdConfig);
+      setLowerThirdAnimationKey(payload.lowerThirdAnimationKey);
+      setAnnouncementConfig(payload.announcementConfig);
+      setLyricsConfig(payload.lyricsConfig);
+      setBibleVerseConfig(payload.bibleVerseConfig);
+      
+      const activeSlot = payload.cameraSlots.find((s: CameraSlot) => s.id === payload.activeCameraId);
+
+
+      if (activeSlot && activeSlot.status === 'connected') {
+        if (activeSlot.sourceType === 'local' && activeSlot.device?.id) {
+          navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: activeSlot.device.id } } })
+            .then(stream => {
+              if (currentStreamRef.current && currentStreamRef.current !== stream) {
+                currentStreamRef.current.getTracks().forEach(track => track.stop());
+              }
+              currentStreamRef.current = stream;
+              setActiveStream(stream);
+            })
+            .catch(err => console.error("Display error getting local stream:", err));
+        } else if (activeSlot.sourceType === 'remote') {
+          // Placeholder remote handling; keep a visible stream
+          navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+              if (currentStreamRef.current && currentStreamRef.current !== stream) {
+                currentStreamRef.current.getTracks().forEach(track => track.stop());
+              }
+              currentStreamRef.current = stream;
+              setActiveStream(stream);
+            })
+            .catch(err => console.error("Display error getting remote placeholder:", err));
         }
+        // If activeSlot is connected but unknown type, do not clear the current local fallback
+      } else {
+        // No active slot chosen by controller: keep existing local fallback stream if any
       }
     };
 
 
-    channel.onmessage = handleMessage;
+    socket.on('prostream:signal', handleSignal);
 
 
     return () => {
-      channel.close();
+      socket.off('prostream:signal', handleSignal);
+      socket.disconnect();
       if (currentStreamRef.current) {
         currentStreamRef.current.getTracks().forEach(track => track.stop());
       }

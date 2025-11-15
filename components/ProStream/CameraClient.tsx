@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { IconVideo, IconMic, IconMicOff, IconFlipCamera, IconX } from './icons';
+import { io, Socket } from 'socket.io-client';
 
 
 interface CameraClientProps {
@@ -7,6 +8,9 @@ interface CameraClientProps {
   slotId: string;
   onExit: () => void;
 }
+
+
+const SIGNALING_URL = import.meta.env.VITE_SYNC_SERVER_URL || 'https://church-app-server.onrender.com';
 
 
 const RTC_CONFIGURATION = {
@@ -17,7 +21,8 @@ const RTC_CONFIGURATION = {
 const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const channelRef = useRef<BroadcastChannel | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const shortSessionIdRef = useRef<string>('');
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
 
 
@@ -29,7 +34,8 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
 
   const startWebRTC = useCallback(async (stream: MediaStream) => {
-    if (!channelRef.current) return;
+    const socket = socketRef.current;
+    if (!socket || !shortSessionIdRef.current) return;
     try {
       peerConnectionRef.current = new RTCPeerConnection(RTC_CONFIGURATION);
       
@@ -37,14 +43,26 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       
       peerConnectionRef.current.onicecandidate = (event) => {
           if (event.candidate) {
-              channelRef.current?.postMessage({ type: 'webrtc-candidate', slotId, payload: event.candidate, target: 'controller' });
+              socket.emit('prostream:signal', {
+                  sessionId: shortSessionIdRef.current,
+                  type: 'webrtc-candidate',
+                  slotId,
+                  payload: event.candidate,
+                  target: 'controller'
+              });
           }
       };
       
       const offer = await peerConnectionRef.current.createOffer();
       await peerConnectionRef.current.setLocalDescription(offer);
       
-      channelRef.current?.postMessage({ type: 'webrtc-offer', slotId, payload: offer });
+      socket.emit('prostream:signal', {
+          sessionId: shortSessionIdRef.current,
+          type: 'webrtc-offer',
+          slotId,
+          payload: offer,
+          target: 'controller'
+      });
     } catch (err) {
       console.error('Error starting WebRTC connection:', err);
       setError('Failed to establish a video connection with the controller.');
@@ -87,12 +105,15 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
   useEffect(() => {
     const shortSessionId = (sessionId.split(':')[1] || sessionId).trim();
-    channelRef.current = new BroadcastChannel(shortSessionId);
+    shortSessionIdRef.current = shortSessionId;
+    const socket = io(SIGNALING_URL, { transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+    socket.emit('prostream:join', { sessionId: shortSessionId, role: 'camera', slotId });
 
 
-    const handleMessage = async (event: MessageEvent) => {
-        const { type, slotId: msgSlotId, payload, target } = event.data;
-        if (target !== 'camera' || msgSlotId.toString() !== slotId) return;
+    const handleSignal = async (message: any) => {
+        const { type, slotId: msgSlotId, payload, target } = message;
+        if (target !== 'camera' || String(msgSlotId) !== String(slotId)) return;
 
 
         try {
@@ -105,10 +126,12 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
             console.error('Error processing WebRTC message from controller:', err);
         }
     };
-    channelRef.current.onmessage = handleMessage;
+    socket.on('prostream:signal', handleSignal);
     
     const handleUnload = () => {
-        channelRef.current?.postMessage({ type: 'camera-disconnected', slotId });
+        const s = socketRef.current;
+        if (!s || !shortSessionIdRef.current) return;
+        s.emit('prostream:signal', { type: 'camera-disconnected', sessionId: shortSessionIdRef.current, slotId });
     };
     window.addEventListener('beforeunload', handleUnload);
 
@@ -116,7 +139,8 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
     return () => {
         handleUnload();
         peerConnectionRef.current?.close();
-        channelRef.current?.close();
+        socket.off('prostream:signal', handleSignal);
+        socket.disconnect();
         window.removeEventListener('beforeunload', handleUnload);
     };
   }, [sessionId, slotId]);
