@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('[AuthContext] Starting login process...');
       // Use environment variable or fallback to production URL
-      const apiUrl = (import.meta as any).env.VITE_API_URL || 'http://localhost:3001/api';
+      const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
       console.log('[AuthContext] Login API URL:', apiUrl);
       const response = await apiClient.fetch(`${apiUrl}/auth/login`, {
         method: 'POST',

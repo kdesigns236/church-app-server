@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { HomeIcon, SermonsIcon, AnnouncementsIcon, EventsIcon, BibleIcon, GivingIcon, MenuIcon, CloseIcon, CrossIcon, MailIcon, ChatBubbleIcon, MoonIcon, BroadcastIcon } from '../constants/icons';
+import { HomeIcon, SermonsIcon, AnnouncementsIcon, EventsIcon, BibleIcon, BookIcon, GivingIcon, MenuIcon, CloseIcon, CrossIcon, MailIcon, ChatBubbleIcon, MoonIcon, BroadcastIcon } from '../constants/icons';
 import { AssistantIcon } from '../constants/icons';
 import { useAuth } from '../hooks/useAuth';
 
@@ -12,6 +12,7 @@ const navLinks = [
   { name: 'Events', path: '/events', icon: EventsIcon },
   { name: 'Bible', path: '/bible', icon: BibleIcon },
   { name: 'Bible Study', path: '/bible-study', icon: BibleIcon },
+  { name: 'Tenzi la Rohoni', path: '/tenzi', icon: BookIcon },
   { name: 'Giving', path: '/giving', icon: GivingIcon },
   { name: 'Go Live', path: '/golive', icon: BroadcastIcon },
   { name: 'Chat', path: '/chat', icon: ChatBubbleIcon },

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <item
+        android:id="@+id/nav_stream"
+        android:icon="@drawable/ic_live_tv"
+        android:title="Stream" />
+    
+    <item
+        android:id="@+id/nav_cameras"
+        android:icon="@drawable/ic_videocam"
+        android:title="Cameras" />
+    
+    <item
+        android:id="@+id/nav_lower_thirds"
+        android:icon="@drawable/ic_text_fields"
+        android:title="Lower 3rd" />
+    
+    <item
+        android:id="@+id/nav_announcements"
+        android:icon="@drawable/ic_announcement"
+        android:title="Announce" />
+    
+    <item
+        android:id="@+id/nav_lyrics"
+        android:icon="@drawable/ic_music_note"
+        android:title="Lyrics" />
+    
+    <item
+        android:id="@+id/nav_bible"
+        android:icon="@drawable/ic_book"
+        android:title="Bible" />
+    
+    <item
+        android:id="@+id/nav_recording"
+        android:icon="@drawable/ic_record"
+        android:title="Record" />
+    
+    <item
+        android:id="@+id/nav_stats"
+        android:icon="@drawable/ic_analytics"
+        android:title="Stats" />
+    
+    <item
+        android:id="@+id/nav_chat"
+        android:icon="@drawable/ic_chat"
+        android:title="Chat" />
+    
+</menu>

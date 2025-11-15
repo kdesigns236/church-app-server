@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Church Camera Android App - Preview</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            background: #1e3a8a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .phone-container {
+            width: 375px;
+            height: 667px;
+            background: #000;
+            border-radius: 25px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .screen {
+            width: 100%;
+            height: 100%;
+            background: #1e3a8a;
+            border-radius: 15px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .screen-content {
+            padding: 20px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Main Screen */
+        .main-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            height: 100%;
+        }
+        
+        .church-logo {
+            width: 80px;
+            height: 80px;
+            background: #f59e0b;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            margin-bottom: 20px;
+        }
+        
+        .app-title {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+        
+        .church-name {
+            color: #f59e0b;
+            font-size: 16px;
+            margin-bottom: 40px;
+        }
+        
+        .main-button {
+            width: 100%;
+            padding: 16px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .primary-button {
+            background: #f59e0b;
+            color: #1e3a8a;
+        }
+        
+        .secondary-button {
+            background: #374151;
+            color: white;
+        }
+        
+        .main-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        /* Choice Screen */
+        .choice-screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .back-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: #374151;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+        }
+        
+        .choice-title {
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 16px;
+        }
+        
+        .choice-subtitle {
+            color: #9ca3af;
+            font-size: 16px;
+        }
+        
+        .choice-buttons {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 20px;
+        }
+        
+        .choice-button {
+            padding: 20px;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        
+        .camera-button {
+            background: #f59e0b;
+            color: #1e3a8a;
+        }
+        
+        .controller-button {
+            background: #1e40af;
+            color: white;
+        }
+        
+        /* Controller Screen */
+        .controller-screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .controller-header {
+            background: #374151;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            background: #10b981;
+            border-radius: 50%;
+        }
+        
+        .controller-title {
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        
+        .controller-content {
+            flex: 1;
+            background: #374151;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .control-section {
+            margin-bottom: 24px;
+        }
+        
+        .section-title {
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 12px;
+        }
+        
+        .control-item {
+            background: #4b5563;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .toggle-button {
+            background: #1e40af;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        
+        .bottom-nav {
+            display: flex;
+            background: #374151;
+            border-radius: 12px;
+            padding: 8px;
+            gap: 4px;
+            margin-top: 20px;
+        }
+        
+        .nav-item {
+            flex: 1;
+            padding: 8px 4px;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 10px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .nav-item.active {
+            background: #1e40af;
+            color: white;
+        }
+        
+        /* Camera Screen */
+        .camera-screen {
+            display: none;
+            flex-direction: column;
+            height: 100%;
+            background: #000;
+        }
+        
+        .camera-preview {
+            flex: 1;
+            background: linear-gradient(45deg, #374151, #4b5563);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 18px;
+            position: relative;
+        }
+        
+        .camera-controls {
+            background: rgba(0,0,0,0.8);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+        
+        .control-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+            color: white;
+            font-size: 14px;
+        }
+        
+        .slider {
+            flex: 1;
+            height: 4px;
+            background: #374151;
+            border-radius: 2px;
+            position: relative;
+        }
+        
+        .slider::after {
+            content: '';
+            position: absolute;
+            left: 30%;
+            top: -4px;
+            width: 12px;
+            height: 12px;
+            background: #f59e0b;
+            border-radius: 50%;
+        }
+        
+        .camera-buttons {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .camera-button-small {
+            background: #374151;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        
+        .connect-button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 16px 24px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        .navigation-buttons {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            z-index: 1000;
+        }
+        
+        .nav-button {
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .nav-button.active {
+            background: #f59e0b;
+            color: #1e3a8a;
+        }
+    </style>
+</head>
+<body>
+    <div class="phone-container">
+        <div class="screen">
+            <!-- Main Screen -->
+            <div class="screen-content main-screen" id="mainScreen">
+                <div class="church-logo">✝</div>
+                <h1 class="app-title">Church Camera</h1>
+                <p class="church-name">Church of God Evening Light</p>
+                <button class="main-button primary-button" onclick="showChoiceScreen()">📱 Scan QR Code</button>
+                <button class="main-button secondary-button">⚙️ Manual Connect</button>
+                <button class="main-button secondary-button">📹 Test Camera</button>
+            </div>
+            
+            <!-- Choice Screen -->
+            <div class="screen-content choice-screen" id="choiceScreen">
+                <button class="back-button" onclick="showMainScreen()">←</button>
+                <div class="header">
+                    <h2 class="choice-title">Choose Your Role</h2>
+                    <p class="choice-subtitle">How would you like to join the streaming system?</p>
+                </div>
+                <div class="choice-buttons">
+                    <button class="choice-button camera-button" onclick="showCameraScreen()">
+                        📹 CAMERA SOURCE
+                    </button>
+                    <p style="color: #9ca3af; text-align: center; font-size: 14px;">Use this device as a camera for live streaming</p>
+                    
+                    <button class="choice-button controller-button" onclick="showControllerScreen()">
+                        🎛️ CONTROLLER
+                    </button>
+                    <p style="color: #9ca3af; text-align: center; font-size: 14px;">Control the live stream (lyrics, announcements, cameras)</p>
+                </div>
+            </div>
+            
+            <!-- Controller Screen -->
+            <div class="screen-content controller-screen" id="controllerScreen">
+                <button class="back-button" onclick="showChoiceScreen()">←</button>
+                <div class="controller-header">
+                    <div class="status-indicator"></div>
+                    <div>
+                        <div class="controller-title">Stream Controller</div>
+                        <div style="color: #9ca3af; font-size: 12px;">Connected: 192.168.1.100:8080</div>
+                    </div>
+                </div>
+                
+                <div class="controller-content">
+                    <div class="control-section">
+                        <div class="section-title">Stream Controls</div>
+                        <div class="control-item">
+                            <span>📺 YouTube</span>
+                            <button class="toggle-button">ON</button>
+                        </div>
+                        <div class="control-item">
+                            <span>📘 Facebook</span>
+                            <button class="toggle-button">OFF</button>
+                        </div>
+                        <div class="control-item">
+                            <span>🔴 GO LIVE</span>
+                            <button class="toggle-button" style="background: #dc2626;">LIVE</button>
+                        </div>
+                    </div>
+                    
+                    <div class="control-section">
+                        <div class="section-title">Lower Third</div>
+                        <div class="control-item">
+                            <span>📝 "SUNDAY SERVICE"</span>
+                            <button class="toggle-button">SHOW</button>
+                        </div>
+                    </div>
+                    
+                    <div class="control-section">
+                        <div class="section-title">Lyrics</div>
+                        <div class="control-item">
+                            <span>🎵 Amazing Grace - Verse 1</span>
+                            <button class="toggle-button">SHOW</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bottom-nav">
+                    <div class="nav-item active">Stream</div>
+                    <div class="nav-item">Camera</div>
+                    <div class="nav-item">Lower</div>
+                    <div class="nav-item">Announce</div>
+                    <div class="nav-item">Lyrics</div>
+                    <div class="nav-item">Bible</div>
+                    <div class="nav-item">Record</div>
+                    <div class="nav-item">Stats</div>
+                    <div class="nav-item">Chat</div>
+                </div>
+            </div>
+            
+            <!-- Camera Screen -->
+            <div class="screen-content camera-screen" id="cameraScreen">
+                <button class="back-button" onclick="showChoiceScreen()">←</button>
+                <div class="camera-preview">
+                    <div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 16px;">📹</div>
+                        <div>HD Camera Preview</div>
+                        <div style="font-size: 14px; color: #9ca3af; margin-top: 8px;">Touch to focus • Pinch to zoom</div>
+                    </div>
+                </div>
+                
+                <div class="camera-controls">
+                    <div class="control-row">
+                        <span>Zoom</span>
+                        <div class="slider"></div>
+                        <span>2.5x</span>
+                    </div>
+                    <div class="control-row">
+                        <span>Exposure</span>
+                        <div class="slider"></div>
+                        <span>+1</span>
+                    </div>
+                </div>
+                
+                <div class="camera-buttons">
+                    <button class="camera-button-small">🔄</button>
+                    <button class="camera-button-small">Controls</button>
+                    <button class="connect-button">Connected</button>
+                    <button class="camera-button-small">⚙️</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="navigation-buttons">
+        <button class="nav-button active" onclick="showMainScreen()">Main</button>
+        <button class="nav-button" onclick="showChoiceScreen()">Choice</button>
+        <button class="nav-button" onclick="showControllerScreen()">Controller</button>
+        <button class="nav-button" onclick="showCameraScreen()">Camera</button>
+    </div>
+    
+    <script>
+        function showMainScreen() {
+            hideAllScreens();
+            document.getElementById('mainScreen').style.display = 'flex';
+            setActiveNav(0);
+        }
+        
+        function showChoiceScreen() {
+            hideAllScreens();
+            document.getElementById('choiceScreen').style.display = 'flex';
+            setActiveNav(1);
+        }
+        
+        function showControllerScreen() {
+            hideAllScreens();
+            document.getElementById('controllerScreen').style.display = 'flex';
+            setActiveNav(2);
+        }
+        
+        function showCameraScreen() {
+            hideAllScreens();
+            document.getElementById('cameraScreen').style.display = 'flex';
+            setActiveNav(3);
+        }
+        
+        function hideAllScreens() {
+            document.getElementById('mainScreen').style.display = 'none';
+            document.getElementById('choiceScreen').style.display = 'none';
+            document.getElementById('controllerScreen').style.display = 'none';
+            document.getElementById('cameraScreen').style.display = 'none';
+        }
+        
+        function setActiveNav(index) {
+            const buttons = document.querySelectorAll('.navigation-buttons .nav-button');
+            buttons.forEach((btn, i) => {
+                btn.classList.toggle('active', i === index);
+            });
+        }
+        
+        // Add interactivity to controller buttons
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('toggle-button')) {
+                const button = e.target;
+                if (button.textContent === 'ON') {
+                    button.textContent = 'OFF';
+                    button.style.background = '#374151';
+                } else if (button.textContent === 'OFF') {
+                    button.textContent = 'ON';
+                    button.style.background = '#1e40af';
+                } else if (button.textContent === 'SHOW') {
+                    button.textContent = 'HIDE';
+                    button.style.background = '#f59e0b';
+                } else if (button.textContent === 'HIDE') {
+                    button.textContent = 'SHOW';
+                    button.style.background = '#1e40af';
+                }
+            }
+        });
+        
+        // Add interactivity to bottom navigation
+        document.addEventListener('click', function(e) {
+            if (e.target.classList.contains('nav-item')) {
+                document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+                e.target.classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<resources>
+    <string name="app_name">Church Camera</string>
+    <string name="church_name">Church of God Evening Light</string>
+    <string name="app_subtitle">Mobile Camera for Live Streaming</string>
+    
+    <!-- Main Activity -->
+    <string name="scan_qr_code">Scan QR Code</string>
+    <string name="manual_connection">Manual Connection</string>
+    <string name="test_camera">Test Camera</string>
+    <string name="how_to_connect">How to Connect</string>
+    <string name="version_info">Version 1.0 - Built for Church Streaming</string>
+    
+    <!-- Camera Activity -->
+    <string name="connect">Connect</string>
+    <string name="disconnect">Disconnect</string>
+    <string name="switch_camera">Switch Camera</string>
+    <string name="settings">Settings</string>
+    <string name="back">Back</string>
+    <string name="live">LIVE</string>
+    
+    <!-- Status Messages -->
+    <string name="ready_to_connect">Ready to Connect</string>
+    <string name="connecting">Connecting...</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="connection_error">Connection Error</string>
+    <string name="test_mode">Test Mode - Camera Preview</string>
+    
+    <!-- Instructions -->
+    <string name="main_instructions">1. Tap \'Scan QR Code\' to connect to the church streaming system\n2. Point your camera at the QR code displayed on the streaming computer\n3. Allow camera permissions when prompted\n4. Your phone will connect as a camera source\n\nFor manual connection, tap \'Manual Connect\' and enter the server details.</string>
+    
+    <!-- Error Messages -->
+    <string name="camera_permission_required">Camera permission is required for this app to work</string>
+    <string name="camera_permission_granted">Camera permission granted</string>
+    <string name="scan_cancelled">Scan cancelled</string>
+    <string name="invalid_qr_code">Invalid QR code. Please scan the QR code from the church streaming system.</string>
+    <string name="camera_init_failed">Camera initialization failed</string>
+    <string name="connection_failed">Connection failed</string>
+    <string name="invalid_connection_data">Invalid connection data</string>
+    
+    <!-- Camera -->
+    <string name="front_camera">Front Camera</string>
+    <string name="back_camera">Back Camera</string>
+    <string name="switched_to_camera">Switched to %s</string>
+    
+    <!-- Connection -->
+    <string name="connected_to_church_system">Connected to church streaming system</string>
+    <string name="disconnected_from_server">Disconnected from server</string>
+    
+    <!-- Quality -->
+    <string name="hd_quality">HD</string>
+    <string name="sd_quality">SD</string>
+    <string name="low_quality">LOW</string>
+</resources>

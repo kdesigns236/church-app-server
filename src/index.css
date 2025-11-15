@@ -13,3 +13,17 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Shared scroll container styling for Pro Stream and GoLive sidebars */
+.scroll-container {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* No-scroll utility for full-screen routes like GoLive */
+html.no-scroll,
+body.no-scroll,
+#root.no-scroll {
+  overflow: hidden;
+  height: 100vh;
+}

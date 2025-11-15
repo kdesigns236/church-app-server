@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/church_dark_blue">
+
+    <!-- Header -->
+    <LinearLayout
+        android:id="@+id/headerLayout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:background="@drawable/header_background"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp">
+
+        <!-- Back Button -->
+        <ImageButton
+            android:id="@+id/btnBack"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="start"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/circular_button_background"
+            android:contentDescription="Back"
+            android:src="@drawable/ic_arrow_back"
+            app:tint="@color/white" />
+
+        <!-- Church Logo -->
+        <ImageView
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:layout_marginBottom="16dp"
+            android:contentDescription="Church Logo"
+            android:src="@drawable/ic_church_logo"
+            app:tint="@color/church_gold" />
+
+        <!-- App Title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:fontFamily="@font/roboto_bold"
+            android:text="Church Camera"
+            android:textColor="@color/white"
+            android:textSize="28sp"
+            android:textStyle="bold" />
+
+        <!-- Church Name -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:fontFamily="@font/roboto_medium"
+            android:text="Church of God Evening Light"
+            android:textColor="@color/church_gold"
+            android:textSize="16sp" />
+
+        <!-- Connection Info -->
+        <TextView
+            android:id="@+id/tvConnectionInfo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/info_background"
+            android:fontFamily="@font/roboto_regular"
+            android:padding="12dp"
+            android:text="Connection detected"
+            android:textColor="@color/white"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+    <!-- Main Content -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/headerLayout"
+        android:layout_centerVertical="true"
+        android:layout_marginHorizontal="32dp"
+        android:orientation="vertical">
+
+        <!-- Title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="24dp"
+            android:fontFamily="@font/roboto_bold"
+            android:text="Choose Your Role"
+            android:textColor="@color/white"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <!-- Description -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="32dp"
+            android:fontFamily="@font/roboto_regular"
+            android:gravity="center"
+            android:text="How would you like to join the church streaming system?"
+            android:textColor="@color/church_light_gray"
+            android:textSize="16sp" />
+
+        <!-- Camera Source Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnJoinAsCamera"
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/church_gold"
+            android:drawableStart="@drawable/ic_videocam"
+            android:drawablePadding="16dp"
+            android:fontFamily="@font/roboto_bold"
+            android:paddingHorizontal="24dp"
+            android:text="📹 CAMERA SOURCE"
+            android:textColor="@color/church_dark_blue"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:cornerRadius="12dp"
+            app:drawableTint="@color/church_dark_blue" />
+
+        <!-- Camera Description -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_marginBottom="24dp"
+            android:fontFamily="@font/roboto_regular"
+            android:gravity="center"
+            android:text="Use this device as a camera for live streaming"
+            android:textColor="@color/church_light_gray"
+            android:textSize="14sp" />
+
+        <!-- Controller Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnJoinAsController"
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:layout_marginBottom="16dp"
+            android:backgroundTint="@color/church_blue"
+            android:drawableStart="@drawable/ic_control_panel"
+            android:drawablePadding="16dp"
+            android:fontFamily="@font/roboto_bold"
+            android:paddingHorizontal="24dp"
+            android:text="🎛️ CONTROLLER"
+            android:textColor="@color/white"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:cornerRadius="12dp"
+            app:drawableTint="@color/white" />
+
+        <!-- Controller Description -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:fontFamily="@font/roboto_regular"
+            android:gravity="center"
+            android:text="Control the live stream (lyrics, announcements, cameras)"
+            android:textColor="@color/church_light_gray"
+            android:textSize="14sp" />
+
+    </LinearLayout>
+
+</RelativeLayout>

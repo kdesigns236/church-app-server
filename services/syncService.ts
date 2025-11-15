@@ -340,7 +340,7 @@ class SyncService {
 
 // Create singleton instance
 const syncConfig: SyncConfig = {
-  apiUrl: (import.meta as any).env?.VITE_API_URL || 'http://localhost:3001/api',
+  apiUrl: (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api',
   enableRealtime: true
 };
 
