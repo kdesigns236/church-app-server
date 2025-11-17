@@ -300,7 +300,11 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
               <div className="diamond-inner"></div>
             </div>
             <div className="logo-icon">
-              <span>{config.logoIcon || '✝'}</span>
+              <img
+                src="/church-logo.svg"
+                alt={config.logoIcon || 'Church logo'}
+                className="w-full h-full object-cover"
+              />
             </div>
           </div>
         </div>
