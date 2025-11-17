@@ -25,9 +25,13 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-const publicDir = path.join(__dirname, '..', 'public');
-if (fs.existsSync(publicDir)) {
-  app.use(express.static(publicDir));
+const serverPublicDir = path.join(__dirname, 'public');
+const rootPublicDir = path.join(__dirname, '..', 'public');
+
+if (fs.existsSync(serverPublicDir)) {
+  app.use(express.static(serverPublicDir));
+} else if (fs.existsSync(rootPublicDir)) {
+  app.use(express.static(rootPublicDir));
 }
 
 // JWT Middleware
