@@ -25,6 +25,11 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+const publicDir = path.join(__dirname, '..', 'public');
+if (fs.existsSync(publicDir)) {
+  app.use(express.static(publicDir));
+}
+
 // JWT Middleware
 // Verify token - allows both admin and member roles
 const verifyToken = (req, res, next) => {

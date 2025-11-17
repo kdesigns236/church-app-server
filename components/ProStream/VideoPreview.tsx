@@ -122,25 +122,35 @@ const BibleVerseOverlay: React.FC<{ config: BibleVerseConfig }> = ({ config }) =
         ? 'bottom center'
         : 'center';
     const isScrolling = config.animationStyle === 'scroll';
+    const verseText = config.text || '';
+    const reference = config.reference || '';
 
 
     return (
         <div
-          className={`absolute inset-0 p-8 flex flex-col pointer-events-none ${positionClasses[config.position]} z-10`}
+          className={`absolute inset-0 px-0 sm:px-0 py-4 sm:py-6 flex flex-col pointer-events-none ${positionClasses[config.position]} z-10`}
           style={{ transform: `scale(1, ${scale})`, transformOrigin: origin }}
         >
           <div 
-            key={config.reference}
-            className={`py-6 px-8 rounded-lg shadow-2xl w-[92%] max-w-none mx-auto ${animationClasses[config.animationStyle]} ${isScrolling ? 'overflow-hidden' : ''}`}
+            key={reference || verseText}
+            className={`py-6 px-4 sm:px-8 rounded-lg shadow-2xl w-full max-w-none mx-auto ${animationClasses[config.animationStyle]} ${isScrolling ? 'overflow-hidden' : ''}`}
             style={backgroundStyle}
           >
-            <div className={`${isScrolling ? 'animate-scroll whitespace-nowrap' : ''}`}>
-                <span className={`${config.fontSize} ${config.fontFamily} italic`} style={{ color: config.textColor, textAlign: isScrolling ? 'left' : config.textAlign }}>
-                  "{config.text}"
-                </span>
-                 <span className={`ml-4 ${config.fontFamily} ${config.fontSize === 'text-5xl' || config.fontSize === 'text-6xl' ? 'text-2xl' : 'text-xl'}`} style={{ color: config.textColor, opacity: 0.8 }}>
-                    - {config.reference}
-                 </span>
+            <div className={isScrolling ? 'animate-scroll whitespace-nowrap' : 'whitespace-pre-wrap'}>
+              <p
+                className={`${config.fontSize} ${config.fontFamily} leading-tight`}
+                style={{ color: config.textColor, textAlign: isScrolling ? 'left' : config.textAlign }}
+              >
+                <span className="italic">"{verseText}"</span>
+              </p>
+              {reference && (
+                <p
+                  className={`${config.fontFamily} mt-3 ${config.fontSize === 'text-5xl' || config.fontSize === 'text-6xl' ? 'text-2xl' : 'text-xl'}`}
+                  style={{ color: config.textColor, opacity: 0.85, textAlign: isScrolling ? 'left' : config.textAlign }}
+                >
+                  {reference}
+                </p>
+              )}
             </div>
           </div>
         </div>

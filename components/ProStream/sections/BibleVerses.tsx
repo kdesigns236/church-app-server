@@ -63,11 +63,11 @@ const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
       setFetchError(null);
 
       // Determine where to load Bible JSON from.
-      // If running inside the standalone Pro Stream client on port 5173,
-      // the Bible files live in the main app on port 3002.
-      const currentOrigin = window.location.origin;
-      const isStandaloneClient = window.location.port === '5173';
-      const bibleBase = isStandaloneClient ? currentOrigin.replace(':5173', ':3002') : currentOrigin;
+      // Use the shared church server as the canonical source so both the
+      // main app and the standalone Pro Stream client can fetch verses.
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+      const serverOrigin = apiUrl.replace(/\/api\/?$/, '');
+      const bibleBase = serverOrigin || window.location.origin;
 
       if (language === 'en') {
         // Old English format: { [bookName]: { [chapter]: { [verse]: text } } }
@@ -127,6 +127,104 @@ const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
     } catch (error) {
       console.error('Failed to fetch verse from local Bible data', error);
       setFetchError('Could not fetch that verse. Check the book name and format (e.g., John 3:16 or Yohana 3:16) and try again.');
+    } finally {
+      setIsFetching(false);
+    }
+  };
+
+  const handleNavigateVerse = async (direction: 'next' | 'prev') => {
+    const referenceSource = (config.reference || '').trim();
+    if (!referenceSource) {
+      setFetchError('Fetch a verse first, then you can go to the next or previous verse.');
+      return;
+    }
+
+    const match = referenceSource.match(/^(.+?)\s+(\d+):(\d+)$/);
+    if (!match) {
+      setFetchError('Use format Book Chapter:Verse, e.g. John 3:16 or Yohana 3:16.');
+      return;
+    }
+
+    const rawBook = match[1].trim();
+    const chapter = match[2];
+    const currentVerseNum = parseInt(match[3], 10);
+    const newVerseNum = direction === 'next' ? currentVerseNum + 1 : currentVerseNum - 1;
+
+    if (newVerseNum < 1) {
+      setFetchError('Already at the first verse of this chapter.');
+      return;
+    }
+
+    try {
+      setIsFetching(true);
+      setFetchError(null);
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+      const serverOrigin = apiUrl.replace(/\/api\/?$/, '');
+      const bibleBase = serverOrigin || window.location.origin;
+
+      if (language === 'en') {
+        const response = await fetch(`${bibleBase}/bible/en.json`);
+        if (!response.ok) {
+          throw new Error('Failed to load English Bible data.');
+        }
+        const data = await response.json() as Record<string, Record<string, Record<string, string>>>;
+
+        const normalizedTarget = rawBook.toLowerCase().replace(/\s+/g, '');
+        const bookKey = Object.keys(data).find(key => key.toLowerCase().replace(/\s+/g, '') === normalizedTarget);
+
+        if (!bookKey) {
+          throw new Error('Book not found in English Bible data.');
+        }
+
+        const chapterData = data[bookKey]?.[chapter];
+        const verseText = chapterData?.[String(newVerseNum)];
+
+        if (!verseText) {
+          setFetchError('No more verses in this chapter.');
+          return;
+        }
+
+        setConfig(prev => ({
+          ...prev,
+          text: verseText.trim(),
+          reference: `${bookKey} ${chapter}:${newVerseNum}`,
+        }));
+      } else {
+        type SwData = { BIBLEBOOK: { book_name: string; CHAPTER: { chapter_number: string; VERSES: { verse_number: string; verse_text: string }[] }[] }[] };
+        const response = await fetch(`${bibleBase}/bible/sw.json`);
+        if (!response.ok) {
+          throw new Error('Failed to load Swahili Bible data.');
+        }
+        const data = await response.json() as SwData;
+
+        const normalizedTarget = rawBook.toLowerCase().replace(/\s+/g, '');
+        const book = data.BIBLEBOOK.find(b => b.book_name.toLowerCase().replace(/\s+/g, '') === normalizedTarget);
+
+        if (!book) {
+          throw new Error('Book not found in Swahili Bible data.');
+        }
+
+        const chapterObj = book.CHAPTER.find(ch => ch.chapter_number === chapter);
+        if (!chapterObj) {
+          throw new Error('Chapter not found in Swahili Bible data.');
+        }
+
+        const verseObj = chapterObj.VERSES.find(v => v.verse_number === String(newVerseNum));
+        if (!verseObj) {
+          setFetchError('No more verses in this chapter.');
+          return;
+        }
+
+        setConfig(prev => ({
+          ...prev,
+          text: verseObj.verse_text.trim(),
+          reference: `${book.book_name} ${chapter}:${newVerseNum}`,
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to navigate to adjacent verse in local Bible data', error);
+      setFetchError('Could not move to that verse. Check the reference and try again.');
     } finally {
       setIsFetching(false);
     }
@@ -269,14 +367,34 @@ const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
         </ControlRow>
       </div>
 
-      <button
-        onClick={toggleVisibility}
-        className={`w-full py-2.5 rounded-lg font-semibold transition-colors ${
-          config.isVisible ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-500'
-        }`}
-      >
-        {config.isVisible ? 'Hide Verse' : 'Show Verse'}
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          onClick={toggleVisibility}
+          className={`px-4 py-2.5 rounded-lg font-semibold transition-colors text-base ${
+            config.isVisible ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-500'
+          }`}
+        >
+          {config.isVisible ? 'Hide Verse' : 'Show Verse'}
+        </button>
+        <div className="flex space-x-2">
+          <button
+            type="button"
+            onClick={() => handleNavigateVerse('prev')}
+            disabled={!config.reference}
+            className="px-3 py-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold"
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            onClick={() => handleNavigateVerse('next')}
+            disabled={!config.reference}
+            className="px-3 py-2 bg-gray-700 rounded-md hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-lg font-bold"
+          >
+            Next
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
