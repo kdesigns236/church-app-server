@@ -244,13 +244,11 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
             z-index: 11;
             box-shadow: 0 4px 12px rgba(0,0,0,0.6);
             background: rgba(0,0,0,0.4);
-        }
-
-        .logo-icon img {
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            display: block;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            color: #ffffff;
         }
 
 
@@ -302,7 +300,7 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
               <div className="diamond-inner"></div>
             </div>
             <div className="logo-icon">
-              <img src="http://localhost:3002/logo.jpg" alt="Church Logo" />
+              <span>{config.logoIcon || '✝'}</span>
             </div>
           </div>
         </div>

@@ -67,29 +67,18 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
 
 
       if (activeSlot && activeSlot.status === 'connected') {
-        if (activeSlot.sourceType === 'local' && activeSlot.device?.id) {
-          navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: activeSlot.device.id } } })
-            .then(stream => {
-              if (currentStreamRef.current && currentStreamRef.current !== stream) {
-                currentStreamRef.current.getTracks().forEach(track => track.stop());
-              }
-              currentStreamRef.current = stream;
-              setActiveStream(stream);
-            })
-            .catch(err => console.error("Display error getting local stream:", err));
-        } else if (activeSlot.sourceType === 'remote') {
-          // Placeholder remote handling; keep a visible stream
-          navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-              if (currentStreamRef.current && currentStreamRef.current !== stream) {
-                currentStreamRef.current.getTracks().forEach(track => track.stop());
-              }
-              currentStreamRef.current = stream;
-              setActiveStream(stream);
-            })
-            .catch(err => console.error("Display error getting remote placeholder:", err));
-        }
-        // If activeSlot is connected but unknown type, do not clear the current local fallback
+        // Always use the default local camera on the GoLive display device.
+        // The controller's deviceId values are specific to its own machine and
+        // cannot be matched reliably on a different device.
+        navigator.mediaDevices.getUserMedia({ video: true })
+          .then(stream => {
+            if (currentStreamRef.current && currentStreamRef.current !== stream) {
+              currentStreamRef.current.getTracks().forEach(track => track.stop());
+            }
+            currentStreamRef.current = stream;
+            setActiveStream(stream);
+          })
+          .catch(err => console.error("Display error getting stream:", err));
       } else {
         // No active slot chosen by controller: keep existing local fallback stream if any
       }
