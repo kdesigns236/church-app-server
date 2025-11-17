@@ -301,9 +301,9 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
             </div>
             <div className="logo-icon">
               <img
-                src="/church-logo.svg"
-                alt={config.logoIcon || 'Church logo'}
-                className="w-full h-full object-cover"
+                src="/logo.jpg"
+                alt={config.logoIcon || 'Church of God Evening Light logo'}
+                className="w-full h-full object-contain"
               />
             </div>
           </div>

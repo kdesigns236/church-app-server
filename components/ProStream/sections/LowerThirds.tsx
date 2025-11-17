@@ -22,6 +22,8 @@ const LowerThirds: React.FC<LowerThirdsProps> = ({ config, setConfig, replayAnim
      if (config.isVisible) {
         setConfig(prev => ({ ...prev, isVisible: false }));
      } else {
+        // Show immediately and trigger animation key
+        setConfig(prev => ({ ...prev, isVisible: true }));
         replayAnimation();
      }
   };

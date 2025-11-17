@@ -88,12 +88,8 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
 
 
   const replayLowerThirdAnimation = () => {
-    setLowerThirdConfig(prev => ({...prev, isVisible: false}));
-    setTimeout(() => {
-        setLowerThirdAnimationKey(k => k + 1);
-        setLowerThirdConfig(prev => ({...prev, isVisible: true}));
-    }, 100)
-  }
+    setLowerThirdAnimationKey(k => k + 1);
+  };
   
   const refreshDevices = useCallback(async () => {
     try {
