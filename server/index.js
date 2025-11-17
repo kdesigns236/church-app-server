@@ -34,6 +34,41 @@ if (fs.existsSync(serverPublicDir)) {
   app.use(express.static(rootPublicDir));
 }
 
+// Explicit Bible JSON routes so they are always available in deployment,
+// even if static middleware behaves differently on the host platform.
+const bibleEnServerPath = path.join(serverPublicDir, 'bible', 'en.json');
+const bibleEnRootPath = path.join(rootPublicDir, 'bible', 'en.json');
+const bibleSwServerPath = path.join(serverPublicDir, 'bible', 'sw.json');
+const bibleSwRootPath = path.join(rootPublicDir, 'bible', 'sw.json');
+
+app.get('/bible/en.json', (req, res) => {
+  const filePath = fs.existsSync(bibleEnServerPath)
+    ? bibleEnServerPath
+    : fs.existsSync(bibleEnRootPath)
+      ? bibleEnRootPath
+      : null;
+
+  if (!filePath) {
+    return res.status(404).send('Bible EN file not found');
+  }
+
+  res.sendFile(filePath);
+});
+
+app.get('/bible/sw.json', (req, res) => {
+  const filePath = fs.existsSync(bibleSwServerPath)
+    ? bibleSwServerPath
+    : fs.existsSync(bibleSwRootPath)
+      ? bibleSwRootPath
+      : null;
+
+  if (!filePath) {
+    return res.status(404).send('Bible SW file not found');
+  }
+
+  res.sendFile(filePath);
+});
+
 // JWT Middleware
 // Verify token - allows both admin and member roles
 const verifyToken = (req, res, next) => {
