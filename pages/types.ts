@@ -67,6 +67,7 @@ export interface LyricsConfig {
     backgroundOpacity: number;
     animationStyle: GraphicAnimationStyle;
     position: GraphicPosition;
+    scale?: number;
 }
 
 export interface BibleVerseConfig {

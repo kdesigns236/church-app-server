@@ -33,10 +33,44 @@ const ControlRow: React.FC<{ label: string; children: React.ReactNode }> = ({ la
 );
 
 const LyricsDisplay: React.FC<LyricsDisplayProps> = ({ config, setConfig }) => {
-  const handleSongChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const songTitle = e.target.value;
-    const selectedSong = songLibrary.find(s => s.title === songTitle) || null;
-    setConfig(prev => ({ ...prev, song: selectedSong, verseIndex: 0 }));
+  const lyricsText = React.useMemo(() => {
+    if (!config.song) return '';
+    return config.song.verses.join('\n\n');
+  }, [config.song]);
+
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const title = e.target.value;
+    setConfig(prev => {
+      const verses = prev.song?.verses || [];
+      if (!title && verses.length === 0) {
+        return { ...prev, song: null, verseIndex: 0 };
+      }
+      return {
+        ...prev,
+        song: { title: title || 'Untitled Song', verses },
+        verseIndex: 0,
+      };
+    });
+  };
+
+  const handleLyricsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const text = e.target.value;
+    const parts = text.split(/\n{2,}/);
+    const verses = parts.map(p => p.trim()).filter(p => p.length > 0);
+    setConfig(prev => {
+      const title = prev.song?.title || 'Untitled Song';
+      if (verses.length === 0 && !title) {
+        return { ...prev, song: null, verseIndex: 0 };
+      }
+      if (verses.length === 0) {
+        return { ...prev, song: prev.song, verseIndex: 0 };
+      }
+      return {
+        ...prev,
+        song: { title, verses },
+        verseIndex: 0,
+      };
+    });
   };
 
   const handleScaleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,15 +109,25 @@ const LyricsDisplay: React.FC<LyricsDisplayProps> = ({ config, setConfig }) => {
 
   return (
     <div className="space-y-4 text-sm">
-      <ControlRow label="Select Song">
-        <select onChange={handleSongChange} value={config.song?.title || ""} className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2">
-          <option value="">- No Song Selected -</option>
-          {songLibrary.map(song => (
-            <option key={song.title} value={song.title}>{song.title}</option>
-          ))}
-        </select>
+      <ControlRow label="Song Title">
+        <input
+          type="text"
+          value={config.song?.title || ''}
+          onChange={handleTitleChange}
+          className="w-full bg-gray-900 border border-gray-700 text-white rounded-lg p-2"
+          placeholder="e.g. Amazing Grace"
+        />
       </ControlRow>
-      
+
+      <ControlRow label="Lyrics (separate verses with a blank line)">
+        <textarea
+          value={lyricsText}
+          onChange={handleLyricsChange}
+          className="w-full h-32 bg-gray-900 border border-gray-700 text-white rounded-lg p-2 resize-y"
+          placeholder="Type lyrics here. Separate each verse with a blank line."
+        />
+      </ControlRow>
+
       {config.song && (
         <ControlRow label="Verse Preview">
           <div className="p-2 bg-gray-900 border border-gray-700 rounded-md h-24 overflow-y-auto scroll-container">

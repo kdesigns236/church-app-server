@@ -36,7 +36,7 @@ class WebSocketService {
     console.log('[WebSocket] Connecting to:', this.serverUrl);
 
     this.socket = io(this.serverUrl, {
-      transports: ['polling', 'websocket'], // Try polling first for Render compatibility
+      transports: ['polling'], // Try polling first for Render compatibility
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
