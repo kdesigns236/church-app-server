@@ -9,6 +9,7 @@ interface ProfessionalLowerThirdProps {
 
 const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config }) => {
   const [logoImageError, setLogoImageError] = useState(false);
+  const logoSrc = '/logo.jpg';
   const darken = (color: string, percent: number): string => {
     try {
       let num = parseInt(color.replace('#', ''), 16);
@@ -307,7 +308,7 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
                 </span>
               ) : (
                 <img
-                  src="/logo.jpg"
+                  src={logoSrc}
                   alt={config.logoIcon || 'Church of God Evening Light logo'}
                   className="w-full h-full object-contain"
                   onError={() => setLogoImageError(true)}
