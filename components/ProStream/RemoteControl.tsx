@@ -357,8 +357,17 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   // Removed auto-assignment of a primary local camera.
   // Slots 1, 2 and 3 are now used only when the operator explicitly selects a device.
   const openDisplayWindow = () => {
-      const sessionParam = sessionId.split(':')[1];
-      const url = `${window.location.origin}${window.location.pathname}?role=display&session=${sessionParam}`;
+      const short = sessionId.split(':')[1] || sessionId;
+
+      // In production the controller often runs on pro-stream-client.onrender.com,
+      // while the public viewing page (GoLive) lives on church-app-server.onrender.com.
+      // Open the real GoLive viewer so the operator sees exactly what members see.
+      let base = window.location.origin;
+      if (base.includes('pro-stream-client.onrender.com')) {
+        base = 'https://church-app-server.onrender.com';
+      }
+
+      const url = `${base}/#/golive?session=${short}`;
       window.open(url, '_blank', 'popup');
   };
 
@@ -372,7 +381,13 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
 
   const copyDisplayLink = useCallback(() => {
     const short = sessionId.split(':')[1] || sessionId;
-    const url = `${window.location.origin}${window.location.pathname}?role=display&session=${short}`;
+
+    let base = window.location.origin;
+    if (base.includes('pro-stream-client.onrender.com')) {
+      base = 'https://church-app-server.onrender.com';
+    }
+
+    const url = `${base}/#/golive?session=${short}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 1200);
