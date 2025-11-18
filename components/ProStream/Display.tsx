@@ -163,8 +163,16 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         const mode: 'local' | 'controller' = payload.sourceMode === 'controller' ? 'controller' : 'local';
         setSourceMode(mode);
         sourceModeRef.current = mode;
-        if (mode === 'controller' && controllerStreamRef.current) {
-          setActiveStream(controllerStreamRef.current);
+
+        if (mode === 'controller') {
+          const s = controllerStreamRef.current;
+          if (s) {
+            const hasLiveTrack = s.getVideoTracks().some(t => t.readyState === 'live');
+            if (hasLiveTrack) {
+              setActiveStream(s);
+            }
+          }
+          // If no live external stream yet, keep showing whatever is currently active (usually GoLive camera)
         } else if (mode === 'local') {
           activateLocalIfNeeded();
         }
