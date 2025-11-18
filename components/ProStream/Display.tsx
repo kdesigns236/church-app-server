@@ -109,6 +109,15 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
             }
             controllerStreamRef.current = stream;
 
+            // If the external stream later stops (e.g. phone sleeps), fall back to GoLive camera
+            stream.getVideoTracks().forEach(track => {
+              track.onended = () => {
+                if (sourceModeRef.current === 'controller') {
+                  activateLocalIfNeeded();
+                }
+              };
+            });
+
             if (sourceModeRef.current === 'controller') {
               setActiveStream(stream);
             }
