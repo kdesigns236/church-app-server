@@ -340,8 +340,9 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   // When the active camera or its stream changes and the display is ready, (re)start WebRTC to the display
   useEffect(() => {
     if (!displayReadyRef.current) return;
+    if (sourceMode !== 'controller') return;
     startDisplayWebRTC();
-  }, [activeCameraId, cameraSlots, startDisplayWebRTC]);
+  }, [activeCameraId, cameraSlots, sourceMode, startDisplayWebRTC]);
 
 
 

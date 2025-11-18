@@ -94,29 +94,18 @@ const CameraControls: React.FC<CameraControlsProps> = ({
           </div>
         </div>
         <div>
-          <h4 className="text-sm font-semibold mb-2 text-gray-400">Output Source</h4>
-          <div className="flex space-x-2">
+          <h4 className="text-sm font-semibold mb-2 text-gray-400">GoLive Camera</h4>
+          <div className="p-2 bg-gray-900 rounded-lg flex items-center justify-between">
+            <div className="text-xs text-gray-300">Use the camera on this GoLive device as the live source.</div>
             <button
               type="button"
-              onClick={() => setSourceMode('local')}
-              className={`flex-1 px-3 py-1.5 text-xs rounded-md border transition-colors ${
-                sourceMode === 'local'
-                  ? 'bg-white text-black border-white'
-                  : 'bg-gray-800 text-gray-200 border-gray-600 hover:border-white/70'
-              }`}
+              onClick={() => {
+                setSourceMode('local');
+                setActiveCameraId(null);
+              }}
+              className="ml-3 px-3 py-1 text-xs bg-indigo-600 rounded hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
             >
-              GoLive camera
-            </button>
-            <button
-              type="button"
-              onClick={() => setSourceMode('controller')}
-              className={`flex-1 px-3 py-1.5 text-xs rounded-md border transition-colors ${
-                sourceMode === 'controller'
-                  ? 'bg-white text-black border-white'
-                  : 'bg-gray-800 text-gray-200 border-gray-600 hover:border-white/70'
-              }`}
-            >
-              External cameras
+              {sourceMode === 'local' ? 'Active' : 'Set Active'}
             </button>
           </div>
         </div>
@@ -148,11 +137,14 @@ const CameraControls: React.FC<CameraControlsProps> = ({
                 </div>
                 <div className="flex items-center space-x-2 mt-2">
                   <button 
-                    onClick={() => setActiveCameraId(slot.id)}
+                    onClick={() => {
+                      setSourceMode('controller');
+                      setActiveCameraId(slot.id);
+                    }}
                     disabled={slot.status === 'disconnected'}
                     className="flex-1 px-2 py-1 text-xs bg-indigo-600 rounded hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
                   >
-                    {activeCameraId === slot.id ? 'Active' : 'Set Active'}
+                    {sourceMode === 'controller' && activeCameraId === slot.id ? 'Active' : 'Set Active'}
                   </button>
                   <button
                     type="button"
