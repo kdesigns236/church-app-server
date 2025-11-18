@@ -1,5 +1,6 @@
 import React, { CSSProperties, useState } from 'react';
 import { LowerThirdConfig } from './types';
+import logoImg from '../../public/logo.jpg';
 
 
 interface ProfessionalLowerThirdProps {
@@ -9,7 +10,7 @@ interface ProfessionalLowerThirdProps {
 
 const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config }) => {
   const [logoImageError, setLogoImageError] = useState(false);
-  const logoSrc = '/logo.jpg';
+  const logoSrc = logoImg as string;
   const darken = (color: string, percent: number): string => {
     try {
       let num = parseInt(color.replace('#', ''), 16);
