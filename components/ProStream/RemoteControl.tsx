@@ -35,6 +35,8 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   const autoAssignedPrimaryRef = useRef(false);
   const displayPeerRef = useRef<RTCPeerConnection | null>(null);
   const displayReadyRef = useRef(false);
+  const activeCameraIdRef = useRef<number | null>(null);
+  const sourceModeRef = useRef<'local' | 'controller'>('local');
 
 
   const [cameraSlots, setCameraSlots] = useState<CameraSlot[]>([
@@ -93,6 +95,16 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   const replayLowerThirdAnimation = () => {
     setLowerThirdAnimationKey(k => k + 1);
   };
+
+
+  useEffect(() => {
+    activeCameraIdRef.current = activeCameraId;
+  }, [activeCameraId]);
+
+
+  useEffect(() => {
+    sourceModeRef.current = sourceMode;
+  }, [sourceMode]);
 
 
   const startDisplayWebRTC = useCallback(async () => {
@@ -282,11 +294,33 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
                 };
                 
                 peerConnection.ontrack = (e) => {
+                    const [stream] = e.streams;
+                    if (!stream) return;
+
                     setCameraSlots(prev => prev.map(slot => 
                         slot.id === numericSlotId 
-                            ? { ...slot, stream: e.streams[0], status: 'connected', sourceType: 'remote', device: null } 
+                            ? { ...slot, stream, status: 'connected', sourceType: 'remote', device: null } 
                             : slot
                     ));
+
+                    // If this phone/USB stream later stops (e.g. phone sleeps), mark it disconnected
+                    // and, if it was the active external source, fall back to GoLive camera.
+                    stream.getVideoTracks().forEach(track => {
+                        track.onended = () => {
+                            setCameraSlots(prev => prev.map(slot => 
+                                slot.id === numericSlotId
+                                    ? { ...slot, stream: null, status: 'disconnected', sourceType: null }
+                                    : slot
+                            ));
+
+                            setActiveCameraId(prev => prev === numericSlotId ? null : prev);
+
+                            if (sourceModeRef.current === 'controller' && activeCameraIdRef.current === numericSlotId) {
+                                setSourceMode('local');
+                            }
+                        };
+                    });
+
                     setActiveCameraId(prevId => prevId === null ? numericSlotId : prevId);
                 };
 
