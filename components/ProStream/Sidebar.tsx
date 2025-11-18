@@ -38,9 +38,6 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = (props) => {
   return (
     <div className="p-4 space-y-2">
-      <Accordion title="Stream Controls" defaultOpen>
-        <StreamControls isLive={props.isLive} setIsLive={props.setIsLive} />
-      </Accordion>
       <Accordion title="Camera & Transition" defaultOpen>
         <CameraControls 
             sessionId={props.sessionId}

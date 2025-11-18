@@ -18,6 +18,8 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const currentStreamRef = useRef<MediaStream | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [isLive, setIsLive] = useState<boolean>(false);
+  const [streamToYoutube, setStreamToYoutube] = useState<boolean>(true);
+  const [streamToFacebook, setStreamToFacebook] = useState<boolean>(false);
   const [lowerThirdConfig, setLowerThirdConfig] = useState<LowerThirdConfig>({ isVisible: false, topText: '', mainText: '', logoIcon: '', accentColor: '', mainBarColor: '' });
   const [lowerThirdAnimationKey, setLowerThirdAnimationKey] = useState(0);
   const [announcementConfig, setAnnouncementConfig] = useState<AnnouncementConfig>({ isVisible: false, text: '', fontSize: '', fontFamily: '', textColor: '', textAlign: 'center', backgroundColor: '', backgroundOpacity: 0, animationStyle: 'fade', position: 'bottom' });
@@ -127,9 +129,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
 
 
       if (!isConnected) setIsConnected(true);
-
-
-      setIsLive(payload.isLive);
       setLowerThirdConfig(payload.lowerThirdConfig);
       setLowerThirdAnimationKey(payload.lowerThirdAnimationKey);
       setAnnouncementConfig(payload.announcementConfig);
@@ -171,6 +170,48 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         lyricsConfig={lyricsConfig}
         bibleVerseConfig={bibleVerseConfig}
       />
+      {/* Local GO LIVE controls - display owns live state and target platforms */}
+      <div className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700 max-w-md">
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex flex-col gap-1 text-xs text-gray-300">
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={streamToYoutube}
+                  onChange={() => setStreamToYoutube(p => !p)}
+                  className="form-checkbox h-4 w-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500"
+                />
+                <span>Stream to YouTube</span>
+              </label>
+              <label className="flex items-center space-x-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={streamToFacebook}
+                  onChange={() => setStreamToFacebook(p => !p)}
+                  className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500"
+                />
+                <span>Stream to Facebook</span>
+              </label>
+            </div>
+            <button
+              onClick={() => {
+                if (!streamToYoutube && !streamToFacebook) return;
+                setIsLive(prev => !prev);
+              }}
+              className={`w-full sm:w-auto px-4 py-2 rounded-lg font-bold text-sm sm:text-base transition-all duration-300 transform active:scale-95 ${
+                isLive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+              } ${!streamToYoutube && !streamToFacebook ? 'bg-gray-600 cursor-not-allowed hover:bg-gray-600' : ''}`}
+              disabled={!streamToYoutube && !streamToFacebook}
+            >
+              {isLive ? 'STOP STREAM' : 'GO LIVE'}
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-400">
+            GoLive controls the live status and audio. The controller only switches cameras and overlays.
+          </p>
+        </div>
+      </div>
        {!isConnected && !activeStream && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
              <div className="bg-[#1e1e1e] p-8 rounded-lg shadow-2xl text-white text-center w-full max-w-md">

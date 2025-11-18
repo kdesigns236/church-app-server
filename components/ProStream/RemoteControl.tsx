@@ -120,7 +120,8 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
       const pc = new RTCPeerConnection(RTC_CONFIGURATION);
       displayPeerRef.current = pc;
 
-      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+      // Forward only video tracks to the display; audio is owned by the GoLive device
+      stream.getVideoTracks().forEach(track => pc.addTrack(track, stream));
 
       pc.onicecandidate = (event) => {
         if (event.candidate) {
@@ -151,7 +152,8 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   
   const refreshDevices = useCallback(async () => {
     try {
-      await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      // Request video permission only (no audio) so this controller never owns live audio
+      await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices
         .filter(device => device.kind === 'videoinput')
@@ -350,19 +352,8 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
     };
   }, [refreshDevices]);
 
-  // Auto-assign the primary camera (slot 1) to the first available local device if nothing is active yet
-  useEffect(() => {
-    if (autoAssignedPrimaryRef.current) return;
-    if (availableDevices.length === 0) return;
-    if (activeCameraId !== null) return;
-    if (!cameraSlots[0] || cameraSlots[0].status !== 'disconnected') return;
-
-    const firstDevice = availableDevices[0];
-    if (!firstDevice) return;
-
-    autoAssignedPrimaryRef.current = true;
-    handleDeviceChange(1, firstDevice.id);
-  }, [availableDevices, activeCameraId, cameraSlots, handleDeviceChange]);
+  // Removed auto-assignment of a primary local camera.
+  // Slots 1, 2 and 3 are now used only when the operator explicitly selects a device.
   const openDisplayWindow = () => {
       const sessionParam = sessionId.split(':')[1];
       const url = `${window.location.origin}${window.location.pathname}?role=display&session=${sessionParam}`;
