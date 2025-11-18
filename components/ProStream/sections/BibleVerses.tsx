@@ -15,6 +15,50 @@ const ControlRow: React.FC<{ label: string; children: React.ReactNode }> = ({ la
 
 type Language = 'en' | 'sw';
 
+type EnBibleData = Record<string, Record<string, Record<string, string>>>;
+type SwBibleData = { BIBLEBOOK: { book_name: string; CHAPTER: { chapter_number: string; VERSES: { verse_number: string; verse_text: string }[] }[] }[] };
+
+let enBibleCache: EnBibleData | null = null;
+let swBibleCache: SwBibleData | null = null;
+let enBiblePromise: Promise<EnBibleData> | null = null;
+let swBiblePromise: Promise<SwBibleData> | null = null;
+
+const getBibleBase = () => {
+  const apiUrl = import.meta.env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+  const serverOrigin = apiUrl.replace(/\/api\/?$/, '');
+  return serverOrigin || window.location.origin;
+};
+
+const loadEnBible = async (): Promise<EnBibleData> => {
+  if (enBibleCache) return enBibleCache;
+  if (!enBiblePromise) {
+    const bibleBase = getBibleBase();
+    enBiblePromise = fetch(`${bibleBase}/bible/en.json`).then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load English Bible data.');
+      }
+      return response.json();
+    });
+  }
+  enBibleCache = await enBiblePromise;
+  return enBibleCache!;
+};
+
+const loadSwBible = async (): Promise<SwBibleData> => {
+  if (swBibleCache) return swBibleCache;
+  if (!swBiblePromise) {
+    const bibleBase = getBibleBase();
+    swBiblePromise = fetch(`${bibleBase}/bible/sw.json`).then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to load Swahili Bible data.');
+      }
+      return response.json();
+    });
+  }
+  swBibleCache = await swBiblePromise;
+  return swBibleCache!;
+};
+
 const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
 
   const [isFetching, setIsFetching] = React.useState(false);
@@ -62,20 +106,9 @@ const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
       setIsFetching(true);
       setFetchError(null);
 
-      // Determine where to load Bible JSON from.
-      // Use the shared church server as the canonical source so both the
-      // main app and the standalone Pro Stream client can fetch verses.
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
-      const serverOrigin = apiUrl.replace(/\/api\/?$/, '');
-      const bibleBase = serverOrigin || window.location.origin;
-
       if (language === 'en') {
         // Old English format: { [bookName]: { [chapter]: { [verse]: text } } }
-        const response = await fetch(`${bibleBase}/bible/en.json`);
-        if (!response.ok) {
-          throw new Error('Failed to load English Bible data.');
-        }
-        const data = await response.json() as Record<string, Record<string, Record<string, string>>>;
+        const data = await loadEnBible();
 
         const normalizedTarget = rawBook.toLowerCase().replace(/\s+/g, '');
         const bookKey = Object.keys(data).find(key => key.toLowerCase().replace(/\s+/g, '') === normalizedTarget);
@@ -98,11 +131,7 @@ const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
         }));
       } else {
         // Swahili format: { BIBLEBOOK: [ { book_name, CHAPTER: [ { chapter_number, VERSES: [ { verse_number, verse_text } ] } ] } ] }
-        const response = await fetch(`${bibleBase}/bible/sw.json`);
-        if (!response.ok) {
-          throw new Error('Failed to load Swahili Bible data.');
-        }
-        const data = await response.json() as { BIBLEBOOK: { book_name: string; CHAPTER: { chapter_number: string; VERSES: { verse_number: string; verse_text: string }[] }[] }[] };
+        const data = await loadSwBible();
 
         const normalizedTarget = rawBook.toLowerCase().replace(/\s+/g, '');
         const book = data.BIBLEBOOK.find(b => b.book_name.toLowerCase().replace(/\s+/g, '') === normalizedTarget);
@@ -159,16 +188,8 @@ const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
       setIsFetching(true);
       setFetchError(null);
 
-      const apiUrl = import.meta.env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
-      const serverOrigin = apiUrl.replace(/\/api\/?$/, '');
-      const bibleBase = serverOrigin || window.location.origin;
-
       if (language === 'en') {
-        const response = await fetch(`${bibleBase}/bible/en.json`);
-        if (!response.ok) {
-          throw new Error('Failed to load English Bible data.');
-        }
-        const data = await response.json() as Record<string, Record<string, Record<string, string>>>;
+        const data = await loadEnBible();
 
         const normalizedTarget = rawBook.toLowerCase().replace(/\s+/g, '');
         const bookKey = Object.keys(data).find(key => key.toLowerCase().replace(/\s+/g, '') === normalizedTarget);
@@ -191,12 +212,7 @@ const BibleVerses: React.FC<BibleVersesProps> = ({ config, setConfig }) => {
           reference: `${bookKey} ${chapter}:${newVerseNum}`,
         }));
       } else {
-        type SwData = { BIBLEBOOK: { book_name: string; CHAPTER: { chapter_number: string; VERSES: { verse_number: string; verse_text: string }[] }[] }[] };
-        const response = await fetch(`${bibleBase}/bible/sw.json`);
-        if (!response.ok) {
-          throw new Error('Failed to load Swahili Bible data.');
-        }
-        const data = await response.json() as SwData;
+        const data = await loadSwBible();
 
         const normalizedTarget = rawBook.toLowerCase().replace(/\s+/g, '');
         const book = data.BIBLEBOOK.find(b => b.book_name.toLowerCase().replace(/\s+/g, '') === normalizedTarget);
