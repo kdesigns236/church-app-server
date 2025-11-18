@@ -3,6 +3,7 @@ import VideoPreview from './components/VideoPreview';
 import Sidebar from './components/Sidebar';
 import MobileCamera from './components/MobileCamera';
 import { CameraSlot, CameraDevice, TransitionType, LowerThirdConfig, AnnouncementConfig, LyricsConfig, BibleVerseConfig } from './types';
+import Scanner from '../components/ProStream/Scanner';
  
 
 
@@ -11,6 +12,7 @@ const GoLivePage: React.FC = () => {
   const [displaySessionId, setDisplaySessionId] = useState<string | null>(null);
   const [sessionInput, setSessionInput] = useState('');
   const [showConnector, setShowConnector] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const isDisplayMode = false;
 
   useEffect(() => {
@@ -48,6 +50,28 @@ const GoLivePage: React.FC = () => {
     const full = raw.startsWith('pro-stream-session:') ? raw : `pro-stream-session:${raw}`;
     localStorage.setItem('pro_stream_session', full);
     setDisplaySessionId(full);
+    setShowConnector(false);
+  };
+
+
+  const handleScanConnect = (data: string) => {
+    let raw = data.trim();
+    if (!raw) {
+      setShowScanner(false);
+      return;
+    }
+
+    try {
+      const u = new URL(raw);
+      const s = u.searchParams.get('session');
+      if (s) raw = s;
+    } catch {}
+
+    const full = raw.startsWith('pro-stream-session:') ? raw : `pro-stream-session:${raw}`;
+    localStorage.setItem('pro_stream_session', full);
+    setDisplaySessionId(full);
+    setSessionInput(raw);
+    setShowScanner(false);
     setShowConnector(false);
   };
 
@@ -123,13 +147,24 @@ const GoLivePage: React.FC = () => {
                 placeholder="e.g. 7h9x2cj or https://... ?session=7h9x2cj"
                 className="w-full p-3 bg-gray-900 border border-gray-700 rounded-md mb-3 placeholder-gray-500"
               />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button onClick={handleConnect} className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">Connect</button>
+                <button onClick={() => setShowScanner(true)} className="px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg font-semibold">Scan QR</button>
                 <button onClick={handleDisconnect} className="px-4 py-3 bg-red-600 hover:bg-red-500 rounded-lg font-semibold">Disconnect</button>
                 <button onClick={() => setShowConnector(false)} className="px-4 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold">Close</button>
               </div>
               <p className="text-xs text-gray-500 mt-3">Current session: <code className="bg-black px-1 py-0.5 rounded">{short}</code></p>
             </div>
+          </div>
+        )}
+
+        {showScanner && (
+          <div className="absolute inset-0 z-50">
+            <Scanner
+              prompt="Scan the display QR from the Controller to connect this GoLive screen."
+              onScan={handleScanConnect}
+              onCancel={() => setShowScanner(false)}
+            />
           </div>
         )}
       </div>
@@ -153,9 +188,15 @@ const GoLivePage: React.FC = () => {
         />
         <button
           onClick={handleConnect}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold"
+          className="w-full py-3 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold mb-2"
         >
           Connect
+        </button>
+        <button
+          onClick={() => setShowScanner(true)}
+          className="w-full py-3 bg-gray-800 hover:bg-gray-700 rounded-lg font-semibold"
+        >
+          Scan QR instead
         </button>
         <p className="text-xs text-gray-500 mt-3">
           Tip: In the Controller, click “Open Display” and use the session shown in the header.

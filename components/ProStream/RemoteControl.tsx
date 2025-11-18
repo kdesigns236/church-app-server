@@ -51,6 +51,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   const [isLive, setIsLive] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [showDisplayQr, setShowDisplayQr] = useState(false);
   const [lowerThirdConfig, setLowerThirdConfig] = useState<LowerThirdConfig>({
     isVisible: false,
     topText: '',
@@ -105,6 +106,20 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   useEffect(() => {
     sourceModeRef.current = sourceMode;
   }, [sourceMode]);
+
+
+  const buildDisplayUrl = useCallback(() => {
+    const short = sessionId.split(':')[1] || sessionId;
+
+    // In production the controller often runs on pro-stream-client.onrender.com,
+    // while the public viewing page (GoLive) lives on church-app-server.onrender.com.
+    let base = window.location.origin;
+    if (base.includes('pro-stream-client.onrender.com')) {
+      base = 'https://church-app-server.onrender.com';
+    }
+
+    return `${base}/#/golive?session=${short}`;
+  }, [sessionId]);
 
 
   const startDisplayWebRTC = useCallback(async () => {
@@ -391,17 +406,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   // Removed auto-assignment of a primary local camera.
   // Slots 1, 2 and 3 are now used only when the operator explicitly selects a device.
   const openDisplayWindow = () => {
-      const short = sessionId.split(':')[1] || sessionId;
-
-      // In production the controller often runs on pro-stream-client.onrender.com,
-      // while the public viewing page (GoLive) lives on church-app-server.onrender.com.
-      // Open the real GoLive viewer so the operator sees exactly what members see.
-      let base = window.location.origin;
-      if (base.includes('pro-stream-client.onrender.com')) {
-        base = 'https://church-app-server.onrender.com';
-      }
-
-      const url = `${base}/#/golive?session=${short}`;
+      const url = buildDisplayUrl();
       window.open(url, '_blank', 'popup');
   };
 
@@ -414,19 +419,12 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   }, [sessionId]);
 
   const copyDisplayLink = useCallback(() => {
-    const short = sessionId.split(':')[1] || sessionId;
-
-    let base = window.location.origin;
-    if (base.includes('pro-stream-client.onrender.com')) {
-      base = 'https://church-app-server.onrender.com';
-    }
-
-    const url = `${base}/#/golive?session=${short}`;
+    const url = buildDisplayUrl();
     navigator.clipboard.writeText(url).then(() => {
       setCopiedLink(true);
       setTimeout(() => setCopiedLink(false), 1200);
     });
-  }, [sessionId]);
+  }, [buildDisplayUrl]);
 
   return (
     <div className="flex h-screen w-screen bg-[#1e1e1e] text-white font-sans overflow-hidden">
@@ -468,6 +466,13 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
               {copiedLink ? 'Link Copied' : 'Copy Link'}
             </button>
             <button
+              onClick={() => setShowDisplayQr(true)}
+              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-sm"
+              title="Show display QR"
+            >
+              QR
+            </button>
+            <button
               onClick={openDisplayWindow}
               className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors text-sm font-semibold flex items-center space-x-2"
             >
@@ -504,6 +509,28 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
           </div>
         </div>
       </div>
+
+      {showDisplayQr && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#1e1e1e] p-6 rounded-lg shadow-2xl text-white w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-2">Display QR Code</h3>
+            <p className="text-xs text-gray-400 mb-3">Scan this on the GoLive page to connect this session.</p>
+            <div className="bg-white rounded-lg p-3 flex items-center justify-center mb-4">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(buildDisplayUrl())}`}
+                alt="Display link QR"
+                className="w-48 h-48"
+              />
+            </div>
+            <button
+              onClick={() => setShowDisplayQr(false)}
+              className="w-full py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors text-sm font-semibold"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
