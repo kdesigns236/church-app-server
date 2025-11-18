@@ -45,6 +45,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   const [availableDevices, setAvailableDevices] = useState<CameraDevice[]>([]);
   const [activeCameraId, setActiveCameraId] = useState<number | null>(null);
   const [transition, setTransition] = useState<TransitionType>('cut');
+  const [sourceMode, setSourceMode] = useState<'local' | 'controller'>('local');
   const [isLive, setIsLive] = useState<boolean>(false);
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -322,7 +323,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
 
   useEffect(() => {
     const fullState = {
-        activeCameraId, isLive, lowerThirdConfig, lowerThirdAnimationKey,
+        activeCameraId, isLive, sourceMode, lowerThirdConfig, lowerThirdAnimationKey,
         announcementConfig, lyricsConfig, bibleVerseConfig,
         cameraSlots: cameraSlots.map(s => ({...s, stream: null}))
     };
@@ -333,7 +334,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
         type: 'state-update',
         payload: getSerializableState(fullState)
     });
-  }, [cameraSlots, activeCameraId, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig]);
+  }, [cameraSlots, activeCameraId, isLive, sourceMode, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig]);
 
 
   // When the active camera or its stream changes and the display is ready, (re)start WebRTC to the display
@@ -438,6 +439,8 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
               setTransition={setTransition}
               isLive={isLive}
               setIsLive={setIsLive}
+              sourceMode={sourceMode}
+              setSourceMode={setSourceMode}
               lowerThirdConfig={lowerThirdConfig}
               setLowerThirdConfig={setLowerThirdConfig}
               replayLowerThirdAnimation={replayLowerThirdAnimation}

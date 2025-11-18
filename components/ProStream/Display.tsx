@@ -15,7 +15,10 @@ interface DisplayProps {
 
 const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const [activeStream, setActiveStream] = useState<MediaStream | null>(null);
-  const currentStreamRef = useRef<MediaStream | null>(null);
+  const [sourceMode, setSourceMode] = useState<'local' | 'controller'>('local');
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const controllerStreamRef = useRef<MediaStream | null>(null);
+  const sourceModeRef = useRef<'local' | 'controller'>('local');
   const [isConnected, setIsConnected] = useState(false);
   const [isLive, setIsLive] = useState<boolean>(false);
   const [streamToYoutube, setStreamToYoutube] = useState<boolean>(true);
@@ -28,14 +31,22 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const socketRef = useRef<Socket | null>(null);
   const shortSessionIdRef = useRef<string>('');
   const displayPeerRef = useRef<RTCPeerConnection | null>(null);
+  const hasRequestedLocalRef = useRef(false);
+
+  useEffect(() => {
+    sourceModeRef.current = sourceMode;
+  }, [sourceMode]);
   
   // Start with the local default camera so the GoLive page shows a feed immediately
   useEffect(() => {
-    if (activeStream) return;
+    if (hasRequestedLocalRef.current) return;
+    hasRequestedLocalRef.current = true;
     navigator.mediaDevices.getUserMedia({ video: true })
       .then(stream => {
-        currentStreamRef.current = stream;
-        setActiveStream(stream);
+        localStreamRef.current = stream;
+        if (sourceModeRef.current === 'local') {
+          setActiveStream(stream);
+        }
       })
       .catch(() => {
         // If permission denied or no device, keep waiting for controller
@@ -77,11 +88,15 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
           pc.ontrack = (event) => {
             const [stream] = event.streams;
             if (!stream) return;
-            if (currentStreamRef.current && currentStreamRef.current !== stream) {
-              currentStreamRef.current.getTracks().forEach(track => track.stop());
+
+            if (controllerStreamRef.current && controllerStreamRef.current !== stream) {
+              controllerStreamRef.current.getTracks().forEach(track => track.stop());
             }
-            currentStreamRef.current = stream;
-            setActiveStream(stream);
+            controllerStreamRef.current = stream;
+
+            if (sourceModeRef.current === 'controller') {
+              setActiveStream(stream);
+            }
           };
 
           pc.onicecandidate = (event) => {
@@ -127,8 +142,19 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
 
       if (type !== 'state-update' || !payload) return;
 
-
       if (!isConnected) setIsConnected(true);
+
+      if (payload.sourceMode) {
+        const mode: 'local' | 'controller' = payload.sourceMode === 'controller' ? 'controller' : 'local';
+        setSourceMode(mode);
+        sourceModeRef.current = mode;
+        if (mode === 'controller' && controllerStreamRef.current) {
+          setActiveStream(controllerStreamRef.current);
+        } else if (mode === 'local' && localStreamRef.current) {
+          setActiveStream(localStreamRef.current);
+        }
+      }
+
       setLowerThirdConfig(payload.lowerThirdConfig);
       setLowerThirdAnimationKey(payload.lowerThirdAnimationKey);
       setAnnouncementConfig(payload.announcementConfig);
@@ -147,8 +173,11 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         displayPeerRef.current.close();
         displayPeerRef.current = null;
       }
-      if (currentStreamRef.current) {
-        currentStreamRef.current.getTracks().forEach(track => track.stop());
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      if (controllerStreamRef.current) {
+        controllerStreamRef.current.getTracks().forEach(track => track.stop());
       }
     };
   }, [sessionId, isConnected]);

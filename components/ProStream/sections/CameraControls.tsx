@@ -11,6 +11,8 @@ interface CameraControlsProps {
   setActiveCameraId: (id: number | null) => void;
   transition: TransitionType;
   setTransition: (type: TransitionType) => void;
+  sourceMode: 'local' | 'controller';
+  setSourceMode: (mode: 'local' | 'controller') => void;
 }
 
 const CameraControls: React.FC<CameraControlsProps> = ({
@@ -22,6 +24,8 @@ const CameraControls: React.FC<CameraControlsProps> = ({
   setActiveCameraId,
   transition,
   setTransition,
+  sourceMode,
+  setSourceMode,
 }) => {
   const [qrSlot, setQrSlot] = useState<CameraSlot | null>(null);
 
@@ -87,6 +91,33 @@ const CameraControls: React.FC<CameraControlsProps> = ({
                 {t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
+          </div>
+        </div>
+        <div>
+          <h4 className="text-sm font-semibold mb-2 text-gray-400">Output Source</h4>
+          <div className="flex space-x-2">
+            <button
+              type="button"
+              onClick={() => setSourceMode('local')}
+              className={`flex-1 px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                sourceMode === 'local'
+                  ? 'bg-white text-black border-white'
+                  : 'bg-gray-800 text-gray-200 border-gray-600 hover:border-white/70'
+              }`}
+            >
+              GoLive camera
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceMode('controller')}
+              className={`flex-1 px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                sourceMode === 'controller'
+                  ? 'bg-white text-black border-white'
+                  : 'bg-gray-800 text-gray-200 border-gray-600 hover:border-white/70'
+              }`}
+            >
+              External cameras
+            </button>
           </div>
         </div>
         <div>

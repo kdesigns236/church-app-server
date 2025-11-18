@@ -23,6 +23,8 @@ interface SidebarProps {
   setTransition: (type: TransitionType) => void;
   isLive: boolean;
   setIsLive: (isLive: boolean | ((prev: boolean) => boolean)) => void;
+  sourceMode: 'local' | 'controller';
+  setSourceMode: (mode: 'local' | 'controller') => void;
   lowerThirdConfig: LowerThirdConfig;
   setLowerThirdConfig: React.Dispatch<React.SetStateAction<LowerThirdConfig>>;
   replayLowerThirdAnimation: () => void;
@@ -47,6 +49,8 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
             setActiveCameraId={props.setActiveCameraId}
             transition={props.transition}
             setTransition={props.setTransition}
+            sourceMode={props.sourceMode}
+            setSourceMode={props.setSourceMode}
             onDeviceChange={props.onDeviceChange}
         />
       </Accordion>
