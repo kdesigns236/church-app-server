@@ -4,6 +4,9 @@ import { IconSettings } from './icons';
 import { CameraSlot, LowerThirdConfig, AnnouncementConfig, LyricsConfig, BibleVerseConfig } from './types';
 import { io, Socket } from 'socket.io-client';
 
+const RTC_CONFIGURATION: RTCConfiguration = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+};
 
 interface DisplayProps {
     sessionId: string;
@@ -22,6 +25,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const [bibleVerseConfig, setBibleVerseConfig] = useState<BibleVerseConfig>({ isVisible: false, text: '', reference: '', fontSize: '', fontFamily: '', textColor: '', textAlign: 'center', backgroundColor: '', backgroundOpacity: 0, animationStyle: 'fade', position: 'bottom' });
   const socketRef = useRef<Socket | null>(null);
   const shortSessionIdRef = useRef<string>('');
+  const displayPeerRef = useRef<RTCPeerConnection | null>(null);
   
   // Start with the local default camera so the GoLive page shows a feed immediately
   useEffect(() => {
@@ -47,9 +51,78 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     socketRef.current = socket;
     socket.emit('prostream:join', { sessionId: shortSessionId, role: 'display' });
 
+    // Let the controller know this display is ready to receive a WebRTC stream
+    socket.emit('prostream:signal', {
+      sessionId: shortSessionId,
+      type: 'display-ready',
+      target: 'controller',
+    });
 
-    const handleSignal = (message: any) => {
-      const { type, payload } = message;
+
+    const handleSignal = async (message: any) => {
+      const { type, payload, target } = message;
+      if (target && target !== 'display') return;
+
+      // WebRTC offer/answer/candidates from controller
+      if (type === 'display-webrtc-offer' && payload) {
+        try {
+          if (displayPeerRef.current) {
+            displayPeerRef.current.close();
+          }
+          const pc = new RTCPeerConnection(RTC_CONFIGURATION);
+          displayPeerRef.current = pc;
+
+          pc.ontrack = (event) => {
+            const [stream] = event.streams;
+            if (!stream) return;
+            if (currentStreamRef.current && currentStreamRef.current !== stream) {
+              currentStreamRef.current.getTracks().forEach(track => track.stop());
+            }
+            currentStreamRef.current = stream;
+            setActiveStream(stream);
+          };
+
+          pc.onicecandidate = (event) => {
+            if (event.candidate) {
+              const s = socketRef.current;
+              if (!s) return;
+              s.emit('prostream:signal', {
+                sessionId: shortSessionIdRef.current,
+                type: 'display-webrtc-candidate',
+                payload: event.candidate,
+                target: 'controller',
+              });
+            }
+          };
+
+          await pc.setRemoteDescription(new RTCSessionDescription(payload));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+
+          const s = socketRef.current;
+          if (s) {
+            s.emit('prostream:signal', {
+              sessionId: shortSessionIdRef.current,
+              type: 'display-webrtc-answer',
+              payload: answer,
+              target: 'controller',
+            });
+          }
+        } catch (err) {
+          console.error('Error handling display-webrtc-offer:', err);
+        }
+        return;
+      }
+
+      if (type === 'display-webrtc-candidate' && payload && displayPeerRef.current) {
+        try {
+          await displayPeerRef.current.addIceCandidate(new RTCIceCandidate(payload));
+        } catch (err) {
+          console.error('Error adding display ICE candidate:', err);
+        }
+        return;
+      }
+
       if (type !== 'state-update' || !payload) return;
 
 
@@ -62,26 +135,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       setAnnouncementConfig(payload.announcementConfig);
       setLyricsConfig(payload.lyricsConfig);
       setBibleVerseConfig(payload.bibleVerseConfig);
-      
-      const activeSlot = payload.cameraSlots.find((s: CameraSlot) => s.id === payload.activeCameraId);
-
-
-      if (activeSlot && activeSlot.status === 'connected') {
-        // Always use the default local camera on the GoLive display device.
-        // The controller's deviceId values are specific to its own machine and
-        // cannot be matched reliably on a different device.
-        navigator.mediaDevices.getUserMedia({ video: true })
-          .then(stream => {
-            if (currentStreamRef.current && currentStreamRef.current !== stream) {
-              currentStreamRef.current.getTracks().forEach(track => track.stop());
-            }
-            currentStreamRef.current = stream;
-            setActiveStream(stream);
-          })
-          .catch(err => console.error("Display error getting stream:", err));
-      } else {
-        // No active slot chosen by controller: keep existing local fallback stream if any
-      }
     };
 
 
@@ -91,6 +144,10 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     return () => {
       socket.off('prostream:signal', handleSignal);
       socket.disconnect();
+      if (displayPeerRef.current) {
+        displayPeerRef.current.close();
+        displayPeerRef.current = null;
+      }
       if (currentStreamRef.current) {
         currentStreamRef.current.getTracks().forEach(track => track.stop());
       }

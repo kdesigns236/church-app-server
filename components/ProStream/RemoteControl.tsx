@@ -33,6 +33,8 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   const shortSessionIdRef = useRef<string>('');
   const peerConnectionsRef = useRef<Map<number, RTCPeerConnection>>(new Map());
   const autoAssignedPrimaryRef = useRef(false);
+  const displayPeerRef = useRef<RTCPeerConnection | null>(null);
+  const displayReadyRef = useRef(false);
 
 
   const [cameraSlots, setCameraSlots] = useState<CameraSlot[]>([
@@ -90,6 +92,62 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   const replayLowerThirdAnimation = () => {
     setLowerThirdAnimationKey(k => k + 1);
   };
+
+
+  const startDisplayWebRTC = useCallback(async () => {
+    const socket = socketRef.current;
+    if (!socket || !shortSessionIdRef.current) return;
+    if (!displayReadyRef.current) return;
+
+    const activeSlot = cameraSlots.find(s => s.id === activeCameraId);
+    const stream = activeSlot?.stream || null;
+
+    if (!activeSlot || !stream) {
+      if (displayPeerRef.current) {
+        displayPeerRef.current.getSenders().forEach(sender => sender.track && sender.track.stop());
+        displayPeerRef.current.close();
+        displayPeerRef.current = null;
+      }
+      return;
+    }
+
+    try {
+      if (displayPeerRef.current) {
+        displayPeerRef.current.getSenders().forEach(sender => sender.track && sender.track.stop());
+        displayPeerRef.current.close();
+      }
+
+      const pc = new RTCPeerConnection(RTC_CONFIGURATION);
+      displayPeerRef.current = pc;
+
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          const s = socketRef.current;
+          if (!s) return;
+          s.emit('prostream:signal', {
+            sessionId: shortSessionIdRef.current,
+            type: 'display-webrtc-candidate',
+            payload: event.candidate,
+            target: 'display',
+          });
+        }
+      };
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
+      socket.emit('prostream:signal', {
+        sessionId: shortSessionIdRef.current,
+        type: 'display-webrtc-offer',
+        payload: offer,
+        target: 'display',
+      });
+    } catch (err) {
+      console.error('Error starting WebRTC to display:', err);
+    }
+  }, [cameraSlots, activeCameraId]);
   
   const refreshDevices = useCallback(async () => {
     try {
@@ -168,6 +226,32 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
 
     const handleSignal = async (message: any) => {
         const { type, slotId, payload, target } = message;
+
+        // Messages intended for controller-display WebRTC
+        if (type === 'display-ready' && (!target || target === 'controller')) {
+            displayReadyRef.current = true;
+            startDisplayWebRTC();
+            return;
+        }
+
+        if (type === 'display-webrtc-answer' && (!target || target === 'controller') && payload && displayPeerRef.current) {
+            try {
+                await displayPeerRef.current.setRemoteDescription(new RTCSessionDescription(payload));
+            } catch (err) {
+                console.error('Error setting display remote description:', err);
+            }
+            return;
+        }
+
+        if (type === 'display-webrtc-candidate' && target === 'controller' && payload && displayPeerRef.current) {
+            try {
+                await displayPeerRef.current.addIceCandidate(new RTCIceCandidate(payload));
+            } catch (err) {
+                console.error('Error adding display ICE candidate:', err);
+            }
+            return;
+        }
+
         if (!type || !slotId) return;
         const numericSlotId = parseInt(String(slotId), 10);
 
@@ -248,6 +332,13 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
         payload: getSerializableState(fullState)
     });
   }, [cameraSlots, activeCameraId, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig]);
+
+
+  // When the active camera or its stream changes and the display is ready, (re)start WebRTC to the display
+  useEffect(() => {
+    if (!displayReadyRef.current) return;
+    startDisplayWebRTC();
+  }, [activeCameraId, cameraSlots, startDisplayWebRTC]);
 
 
 
