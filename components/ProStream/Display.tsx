@@ -33,14 +33,18 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const displayPeerRef = useRef<RTCPeerConnection | null>(null);
   const hasRequestedLocalRef = useRef(false);
 
-  useEffect(() => {
-    sourceModeRef.current = sourceMode;
-  }, [sourceMode]);
-  
-  // Start with the local default camera so the GoLive page shows a feed immediately
-  useEffect(() => {
-    if (hasRequestedLocalRef.current) return;
-    hasRequestedLocalRef.current = true;
+  // Ensure we have a live local camera stream when GoLive camera is selected
+  function activateLocalIfNeeded() {
+    const existing = localStreamRef.current;
+    if (existing) {
+      const hasLiveTrack = existing.getVideoTracks().some(t => t.readyState === 'live');
+      if (hasLiveTrack) {
+        setActiveStream(existing);
+        return;
+      }
+      existing.getTracks().forEach(track => track.stop());
+    }
+
     navigator.mediaDevices.getUserMedia({ video: true })
       .then(stream => {
         localStreamRef.current = stream;
@@ -51,6 +55,17 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       .catch(() => {
         // If permission denied or no device, keep waiting for controller
       });
+  }
+
+  useEffect(() => {
+    sourceModeRef.current = sourceMode;
+  }, [sourceMode]);
+  
+  // Start with the local default camera so the GoLive page shows a feed immediately
+  useEffect(() => {
+    if (hasRequestedLocalRef.current) return;
+    hasRequestedLocalRef.current = true;
+    activateLocalIfNeeded();
   }, []);
 
   useEffect(() => {
@@ -150,8 +165,8 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         sourceModeRef.current = mode;
         if (mode === 'controller' && controllerStreamRef.current) {
           setActiveStream(controllerStreamRef.current);
-        } else if (mode === 'local' && localStreamRef.current) {
-          setActiveStream(localStreamRef.current);
+        } else if (mode === 'local') {
+          activateLocalIfNeeded();
         }
       }
 
