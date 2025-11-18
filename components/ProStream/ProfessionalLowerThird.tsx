@@ -1,4 +1,4 @@
-import React, { CSSProperties } from 'react';
+import React, { CSSProperties, useState } from 'react';
 import { LowerThirdConfig } from './types';
 
 
@@ -8,6 +8,7 @@ interface ProfessionalLowerThirdProps {
 
 
 const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config }) => {
+  const [logoImageError, setLogoImageError] = useState(false);
   const darken = (color: string, percent: number): string => {
     try {
       let num = parseInt(color.replace('#', ''), 16);
@@ -300,11 +301,18 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
               <div className="diamond-inner"></div>
             </div>
             <div className="logo-icon">
-              <img
-                src="/logo.jpg"
-                alt={config.logoIcon || 'Church of God Evening Light logo'}
-                className="w-full h-full object-contain"
-              />
+              {logoImageError ? (
+                <span className="w-full h-full flex items-center justify-center text-4xl">
+                  {config.logoIcon || '✝'}
+                </span>
+              ) : (
+                <img
+                  src="/logo.jpg"
+                  alt={config.logoIcon || 'Church of God Evening Light logo'}
+                  className="w-full h-full object-contain"
+                  onError={() => setLogoImageError(true)}
+                />
+              )}
             </div>
           </div>
         </div>
