@@ -45,6 +45,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   const [isPortrait, setIsPortrait] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [resolutionLabel, setResolutionLabel] = useState<string>('');
+  const [showOrientationHint, setShowOrientationHint] = useState(true);
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
@@ -305,7 +306,11 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
   useEffect(() => {
     const updateOrientation = () => {
-      setIsPortrait(window.innerHeight > window.innerWidth);
+      const portrait = window.innerHeight > window.innerWidth;
+      setIsPortrait(portrait);
+      if (!portrait) {
+        setShowOrientationHint(false);
+      }
     };
 
 
@@ -485,10 +490,13 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       </div>
 
 
-      {isPortrait && !error && (
-        <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center z-10 px-6 text-center">
+      {showOrientationHint && isPortrait && !error && (
+        <div
+          className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center z-10 px-6 text-center"
+          onClick={() => setShowOrientationHint(false)}
+        >
           <h2 className="text-xl font-semibold mb-2">Rotate your phone</h2>
-          <p className="text-sm text-gray-300">For the best Pro Master quality, hold your device in landscape while recording.</p>
+          <p className="text-sm text-gray-300">For the best Pro Master quality, hold your device in landscape while recording. Tap anywhere to continue.</p>
         </div>
       )}
 
