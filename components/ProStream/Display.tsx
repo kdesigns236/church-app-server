@@ -41,6 +41,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       return false;
     }
   });
+  const [remoteZoom, setRemoteZoom] = useState<number | null>(null);
 
   // Ensure we have a live local camera stream when GoLive camera is selected
   function activateLocalIfNeeded() {
@@ -198,8 +199,15 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
             }
           }
           // If no live external stream yet, keep showing whatever is currently active (usually GoLive camera)
+
+          if (typeof payload.activeCameraZoom === 'number') {
+            setRemoteZoom(payload.activeCameraZoom > 1 ? payload.activeCameraZoom : 1);
+          } else {
+            setRemoteZoom(null);
+          }
         } else if (mode === 'local') {
           activateLocalIfNeeded();
+          setRemoteZoom(null);
         }
       }
 
@@ -247,6 +255,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         lyricsConfig={lyricsConfig}
         bibleVerseConfig={bibleVerseConfig}
         rotate90={rotate90}
+        zoomScale={remoteZoom || undefined}
       />
       {/* Local GO LIVE controls - display owns live state and target platforms */}
       <div className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700 max-w-md">

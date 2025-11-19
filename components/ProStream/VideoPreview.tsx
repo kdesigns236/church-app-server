@@ -12,6 +12,7 @@ interface VideoPreviewProps {
   lyricsConfig: LyricsConfig;
   bibleVerseConfig: BibleVerseConfig;
   rotate90?: boolean;
+  zoomScale?: number | null;
 }
 
 
@@ -160,7 +161,7 @@ const BibleVerseOverlay: React.FC<{ config: BibleVerseConfig }> = ({ config }) =
 
 
 
-const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, rotate90 }) => {
+const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, rotate90, zoomScale }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [autoRotate90, setAutoRotate90] = React.useState(false);
   const [scale, setScale] = React.useState(1);
@@ -268,8 +269,10 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
         if (normalized !== 0) {
           transforms.push(`rotate(${normalized}deg)`);
         }
-        if (scale && scale !== 1) {
-          transforms.push(`scale(${scale})`);
+        const zoom = zoomScale && zoomScale > 1 ? zoomScale : 1;
+        const totalScale = (scale || 1) * zoom;
+        if (totalScale && totalScale !== 1) {
+          transforms.push(`scale(${totalScale})`);
         }
 
         const videoStyle = {

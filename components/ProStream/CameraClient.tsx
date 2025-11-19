@@ -379,11 +379,27 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
   const applyZoom = (value: number) => {
     setZoom(value);
+
     const track: any = videoTrackRef.current as any;
-    if (!hardwareZoom || !track || !track.applyConstraints) return;
-    track
-      .applyConstraints({ advanced: [{ zoom: value }] })
-      .catch((err: any) => console.warn('Failed to apply zoom value', err));
+    if (hardwareZoom && track && track.applyConstraints) {
+      track
+        .applyConstraints({ advanced: [{ zoom: value }] })
+        .catch((err: any) => console.warn('Failed to apply zoom value', err));
+    }
+
+
+    if (!hardwareZoom) {
+      const socket = socketRef.current;
+      if (socket && shortSessionIdRef.current) {
+        socket.emit('prostream:signal', {
+          sessionId: shortSessionIdRef.current,
+          type: 'camera-zoom',
+          slotId,
+          payload: { zoom: value },
+          target: 'controller',
+        });
+      }
+    }
   };
 
 

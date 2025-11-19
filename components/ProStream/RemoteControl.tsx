@@ -49,6 +49,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   const [transition, setTransition] = useState<TransitionType>('cut');
   const [sourceMode, setSourceMode] = useState<'local' | 'controller'>('local');
   const [isLive, setIsLive] = useState<boolean>(false);
+  const [activeCameraZoom, setActiveCameraZoom] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showDisplayQr, setShowDisplayQr] = useState(false);
@@ -285,6 +286,14 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
         if (!type || !slotId) return;
         const numericSlotId = parseInt(String(slotId), 10);
 
+        if (type === 'camera-zoom') {
+            const zoomValue = payload && typeof payload.zoom === 'number' ? payload.zoom : null;
+            if (zoomValue && zoomValue > 0 && activeCameraIdRef.current === numericSlotId) {
+                setActiveCameraZoom(zoomValue);
+            }
+            return;
+        }
+
         try {
             if (type === 'camera-disconnected') {
                 setCameraSlots(prev => prev.map(s => s.id === numericSlotId ? { ...s, status: 'disconnected', sourceType: null, stream: null } : s));
@@ -372,7 +381,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
 
   useEffect(() => {
     const fullState = {
-        activeCameraId, isLive, sourceMode, lowerThirdConfig, lowerThirdAnimationKey,
+        activeCameraId, isLive, sourceMode, activeCameraZoom, lowerThirdConfig, lowerThirdAnimationKey,
         announcementConfig, lyricsConfig, bibleVerseConfig,
         cameraSlots: cameraSlots.map(s => ({...s, stream: null}))
     };
@@ -383,7 +392,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
         type: 'state-update',
         payload: getSerializableState(fullState)
     });
-  }, [cameraSlots, activeCameraId, isLive, sourceMode, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig]);
+  }, [cameraSlots, activeCameraId, isLive, sourceMode, activeCameraZoom, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig]);
 
 
   // When the active camera or its stream changes and the display is ready, (re)start WebRTC to the display
