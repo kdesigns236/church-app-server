@@ -48,6 +48,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
+  const [hardwareZoom, setHardwareZoom] = useState(false);
   const [gimbalAssist, setGimbalAssist] = useState(true);
   const [isStreaming, setIsStreaming] = useState(true);
 
@@ -152,6 +153,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
             const min = caps.zoom.min ?? 1;
             const max = caps.zoom.max ?? 5;
             const step = caps.zoom.step ?? 0.1;
+            setHardwareZoom(true);
             setZoomSupported(true);
             setZoomRange({ min, max, step });
             const initialZoom =
@@ -162,20 +164,32 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
               .applyConstraints({ advanced: [{ zoom: initialZoom }] })
               .catch((err: any) => console.warn('Failed to apply initial zoom', err));
           } else {
-            setZoomSupported(false);
-            setZoomRange(null);
-            setZoom(null);
+            setHardwareZoom(false);
+            setZoomSupported(true);
+            const min = 1;
+            const max = 3;
+            const step = 0.1;
+            setZoomRange({ min, max, step });
+            setZoom(1);
           }
         } catch (err) {
           console.warn('Zoom not supported on this camera.', err);
-          setZoomSupported(false);
-          setZoomRange(null);
-          setZoom(null);
+          setHardwareZoom(false);
+          setZoomSupported(true);
+          const min = 1;
+          const max = 3;
+          const step = 0.1;
+          setZoomRange({ min, max, step });
+          setZoom(1);
         }
       } else {
-        setZoomSupported(false);
-        setZoomRange(null);
-        setZoom(null);
+        setHardwareZoom(false);
+        setZoomSupported(true);
+        const min = 1;
+        const max = 3;
+        const step = 0.1;
+        setZoomRange({ min, max, step });
+        setZoom(1);
       }
 
 
@@ -366,7 +380,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   const applyZoom = (value: number) => {
     setZoom(value);
     const track: any = videoTrackRef.current as any;
-    if (!track || !track.applyConstraints) return;
+    if (!hardwareZoom || !track || !track.applyConstraints) return;
     track
       .applyConstraints({ advanced: [{ zoom: value }] })
       .catch((err: any) => console.warn('Failed to apply zoom value', err));
@@ -402,12 +416,19 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   };
 
 
+  const videoStyle: React.CSSProperties = {};
+  if (!hardwareZoom && zoom !== null && zoom > 1) {
+    videoStyle.transform = `scale(${zoom})`;
+    videoStyle.transformOrigin = 'center center';
+  }
+
+
   return (
     <div
       className="relative h-screen w-screen bg-black flex items-center justify-center text-white font-sans cursor-pointer"
       onClick={() => setUiVisible(true)}
     >
-      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover"></video>
+      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={videoStyle}></video>
       
       {/* UI Overlay Container */}
       <div

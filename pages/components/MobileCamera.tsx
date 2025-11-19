@@ -14,6 +14,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
+  const [hardwareZoom, setHardwareZoom] = useState(false);
   const [gimbalAssist, setGimbalAssist] = useState(true);
 
 
@@ -29,6 +30,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
           const min = caps.zoom.min ?? 1;
           const max = caps.zoom.max ?? 5;
           const step = caps.zoom.step ?? 0.1;
+          setHardwareZoom(true);
           setZoomSupported(true);
           setZoomRange({ min, max, step });
           const settings = (track as any).getSettings?.() || {};
@@ -40,16 +42,37 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
             .applyConstraints({ advanced: [{ zoom: initialZoom }] })
             .catch((err: any) => console.warn('Failed to apply initial zoom on MobileCamera', err));
           return;
+        } else {
+          setHardwareZoom(false);
+          setZoomSupported(true);
+          const min = 1;
+          const max = 3;
+          const step = 0.1;
+          setZoomRange({ min, max, step });
+          setZoom(1);
+          return;
         }
       } catch (err) {
         console.warn('Zoom not supported on this mobile camera.', err);
+        setHardwareZoom(false);
+        setZoomSupported(true);
+        const min = 1;
+        const max = 3;
+        const step = 0.1;
+        setZoomRange({ min, max, step });
+        setZoom(1);
+        return;
       }
     }
 
 
-    setZoomSupported(false);
-    setZoomRange(null);
-    setZoom(null);
+    setHardwareZoom(false);
+    setZoomSupported(true);
+    const min = 1;
+    const max = 3;
+    const step = 0.1;
+    setZoomRange({ min, max, step });
+    setZoom(1);
   };
 
   const startCamera = async () => {
@@ -105,7 +128,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
   const applyZoom = (value: number) => {
     setZoom(value);
     const track: any = videoTrackRef.current as any;
-    if (!track || !track.applyConstraints) return;
+    if (!hardwareZoom || !track || !track.applyConstraints) return;
     track
       .applyConstraints({ advanced: [{ zoom: value }] })
       .catch((err: any) => console.warn('Failed to apply zoom on MobileCamera', err));
@@ -125,6 +148,12 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
       stopCamera();
     };
   }, [facingMode]);
+
+  const videoStyle: React.CSSProperties = {};
+  if (!hardwareZoom && zoom !== null && zoom > 1) {
+    videoStyle.transform = `scale(${zoom})`;
+    videoStyle.transformOrigin = 'center center';
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
@@ -149,6 +178,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
             playsInline
             muted
             className="w-full h-full object-cover"
+            style={videoStyle}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
