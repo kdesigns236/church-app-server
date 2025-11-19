@@ -79,12 +79,12 @@ const CameraControls: React.FC<CameraControlsProps> = ({
       <div className="space-y-4">
         <div>
           <h4 className="text-sm font-semibold mb-2 text-gray-400">Transitions</h4>
-          <div className="flex space-x-2">
+          <div className="flex flex-wrap gap-2">
             {(['cut', 'fade', 'dissolve'] as TransitionType[]).map(t => (
               <button
                 key={t}
                 onClick={() => setTransition(t)}
-                className={`px-3 py-1.5 text-sm rounded-md transition-colors flex-grow ${
+                className={`px-3 py-1.5 text-sm rounded-md transition-colors flex-1 min-w-[90px] ${
                   transition === t ? 'bg-blue-600 text-white' : 'bg-gray-700 hover:bg-gray-600'
                 }`}
               >
@@ -95,7 +95,7 @@ const CameraControls: React.FC<CameraControlsProps> = ({
         </div>
         <div>
           <h4 className="text-sm font-semibold mb-2 text-gray-400">GoLive Camera</h4>
-          <div className="p-2 bg-gray-900 rounded-lg flex items-center justify-between">
+          <div className="p-2 bg-gray-900 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
             <div className="text-xs text-gray-300">Use the camera on this GoLive device as the live source.</div>
             <button
               type="button"
@@ -103,7 +103,7 @@ const CameraControls: React.FC<CameraControlsProps> = ({
                 setSourceMode('local');
                 setActiveCameraId(null);
               }}
-              className="ml-3 px-3 py-1 text-xs bg-indigo-600 rounded hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
+              className="mt-2 sm:mt-0 sm:ml-3 px-3 py-1 text-xs bg-indigo-600 rounded hover:bg-indigo-500 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors w-full sm:w-auto text-center"
             >
               {sourceMode === 'local' ? 'Active' : 'Set Active'}
             </button>
@@ -135,7 +135,7 @@ const CameraControls: React.FC<CameraControlsProps> = ({
                     <span>No camera connected</span>
                   )}
                 </div>
-                <div className="flex items-center space-x-2 mt-2">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-2">
                   <button 
                     onClick={() => {
                       setSourceMode('controller');
@@ -149,7 +149,7 @@ const CameraControls: React.FC<CameraControlsProps> = ({
                   <button
                     type="button"
                     onClick={() => setQrSlot(slot)}
-                    className="px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded flex items-center justify-center space-x-1 hover:bg-gray-700 transition-colors"
+                    className="px-2 py-1 text-xs bg-gray-800 border border-gray-600 rounded flex items-center justify-center space-x-1 hover:bg-gray-700 transition-colors w-full sm:w-auto"
                   >
                     <IconQrCode className="w-4 h-4 text-gray-300" />
                     <span>QR</span>

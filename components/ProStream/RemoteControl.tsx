@@ -429,7 +429,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
   return (
     <div className="flex h-screen w-screen bg-[#1e1e1e] text-white font-sans overflow-hidden">
       <div className="w-full flex flex-col">
-        <header className="flex-shrink-0 bg-[#1a1a1a] p-3 flex items-center justify-between border-b border-gray-700 shadow-md">
+        <header className="flex-shrink-0 bg-[#1a1a1a] p-2 sm:p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0 border-b border-gray-700 shadow-md">
           <div className="flex items-center space-x-3">
             {onExit && (
               <button
@@ -444,7 +444,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
             <IconSettings className="w-6 h-6 text-blue-400" />
             <h1 className="text-lg font-bold">Church Live Streaming Controller</h1>
           </div>
-          <div className="text-xs text-center text-gray-400">
+          <div className="text-xs text-center text-gray-400 flex-1 sm:flex-none">
             <p>Session ID</p>
             <div className="flex items-center justify-center gap-2">
               <span className="font-mono bg-black px-2 py-0.5 rounded select-all">{sessionId.split(':')[1] || sessionId}</span>
@@ -457,7 +457,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
               </button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 w-full sm:w-auto justify-end">
             <button
               onClick={() => setShowDisplayQr(true)}
               className="px-3 py-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-sm"
@@ -474,7 +474,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
             </button>
           </div>
         </header>
-        <div className="flex-1 overflow-hidden flex gap-4 p-4">
+        <div className="flex-1 overflow-hidden flex p-3 sm:p-4">
           <div className="flex-1 bg-[#1a1a1a] rounded-lg overflow-y-auto border border-gray-700">
             <Sidebar
               sessionId={sessionId}

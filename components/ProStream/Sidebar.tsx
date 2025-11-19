@@ -39,7 +39,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
   return (
-    <div className="p-4 space-y-2">
+    <div className="p-3 sm:p-4 space-y-2">
       <Accordion title="Camera & Transition" defaultOpen>
         <CameraControls 
             sessionId={props.sessionId}
