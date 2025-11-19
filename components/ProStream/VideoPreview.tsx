@@ -11,6 +11,8 @@ interface VideoPreviewProps {
   announcementConfig: AnnouncementConfig;
   lyricsConfig: LyricsConfig;
   bibleVerseConfig: BibleVerseConfig;
+  flipHorizontal?: boolean;
+  rotate90?: boolean;
 }
 
 
@@ -159,7 +161,7 @@ const BibleVerseOverlay: React.FC<{ config: BibleVerseConfig }> = ({ config }) =
 
 
 
-const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig }) => {
+const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, flipHorizontal, rotate90 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
 
 
@@ -205,7 +207,20 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
           animation: scroll-left 40s linear infinite;
         }
       `}</style>
-      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className="w-full h-full object-cover"
+        style={
+          rotate90 || flipHorizontal
+            ? {
+                transform: `${rotate90 ? 'rotate(90deg)' : ''} ${flipHorizontal ? 'scaleX(-1)' : ''}`.trim(),
+              }
+            : undefined
+        }
+      />
       
       {isLive && (
         <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full flex items-center space-x-2 border border-white/10 z-20">

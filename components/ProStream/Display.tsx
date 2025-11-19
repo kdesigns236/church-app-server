@@ -32,6 +32,24 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const shortSessionIdRef = useRef<string>('');
   const displayPeerRef = useRef<RTCPeerConnection | null>(null);
   const hasRequestedLocalRef = useRef(false);
+  const [flipHorizontal, setFlipHorizontal] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = window.localStorage.getItem('prostream_display_flip');
+      return stored === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [rotate90, setRotate90] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const stored = window.localStorage.getItem('prostream_display_rotate90');
+      return stored === 'true';
+    } catch {
+      return false;
+    }
+  });
 
   // Ensure we have a live local camera stream when GoLive camera is selected
   function activateLocalIfNeeded() {
@@ -60,6 +78,20 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   useEffect(() => {
     sourceModeRef.current = sourceMode;
   }, [sourceMode]);
+  
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('prostream_display_flip', flipHorizontal ? 'true' : 'false');
+    } catch {}
+  }, [flipHorizontal]);
+
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('prostream_display_rotate90', rotate90 ? 'true' : 'false');
+    } catch {}
+  }, [rotate90]);
   
   // Start with the local default camera so the GoLive page shows a feed immediately
   useEffect(() => {
@@ -230,6 +262,8 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         announcementConfig={announcementConfig}
         lyricsConfig={lyricsConfig}
         bibleVerseConfig={bibleVerseConfig}
+        flipHorizontal={flipHorizontal}
+        rotate90={rotate90}
       />
       {/* Local GO LIVE controls - display owns live state and target platforms */}
       <div className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700 max-w-md">
@@ -271,6 +305,26 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
           <p className="text-[10px] text-gray-400">
             GoLive controls the live status and audio. The controller only switches cameras and overlays.
           </p>
+          <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-gray-300">
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={flipHorizontal}
+                onChange={() => setFlipHorizontal(v => !v)}
+                className="h-3 w-3 text-red-500 bg-gray-800 border-gray-600 rounded"
+              />
+              <span>Mirror output</span>
+            </label>
+            <label className="flex items-center gap-1 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={rotate90}
+                onChange={() => setRotate90(v => !v)}
+                className="h-3 w-3 text-red-500 bg-gray-800 border-gray-600 rounded"
+              />
+              <span>Rotate 90°</span>
+            </label>
+          </div>
         </div>
       </div>
        {!isConnected && !activeStream && (
