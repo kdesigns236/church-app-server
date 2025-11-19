@@ -120,14 +120,18 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
             left: 180px;
             transform: translateY(-50%);
             color: #ffffff;
-            font-size: 24px;
+            font-size: 42px;
             font-weight: 900;
-            letter-spacing: 8px;
+            letter-spacing: 5px;
             text-transform: uppercase;
             text-shadow: 
                 0 2px 10px rgba(0,0,0,0.5),
                 0 0 20px rgba(255,255,255,0.3);
             animation: fadeIn 0.8s 0.5s both;
+            max-width: 70%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* Main bar with gradient and glow */
@@ -151,14 +155,18 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
             top: 50%;
             left: 180px;
             transform: translateY(-50%);
-            font-size: 38px;
-            font-weight: 900;
-            letter-spacing: 3px;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 4px;
             text-transform: uppercase;
             text-shadow: 
                 1px 1px 0 rgba(255,255,255,0.8),
                 2px 2px 4px rgba(0,0,0,0.2);
             animation: fadeIn 0.8s 0.7s both;
+            max-width: 72%;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         /* Side accent tab */
