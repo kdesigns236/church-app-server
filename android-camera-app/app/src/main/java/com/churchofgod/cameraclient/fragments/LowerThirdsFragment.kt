@@ -21,7 +21,7 @@ class LowerThirdsFragment : Fragment() {
     private var isVisible = false
     private var topText = "GRACE FELLOWSHIP"
     private var mainText = "SUNDAY SERVICE"
-    private var logoIcon = "✝"
+    private var logoIcon = ""
     private var accentColor = "#dc2626"
     private var mainBarColor = "#ffffff"
     

@@ -119,7 +119,7 @@
                     android:layout_height="wrap_content"
                     android:background="@drawable/edit_text_background"
                     android:fontFamily="@font/roboto_regular"
-                    android:hint="✝"
+                    android:hint="Logo icon"
                     android:inputType="text"
                     android:maxLength="2"
                     android:textColor="@color/white"

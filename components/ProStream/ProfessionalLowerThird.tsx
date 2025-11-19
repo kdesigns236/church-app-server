@@ -303,11 +303,7 @@ const ProfessionalLowerThird: React.FC<ProfessionalLowerThirdProps> = ({ config 
               <div className="diamond-inner"></div>
             </div>
             <div className="logo-icon">
-              {logoImageError ? (
-                <span className="w-full h-full flex items-center justify-center text-4xl">
-                  {config.logoIcon || '✝'}
-                </span>
-              ) : (
+              {!logoImageError && (
                 <img
                   src={logoSrc}
                   alt={config.logoIcon || 'Church of God Evening Light logo'}

@@ -37,7 +37,7 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
   return (
     <div className="h-full w-full max-w-full bg-[#1e1e1e] flex flex-col overflow-hidden">
       <div className="p-4 border-b border-gray-700 flex-shrink-0">
-        <h1 className="text-xl font-bold truncate">Stream Dashboard</h1>
+        <h1 className="text-xl font-bold truncate">Church Live Streaming Controller</h1>
       </div>
       <div className="flex-grow overflow-y-auto overflow-x-hidden min-h-0 scroll-container">
         <Accordion title="Stream Controls" defaultOpen>

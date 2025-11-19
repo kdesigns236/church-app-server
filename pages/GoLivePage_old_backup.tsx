@@ -88,7 +88,7 @@ const GoLivePage: React.FC = () => {
     isVisible: false,
     topText: 'GRACE FELLOWSHIP',
     mainText: 'SUNDAY SERVICE',
-    logoIcon: '✝',
+    logoIcon: '',
     accentColor: '#d32f2f',
     mainBarColor: '#ffffff',
   });
@@ -539,7 +539,7 @@ const Sidebar: React.FC<{
   return (
     <div className="h-full w-full bg-[#1e1e1e] flex flex-col">
       <div className="p-4 border-b border-gray-700">
-        <h1 className="text-xl font-bold">Church Stream Dashboard</h1>
+        <h1 className="text-xl font-bold">Church Live Streaming Controller</h1>
       </div>
       <div className="flex-grow overflow-y-auto p-4 space-y-4">
         {/* Stream Controls */}

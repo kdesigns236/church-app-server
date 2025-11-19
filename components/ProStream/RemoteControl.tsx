@@ -442,7 +442,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
               </button>
             )}
             <IconSettings className="w-6 h-6 text-blue-400" />
-            <h1 className="text-lg font-bold">Stream Dashboard</h1>
+            <h1 className="text-lg font-bold">Church Live Streaming Controller</h1>
           </div>
           <div className="text-xs text-center text-gray-400">
             <p>Session ID</p>
@@ -458,13 +458,6 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={copyDisplayLink}
-              className="px-3 py-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-sm"
-              title="Copy display URL"
-            >
-              {copiedLink ? 'Link Copied' : 'Copy Link'}
-            </button>
             <button
               onClick={() => setShowDisplayQr(true)}
               className="px-3 py-2 bg-gray-800 border border-gray-700 rounded hover:bg-gray-700 text-sm"

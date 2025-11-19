@@ -55,13 +55,13 @@ const PermanentLowerThird: React.FC<PermanentLowerThirdProps> = ({
                     onError={(e) => {
                       // Fallback to default icon if logo fails to load
                       (e.target as HTMLImageElement).style.display = 'none';
-                      (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
                     }}
                   />
-                ) : null}
-                <div className={`w-10 h-10 bg-green-600 rounded-full flex items-center justify-center ${logoUrl ? 'hidden' : ''}`}>
-                  <span className="text-white font-bold text-lg">✝</span>
-                </div>
+                ) : (
+                  <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span className="text-gray-400 font-bold text-lg">COGEL</span>
+                  </div>
+                )}
               </div>
             </div>
 

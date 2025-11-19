@@ -217,7 +217,7 @@ const GoLivePage: React.FC = () => {
     isVisible: false,
     topText: 'GRACE FELLOWSHIP',
     mainText: 'SUNDAY SERVICE',
-    logoIcon: '✝',
+    logoIcon: '',
     accentColor: '#d32f2f',
     mainBarColor: '#ffffff',
   });

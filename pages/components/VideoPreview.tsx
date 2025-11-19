@@ -145,19 +145,19 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
           from { opacity: 0; }
           to { opacity: 1; }
         }
-        .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+        .animate-fade-in { animation: fade-in 1s ease-out forwards; }
 
         @keyframes slide-in-up {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-slide-in-up { animation: slide-in-up 0.5s ease-out forwards; }
+        .animate-slide-in-up { animation: slide-in-up 1s ease-out forwards; }
         
         @keyframes slide-in-down {
           from { opacity: 0; transform: translateY(-20px); }
           to { opacity: 1; transform: translateY(0); }
         }
-        .animate-slide-in-down { animation: slide-in-down 0.5s ease-out forwards; }
+        .animate-slide-in-down { animation: slide-in-down 1s ease-out forwards; }
 
         @keyframes scroll-left {
           0% { transform: translateX(100%); }
@@ -166,7 +166,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
         .animate-scroll {
           display: inline-block;
           padding-left: 100%;
-          animation: scroll-left 20s linear infinite;
+          animation: scroll-left 40s linear infinite;
         }
       `}</style>
       <video 
