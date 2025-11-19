@@ -263,16 +263,24 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
       {(() => {
         const baseRotate = autoRotate90 ? 90 : 0;
         const totalRotate = baseRotate + (rotate90 ? 90 : 0);
+        const normalized = ((totalRotate % 360) + 360) % 360;
         const transforms: string[] = ['translate(-50%, -50%)'];
 
-        if (totalRotate % 360 !== 0) {
-          transforms.push(`rotate(${totalRotate}deg)`);
+        if (normalized !== 0) {
+          transforms.push(`rotate(${normalized}deg)`);
         }
         if (scale && scale !== 1) {
           transforms.push(`scale(${scale})`);
         }
         if (flipHorizontal) {
-          transforms.push('scaleX(-1)');
+          // Ensure mirror is always horizontal on the viewer's screen.
+          // For 90° / 270° rotated video, horizontal mirror in screen space
+          // corresponds to a vertical flip in the video space.
+          if (normalized === 90 || normalized === 270) {
+            transforms.push('scaleY(-1)');
+          } else {
+            transforms.push('scaleX(-1)');
+          }
         }
 
         const videoStyle = {
