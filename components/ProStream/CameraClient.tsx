@@ -18,18 +18,37 @@ const RTC_CONFIGURATION = {
 };
 
 
+const formatDuration = (ms: number) => {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const to2 = (v: number) => v.toString().padStart(2, '0');
+  return `${to2(hours)}:${to2(minutes)}:${to2(seconds)}`;
+};
+
+
 const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const shortSessionIdRef = useRef<string>('');
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const wakeLockRef = useRef<any>(null);
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
 
 
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [uiVisible, setUiVisible] = useState(true);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [resolutionLabel, setResolutionLabel] = useState<string>('');
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [gimbalAssist, setGimbalAssist] = useState(true);
 
 
 
@@ -81,11 +100,93 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
     try {
       setError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { exact: facingMode }, width: 1280, height: 720 },
-        audio: true,
-      });
+      const highResConstraints: MediaStreamConstraints = {
+        video: {
+          facingMode,
+          width: { ideal: 1920, max: 3840 },
+          height: { ideal: 1080, max: 2160 },
+          frameRate: { ideal: 30, max: 60 },
+        } as any,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      };
+
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(highResConstraints);
+      } catch (err) {
+        console.warn('High-resolution constraints failed, falling back to default camera settings.', err);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode },
+          audio: true,
+        });
+      }
+
+
       streamRef.current = stream;
+
+
+      const videoTrack = stream.getVideoTracks()[0];
+      videoTrackRef.current = videoTrack || null;
+      let settings: any = {};
+
+
+      if (videoTrack && typeof (videoTrack as any).getSettings === 'function') {
+        settings = (videoTrack as any).getSettings();
+      }
+
+
+      if (videoTrack && (videoTrack as any).getCapabilities) {
+        try {
+          const caps = (videoTrack as any).getCapabilities();
+          if (caps && caps.zoom) {
+            const min = caps.zoom.min ?? 1;
+            const max = caps.zoom.max ?? 5;
+            const step = caps.zoom.step ?? 0.1;
+            setZoomSupported(true);
+            setZoomRange({ min, max, step });
+            const initialZoom =
+              (settings as any).zoom ??
+              (caps.zoom.default ?? min);
+            setZoom(initialZoom);
+            (videoTrack as any)
+              .applyConstraints({ advanced: [{ zoom: initialZoom }] })
+              .catch((err: any) => console.warn('Failed to apply initial zoom', err));
+          } else {
+            setZoomSupported(false);
+            setZoomRange(null);
+            setZoom(null);
+          }
+        } catch (err) {
+          console.warn('Zoom not supported on this camera.', err);
+          setZoomSupported(false);
+          setZoomRange(null);
+          setZoom(null);
+        }
+      } else {
+        setZoomSupported(false);
+        setZoomRange(null);
+        setZoom(null);
+      }
+
+
+      if (settings && (settings as any).width && (settings as any).height) {
+        const width = (settings as any).width as number;
+        const height = (settings as any).height as number;
+        let label = `${width}x${height}`;
+        if (width >= 3840 || height >= 2160) {
+          label += ' (4K)';
+        } else if (width >= 1920 || height >= 1080) {
+          label += ' (1080p)';
+        }
+        setResolutionLabel(label);
+      } else {
+        setResolutionLabel('HD');
+      }
 
 
       if (videoRef.current) {
@@ -156,6 +257,110 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   }, [startCamera]);
 
 
+  useEffect(() => {
+    const anyNavigator: any = navigator as any;
+    let cancelled = false;
+
+
+    const requestWakeLock = async () => {
+      try {
+        if (anyNavigator.wakeLock && anyNavigator.wakeLock.request) {
+          const sentinel = await anyNavigator.wakeLock.request('screen');
+          if (cancelled) {
+            await sentinel.release().catch(() => {});
+            return;
+          }
+          wakeLockRef.current = sentinel;
+          sentinel.addEventListener('release', () => {
+            wakeLockRef.current = null;
+          });
+        }
+      } catch (err) {
+        console.warn('Screen wake lock not available.', err);
+      }
+    };
+
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !wakeLockRef.current) {
+        requestWakeLock();
+      }
+    };
+
+
+    requestWakeLock();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockRef.current) {
+        wakeLockRef.current.release().catch(() => {});
+        wakeLockRef.current = null;
+      }
+    };
+  }, []);
+
+
+  useEffect(() => {
+    const updateOrientation = () => {
+      setIsPortrait(window.innerHeight > window.innerWidth);
+    };
+
+
+    updateOrientation();
+
+
+    const handleResize = () => updateOrientation();
+
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+
+
+    const lockOrientation = async () => {
+      try {
+        const anyScreen: any = window.screen as any;
+        if (anyScreen.orientation && anyScreen.orientation.lock) {
+          await anyScreen.orientation.lock('landscape');
+        }
+      } catch (err) {
+        console.warn('Orientation lock not supported.', err);
+      }
+    };
+
+
+    lockOrientation();
+
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
+  }, []);
+
+
+  useEffect(() => {
+    const start = Date.now();
+    setElapsedMs(0);
+    const id = window.setInterval(() => {
+      setElapsedMs(Date.now() - start);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+
+  const applyZoom = (value: number) => {
+    setZoom(value);
+    const track: any = videoTrackRef.current as any;
+    if (!track || !track.applyConstraints) return;
+    track
+      .applyConstraints({ advanced: [{ zoom: value }] })
+      .catch((err: any) => console.warn('Failed to apply zoom value', err));
+  };
+
+
   const toggleMute = () => {
       setIsMuted(prev => {
           const newMutedState = !prev;
@@ -187,13 +392,30 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/40 pointer-events-none"></div>
 
 
+        {gimbalAssist && (
+          <div className="absolute inset-6 pointer-events-none">
+            <div className="absolute inset-0 border border-white/15 rounded-xl" />
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 border border-white/25 rounded-full" />
+            <div className="absolute top-1/2 left-8 right-8 border-t border-white/15" />
+          </div>
+        )}
+
+
         {/* Top Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center" style={{textShadow: '0 1px 5px rgba(0,0,0,0.5)'}}>
-          <div className="flex items-center space-x-2 p-2 bg-black/30 backdrop-blur-sm rounded-full border border-white/10">
-            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
-            <span className="font-semibold tracking-wider text-green-300 text-xs uppercase">LIVE</span>
-            <span className="text-gray-400">|</span>
-            <span className="text-sm text-gray-200">Slot {slotId}</span>
+          <div className="flex flex-col items-start space-y-1 p-2 bg-black/30 backdrop-blur-sm rounded-full border border-white/10">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="font-semibold tracking-wider text-green-300 text-xs uppercase">LIVE</span>
+              <span className="text-gray-400">|</span>
+              <span className="text-sm text-gray-200">Slot {slotId}</span>
+            </div>
+            <div className="flex items-center text-[11px] text-gray-300">
+              <span>{formatDuration(elapsedMs)}</span>
+              {resolutionLabel && (
+                <span className="ml-2 opacity-80">{resolutionLabel}</span>
+              )}
+            </div>
           </div>
           <button
             onClick={onExit}
@@ -229,7 +451,46 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
                 <IconFlipCamera className="w-8 h-8"/>
             </button>
         </div>
+
+
+        {zoomSupported && zoomRange && (
+          <div className="absolute bottom-24 left-4 right-4 max-w-md mx-auto bg-black/40 backdrop-blur-sm rounded-xl border border-white/10 px-4 py-3">
+            <div className="flex items-center justify-between text-xs text-gray-200 mb-2">
+              <span className="font-medium">Zoom</span>
+              {zoom !== null && (
+                <span className="opacity-80">{zoom.toFixed(1)}x</span>
+              )}
+            </div>
+            <input
+              type="range"
+              min={zoomRange.min}
+              max={zoomRange.max}
+              step={zoomRange.step}
+              value={zoom ?? zoomRange.min}
+              onChange={e => applyZoom(Number(e.target.value))}
+              className="w-full accent-red-500"
+            />
+          </div>
+        )}
+
+
+        <div className="absolute bottom-4 left-4">
+          <button
+            onClick={() => setGimbalAssist(prev => !prev)}
+            className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-sm border border-white/20 text-[11px] font-semibold uppercase tracking-wide"
+          >
+            Gimbal Assist: {gimbalAssist ? 'On' : 'Off'}
+          </button>
+        </div>
       </div>
+
+
+      {isPortrait && !error && (
+        <div className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center z-10 px-6 text-center">
+          <h2 className="text-xl font-semibold mb-2">Rotate your phone</h2>
+          <p className="text-sm text-gray-300">For the best Pro Master quality, hold your device in landscape while recording.</p>
+        </div>
+      )}
 
 
       {error && (

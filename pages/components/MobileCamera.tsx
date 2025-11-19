@@ -10,6 +10,47 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string>('');
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [gimbalAssist, setGimbalAssist] = useState(true);
+
+
+  const setupZoomForStream = (newStream: MediaStream) => {
+    const track = newStream.getVideoTracks()[0];
+    videoTrackRef.current = track || null;
+
+
+    if (track && (track as any).getCapabilities) {
+      try {
+        const caps = (track as any).getCapabilities();
+        if (caps && caps.zoom) {
+          const min = caps.zoom.min ?? 1;
+          const max = caps.zoom.max ?? 5;
+          const step = caps.zoom.step ?? 0.1;
+          setZoomSupported(true);
+          setZoomRange({ min, max, step });
+          const settings = (track as any).getSettings?.() || {};
+          const initialZoom =
+            (settings as any).zoom ??
+            (caps.zoom.default ?? min);
+          setZoom(initialZoom);
+          (track as any)
+            .applyConstraints({ advanced: [{ zoom: initialZoom }] })
+            .catch((err: any) => console.warn('Failed to apply initial zoom on MobileCamera', err));
+          return;
+        }
+      } catch (err) {
+        console.warn('Zoom not supported on this mobile camera.', err);
+      }
+    }
+
+
+    setZoomSupported(false);
+    setZoomRange(null);
+    setZoom(null);
+  };
 
   const startCamera = async () => {
     try {
@@ -33,6 +74,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
 
       setStream(newStream);
       setIsConnected(true);
+      setupZoomForStream(newStream);
       
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
@@ -56,6 +98,16 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
 
   const switchCamera = () => {
     setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+  };
+
+
+  const applyZoom = (value: number) => {
+    setZoom(value);
+    const track: any = videoTrackRef.current as any;
+    if (!track || !track.applyConstraints) return;
+    track
+      .applyConstraints({ advanced: [{ zoom: value }] })
+      .catch((err: any) => console.warn('Failed to apply zoom on MobileCamera', err));
   };
 
   useEffect(() => {
@@ -110,6 +162,14 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
           </div>
         )}
 
+        {gimbalAssist && (
+          <div className="absolute inset-6 pointer-events-none">
+            <div className="absolute inset-0 border border-white/15 rounded-xl" />
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-16 h-16 border border-white/25 rounded-full" />
+            <div className="absolute top-1/2 left-8 right-8 border-t border-white/15" />
+          </div>
+        )}
+
         {/* Camera overlay info */}
         {isConnected && (
           <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-2 rounded-lg">
@@ -156,6 +216,38 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
             className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
           >
             Stop Camera
+          </button>
+        </div>
+
+        {zoomSupported && zoomRange && (
+          <div>
+            <div className="flex items-center justify-between text-sm mb-1">
+              <span className="font-semibold">Zoom</span>
+              {zoom !== null && (
+                <span className="text-gray-300">{zoom.toFixed(1)}x</span>
+              )}
+            </div>
+            <input
+              type="range"
+              min={zoomRange.min}
+              max={zoomRange.max}
+              step={zoomRange.step}
+              value={zoom ?? zoomRange.min}
+              onChange={e => applyZoom(Number(e.target.value))}
+              className="w-full accent-blue-500"
+            />
+          </div>
+        )}
+
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-300">Gimbal Assist Overlay</span>
+          <button
+            onClick={() => setGimbalAssist(prev => !prev)}
+            className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              gimbalAssist ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+          >
+            {gimbalAssist ? 'On' : 'Off'}
           </button>
         </div>
 
