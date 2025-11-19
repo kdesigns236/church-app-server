@@ -32,15 +32,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const shortSessionIdRef = useRef<string>('');
   const displayPeerRef = useRef<RTCPeerConnection | null>(null);
   const hasRequestedLocalRef = useRef(false);
-  const [flipHorizontal, setFlipHorizontal] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const stored = window.localStorage.getItem('prostream_display_flip');
-      return stored === 'true';
-    } catch {
-      return false;
-    }
-  });
   const [rotate90, setRotate90] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     try {
@@ -79,13 +70,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     sourceModeRef.current = sourceMode;
   }, [sourceMode]);
   
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('prostream_display_flip', flipHorizontal ? 'true' : 'false');
-    } catch {}
-  }, [flipHorizontal]);
-
 
   useEffect(() => {
     try {
@@ -262,7 +246,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         announcementConfig={announcementConfig}
         lyricsConfig={lyricsConfig}
         bibleVerseConfig={bibleVerseConfig}
-        flipHorizontal={flipHorizontal}
         rotate90={rotate90}
       />
       {/* Local GO LIVE controls - display owns live state and target platforms */}
@@ -306,15 +289,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
             GoLive controls the live status and audio. The controller only switches cameras and overlays.
           </p>
           <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-gray-300">
-            <label className="flex items-center gap-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={flipHorizontal}
-                onChange={() => setFlipHorizontal(v => !v)}
-                className="h-3 w-3 text-red-500 bg-gray-800 border-gray-600 rounded"
-              />
-              <span>Mirror output</span>
-            </label>
             <label className="flex items-center gap-1 cursor-pointer">
               <input
                 type="checkbox"

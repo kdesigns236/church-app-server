@@ -11,7 +11,6 @@ interface VideoPreviewProps {
   announcementConfig: AnnouncementConfig;
   lyricsConfig: LyricsConfig;
   bibleVerseConfig: BibleVerseConfig;
-  flipHorizontal?: boolean;
   rotate90?: boolean;
 }
 
@@ -161,7 +160,7 @@ const BibleVerseOverlay: React.FC<{ config: BibleVerseConfig }> = ({ config }) =
 
 
 
-const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, flipHorizontal, rotate90 }) => {
+const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, rotate90 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [autoRotate90, setAutoRotate90] = React.useState(false);
   const [scale, setScale] = React.useState(1);
@@ -271,16 +270,6 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
         }
         if (scale && scale !== 1) {
           transforms.push(`scale(${scale})`);
-        }
-        if (flipHorizontal) {
-          // Ensure mirror is always horizontal on the viewer's screen.
-          // For 90° / 270° rotated video, horizontal mirror in screen space
-          // corresponds to a vertical flip in the video space.
-          if (normalized === 90 || normalized === 270) {
-            transforms.push('scaleY(-1)');
-          } else {
-            transforms.push('scaleX(-1)');
-          }
         }
 
         const videoStyle = {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { IconVideo, IconMic, IconMicOff, IconFlipCamera, IconX } from './icons';
+import { IconVideo, IconFlipCamera, IconX } from './icons';
 import { io, Socket } from 'socket.io-client';
 
 
@@ -39,7 +39,6 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
 
   const [error, setError] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(false);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [uiVisible, setUiVisible] = useState(true);
   const [isPortrait, setIsPortrait] = useState(false);
@@ -50,6 +49,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   const [zoomRange, setZoomRange] = useState<{ min: number; max: number; step: number } | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
   const [gimbalAssist, setGimbalAssist] = useState(true);
+  const [isStreaming, setIsStreaming] = useState(true);
 
 
 
@@ -104,16 +104,13 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       const highResConstraints: MediaStreamConstraints = {
         video: {
           facingMode,
-          width: { min: 1280, ideal: 1920, max: 3840 },
-          height: { min: 720, ideal: 1080, max: 2160 },
+          // Target smooth full‑HD instead of pushing 4K/60, which can stutter on motion
+          width: { min: 960, ideal: 1920, max: 1920 },
+          height: { min: 540, ideal: 1080, max: 1080 },
           aspectRatio: { ideal: 16 / 9 },
-          frameRate: { ideal: 30, max: 60 },
+          frameRate: { ideal: 30, max: 30 },
         } as any,
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
+        audio: false,
       };
 
 
@@ -125,11 +122,12 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode,
-            width: { min: 1280, ideal: 1920 },
-            height: { min: 720, ideal: 1080 },
+            width: { min: 960, ideal: 1920 },
+            height: { min: 540, ideal: 1080 },
             aspectRatio: { ideal: 16 / 9 },
+            frameRate: { ideal: 30, max: 30 },
           },
-          audio: true,
+          audio: false,
         });
       }
 
@@ -199,15 +197,17 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
-      stream.getAudioTracks().forEach(track => track.enabled = !isMuted);
-      startWebRTC(stream);
+
+      if (isStreaming) {
+        startWebRTC(stream);
+      }
 
 
     } catch (err) {
       console.error("Error accessing media devices.", err);
       setError("Could not access camera. Please check permissions and try a different camera mode.");
     }
-  }, [facingMode, isMuted, startWebRTC]);
+  }, [facingMode, isStreaming, startWebRTC]);
 
 
 
@@ -373,14 +373,27 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   };
 
 
-  const toggleMute = () => {
-      setIsMuted(prev => {
-          const newMutedState = !prev;
-          if (streamRef.current) {
-              streamRef.current.getAudioTracks().forEach(track => track.enabled = !newMutedState);
-          }
-          return newMutedState;
-      });
+  const startStreaming = () => {
+    const stream = streamRef.current;
+    setIsStreaming(true);
+    if (stream) {
+      startWebRTC(stream);
+    } else {
+      startCamera();
+    }
+  };
+
+
+  const stopStreaming = () => {
+    setIsStreaming(false);
+    if (peerConnectionRef.current) {
+      try {
+        peerConnectionRef.current.close();
+      } catch (err) {
+        console.warn('Error closing peer connection on stopStreaming', err);
+      }
+      peerConnectionRef.current = null;
+    }
   };
 
 
@@ -441,26 +454,26 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
 
         {/* Bottom Controls */}
-        <div className="absolute bottom-6 left-4 right-4 flex justify-center items-center space-x-4">
-            <button 
-                onClick={toggleMute}
-                className="w-16 h-16 rounded-full flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white transition-colors hover:bg-white/20 active:bg-white/30"
-                aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+        <div className="absolute bottom-6 left-4 right-4 flex justify-center items-center space-x-5">
+            <button
+              onClick={isStreaming ? stopStreaming : startStreaming}
+              className={`w-16 h-16 rounded-full flex items-center justify-center border-2 shadow-lg transition-colors ${
+                isStreaming ? 'bg-red-600/80 border-red-300' : 'bg-gray-600/80 border-gray-300'
+              }`}
+              aria-label={isStreaming ? 'Stop camera stream' : 'Start camera stream'}
             >
-                {isMuted ? <IconMicOff className="w-8 h-8"/> : <IconMic className="w-8 h-8"/>}
+              <div
+                className={`w-12 h-12 rounded-full ${
+                  isStreaming ? 'bg-red-500' : 'bg-gray-200'
+                }`}
+              ></div>
             </button>
-            <div 
-                className="w-20 h-20 rounded-full flex items-center justify-center bg-red-600/80 border-4 border-white/20 shadow-lg"
-                aria-label="Recording indicator"
-            >
-                 <div className="w-16 h-16 bg-red-600 rounded-full"></div>
-            </div>
             <button 
                 onClick={flipCamera}
-                className="w-16 h-16 rounded-full flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white transition-colors hover:bg-white/20 active:bg-white/30"
+                className="w-14 h-14 rounded-full flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white transition-colors hover:bg-white/20 active:bg-white/30"
                 aria-label="Flip camera"
             >
-                <IconFlipCamera className="w-8 h-8"/>
+                <IconFlipCamera className="w-7 h-7"/>
             </button>
         </div>
 
