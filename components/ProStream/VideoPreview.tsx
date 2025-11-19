@@ -164,6 +164,7 @@ const BibleVerseOverlay: React.FC<{ config: BibleVerseConfig }> = ({ config }) =
 const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, flipHorizontal, rotate90 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [autoRotate90, setAutoRotate90] = React.useState(false);
+  const [scale, setScale] = React.useState(1);
 
 
   useEffect(() => {
@@ -180,28 +181,50 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
     if (!video) return;
 
 
-    const updateRotation = () => {
+    const updateRotationAndScale = () => {
       try {
         const w = video.videoWidth;
         const h = video.videoHeight;
         if (!w || !h) return;
-        // If the incoming video is taller than it is wide, treat it as portrait and rotate.
-        setAutoRotate90(w < h);
+
+        const container = video.parentElement;
+        if (!container) return;
+        const cw = container.clientWidth;
+        const ch = container.clientHeight;
+        if (!cw || !ch) return;
+
+        const portrait = w < h;
+        setAutoRotate90(portrait);
+
+        const baseRotate = portrait ? 90 : 0;
+        const totalRotate = baseRotate + (rotate90 ? 90 : 0);
+        const normalized = ((totalRotate % 360) + 360) % 360;
+        const isRotated = normalized === 90 || normalized === 270;
+
+        const displayW = isRotated ? h : w;
+        const displayH = isRotated ? w : h;
+
+        const scaleX = cw / displayW;
+        const scaleY = ch / displayH;
+        const coverScale = Math.max(scaleX, scaleY);
+
+        setScale(coverScale || 1);
       } catch {
-        // Ignore orientation detection errors
+        // Ignore orientation/scale errors
       }
     };
 
 
-    video.addEventListener('loadedmetadata', updateRotation);
-    video.addEventListener('resize', updateRotation as any);
+    updateRotationAndScale();
+    video.addEventListener('loadedmetadata', updateRotationAndScale);
+    video.addEventListener('resize', updateRotationAndScale as any);
 
 
     return () => {
-      video.removeEventListener('loadedmetadata', updateRotation);
-      video.removeEventListener('resize', updateRotation as any);
+      video.removeEventListener('loadedmetadata', updateRotationAndScale);
+      video.removeEventListener('resize', updateRotationAndScale as any);
     };
-  }, [stream]);
+  }, [stream, rotate90]);
 
 
   return (
@@ -238,15 +261,27 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
         }
       `}</style>
       {(() => {
-        const transforms: string[] = [];
-        const totalRotate = (autoRotate90 ? 90 : 0) + (rotate90 ? 90 : 0);
+        const baseRotate = autoRotate90 ? 90 : 0;
+        const totalRotate = baseRotate + (rotate90 ? 90 : 0);
+        const transforms: string[] = ['translate(-50%, -50%)'];
+
         if (totalRotate % 360 !== 0) {
           transforms.push(`rotate(${totalRotate}deg)`);
+        }
+        if (scale && scale !== 1) {
+          transforms.push(`scale(${scale})`);
         }
         if (flipHorizontal) {
           transforms.push('scaleX(-1)');
         }
-        const videoStyle = transforms.length ? { transform: transforms.join(' ') } : undefined;
+
+        const videoStyle = {
+          position: 'absolute' as const,
+          top: '50%',
+          left: '50%',
+          transform: transforms.join(' '),
+          objectFit: 'cover' as const,
+        };
 
         return (
           <video
@@ -254,7 +289,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
             autoPlay
             playsInline
             muted
-            className="w-full h-full object-cover"
+            className="object-cover"
             style={videoStyle}
           />
         );
