@@ -163,6 +163,7 @@ const BibleVerseOverlay: React.FC<{ config: BibleVerseConfig }> = ({ config }) =
 
 const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, flipHorizontal, rotate90 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [autoRotate90, setAutoRotate90] = React.useState(false);
 
 
   useEffect(() => {
@@ -171,6 +172,35 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
     } else if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
+  }, [stream]);
+
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+
+    const updateRotation = () => {
+      try {
+        const w = video.videoWidth;
+        const h = video.videoHeight;
+        if (!w || !h) return;
+        // If the incoming video is taller than it is wide, treat it as portrait and rotate.
+        setAutoRotate90(w < h);
+      } catch {
+        // Ignore orientation detection errors
+      }
+    };
+
+
+    video.addEventListener('loadedmetadata', updateRotation);
+    video.addEventListener('resize', updateRotation as any);
+
+
+    return () => {
+      video.removeEventListener('loadedmetadata', updateRotation);
+      video.removeEventListener('resize', updateRotation as any);
+    };
   }, [stream]);
 
 
@@ -207,20 +237,28 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
           animation: scroll-left 40s linear infinite;
         }
       `}</style>
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className="w-full h-full object-cover"
-        style={
-          rotate90 || flipHorizontal
-            ? {
-                transform: `${rotate90 ? 'rotate(90deg)' : ''} ${flipHorizontal ? 'scaleX(-1)' : ''}`.trim(),
-              }
-            : undefined
+      {(() => {
+        const transforms: string[] = [];
+        const totalRotate = (autoRotate90 ? 90 : 0) + (rotate90 ? 90 : 0);
+        if (totalRotate % 360 !== 0) {
+          transforms.push(`rotate(${totalRotate}deg)`);
         }
-      />
+        if (flipHorizontal) {
+          transforms.push('scaleX(-1)');
+        }
+        const videoStyle = transforms.length ? { transform: transforms.join(' ') } : undefined;
+
+        return (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+            className="w-full h-full object-cover"
+            style={videoStyle}
+          />
+        );
+      })()}
       
       {isLive && (
         <div className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full flex items-center space-x-2 border border-white/10 z-20">

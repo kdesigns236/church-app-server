@@ -104,8 +104,9 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       const highResConstraints: MediaStreamConstraints = {
         video: {
           facingMode,
-          width: { ideal: 1920, max: 3840 },
-          height: { ideal: 1080, max: 2160 },
+          width: { min: 1280, ideal: 1920, max: 3840 },
+          height: { min: 720, ideal: 1080, max: 2160 },
+          aspectRatio: { ideal: 16 / 9 },
           frameRate: { ideal: 30, max: 60 },
         } as any,
         audio: {
@@ -122,7 +123,12 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       } catch (err) {
         console.warn('High-resolution constraints failed, falling back to default camera settings.', err);
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode },
+          video: {
+            facingMode,
+            width: { min: 1280, ideal: 1920 },
+            height: { min: 720, ideal: 1080 },
+            aspectRatio: { ideal: 16 / 9 },
+          },
           audio: true,
         });
       }
@@ -310,6 +316,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       setIsPortrait(portrait);
       if (!portrait) {
         setShowOrientationHint(false);
+        setUiVisible(true);
       }
     };
 
@@ -385,7 +392,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   return (
     <div
       className="relative h-screen w-screen bg-black flex items-center justify-center text-white font-sans cursor-pointer"
-      onClick={() => setUiVisible(prev => !prev)}
+      onClick={() => setUiVisible(true)}
     >
       <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover"></video>
       
@@ -493,7 +500,11 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       {showOrientationHint && isPortrait && !error && (
         <div
           className="absolute inset-0 bg-black/75 flex flex-col items-center justify-center z-10 px-6 text-center"
-          onClick={() => setShowOrientationHint(false)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowOrientationHint(false);
+            setUiVisible(true);
+          }}
         >
           <h2 className="text-xl font-semibold mb-2">Rotate your phone</h2>
           <p className="text-sm text-gray-300">For the best Pro Master quality, hold your device in landscape while recording. Tap anywhere to continue.</p>
