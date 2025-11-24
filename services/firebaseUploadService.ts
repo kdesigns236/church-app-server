@@ -179,8 +179,9 @@ export async function uploadSermonWithVideo(
     console.log('[Firebase] Video uploaded, saving to database...');
 
     // 2. Save sermon data with Firebase video URL to database
-    // Use environment variable for API URL, fallback to localhost for development
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    // Use the shared API base URL; fall back to the Render API if not set so
+    // production/mobile builds never point at localhost:3000.
+    const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
     
     // Get auth token from localStorage
     const token = localStorage.getItem('authToken');
