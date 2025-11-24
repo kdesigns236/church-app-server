@@ -51,7 +51,9 @@ const HomePage: React.FC = () => {
             <section className="py-16 bg-accent dark:bg-gray-900">
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center gap-8 md:gap-12">
                     <div className="md:w-1/3 text-center md:text-left animate-slide-in-up">
-                        <img src="/logo.jpg" alt="Church logo" className="w-48 h-48 object-contain mx-auto md:mx-0" />
+                        <div className="inline-flex items-center justify-center mx-auto md:mx-0 rounded-3xl bg-white shadow-xl shadow-black/20 ring-2 ring-primary/10 overflow-hidden p-3">
+                            <img src="/logo.jpg" alt="Church logo" className="w-40 h-40 md:w-48 md:h-48 object-contain rounded-2xl" />
+                        </div>
                     </div>
                     <div className="md:w-2/3 animate-slide-in-up" style={{animationDelay: '0.2s'}}>
                         <h2 className="text-3xl font-serif font-bold text-primary dark:text-white mb-4">A Warm Welcome to You</h2>
