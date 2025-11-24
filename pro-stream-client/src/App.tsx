@@ -5,6 +5,8 @@ import RemoteControl from '../../components/ProStream/RemoteControl';
 import CameraClient from '../../components/ProStream/CameraClient';
 import Display from '../../components/ProStream/Display';
 import Scanner from '../../components/ProStream/Scanner';
+import YouTubeCallback from '../../components/ProStream/YouTubeCallback';
+import FacebookCallback from '../../components/ProStream/FacebookCallback';
 
 
 type View = 'connect' | 'controller' | 'camera_scan' | 'camera' | 'display';
@@ -14,9 +16,7 @@ interface CameraConnectData {
   sessionId: string;
   slotId: string;
 }
-
-
-const App: React.FC = () => {
+const ProStreamApp: React.FC = () => {
   const [view, setView] = useState<View>('connect');
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [cameraData, setCameraData] = useState<CameraConnectData | null>(null);
@@ -88,6 +88,21 @@ const App: React.FC = () => {
     default:
       return <Connect onSelectRole={handleSelectRole} />;
   }
+};
+
+
+const App: React.FC = () => {
+  const pathname = window.location.pathname;
+
+  if (pathname === '/auth/youtube/callback') {
+    return <YouTubeCallback />;
+  }
+
+  if (pathname === '/auth/facebook/callback') {
+    return <FacebookCallback />;
+  }
+
+  return <ProStreamApp />;
 };
 
 

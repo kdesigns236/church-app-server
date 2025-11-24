@@ -1,8 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import VideoPreview from './VideoPreview';
+import ProgramOutputCanvas from './ProgramOutputCanvas';
 import { IconSettings } from './icons';
 import { CameraSlot, LowerThirdConfig, AnnouncementConfig, LyricsConfig, BibleVerseConfig } from './types';
 import { io, Socket } from 'socket.io-client';
+import { liveStreamService, StreamSettings, StreamPlatform } from '../../services/liveStreamService';
+import { oauthService } from '../../services/oauthService';
 
 const RTC_CONFIGURATION: RTCConfiguration = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -42,6 +45,17 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     }
   });
   const [remoteZoom, setRemoteZoom] = useState<number | null>(null);
+  const [programStream, setProgramStream] = useState<MediaStream | null>(null);
+  const [controlsVisible, setControlsVisible] = useState(false);
+  const [isTogglingLive, setIsTogglingLive] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<{ facebook: boolean; youtube: boolean }>({
+    facebook: false,
+    youtube: false,
+  });
+  const [authLoading, setAuthLoading] = useState<{ facebook: boolean; youtube: boolean }>({
+    facebook: false,
+    youtube: false,
+  });
 
   // Ensure we have a live local camera stream when GoLive camera is selected
   function activateLocalIfNeeded() {
@@ -55,7 +69,22 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       existing.getTracks().forEach(track => track.stop());
     }
 
-    navigator.mediaDevices.getUserMedia({ video: true })
+    const constraints: MediaStreamConstraints = {
+      video: {
+        // Target smooth 16:9 720p for YouTube (lighter on bandwidth)
+        width: { min: 640, ideal: 1280, max: 1280 },
+        height: { min: 360, ideal: 720, max: 720 },
+        aspectRatio: { ideal: 16 / 9 },
+        frameRate: { ideal: 30, max: 30 },
+      } as any,
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    };
+
+    navigator.mediaDevices.getUserMedia(constraints)
       .then(stream => {
         localStreamRef.current = stream;
         if (sourceModeRef.current === 'local') {
@@ -77,6 +106,42 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       window.localStorage.setItem('prostream_display_rotate90', rotate90 ? 'true' : 'false');
     } catch {}
   }, [rotate90]);
+  
+  useEffect(() => {
+    try {
+      const status = oauthService.getConnectionStatus();
+      const hasEnvFacebookToken = Boolean((import.meta as any).env?.VITE_FACEBOOK_ACCESS_TOKEN);
+      setConnectionStatus({
+        facebook: status.facebook || hasEnvFacebookToken,
+        // For RTMP bridge we only need the stream key in server/.env,
+        // so treat YouTube as connected by default.
+        youtube: true,
+      });
+    } catch {}
+  }, []);
+  
+  useEffect(() => {
+    const videoSource = programStream || activeStream;
+    if (!videoSource) return;
+
+    // Build a streaming MediaStream that always uses video from the
+    // current active source (local or controller) but audio only from
+    // the local GoLive PC microphone.
+    const mixed = new MediaStream();
+
+    videoSource.getVideoTracks().forEach(track => {
+      mixed.addTrack(track);
+    });
+
+    const local = localStreamRef.current;
+    if (local) {
+      local.getAudioTracks().forEach(track => {
+        mixed.addTrack(track);
+      });
+    }
+
+    liveStreamService.attachExternalStream(mixed);
+  }, [activeStream, programStream]);
   
   // Start with the local default camera so the GoLive page shows a feed immediately
   useEffect(() => {
@@ -244,6 +309,130 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   }
 
 
+  const buildPlatforms = (): StreamPlatform[] => {
+    const platforms: StreamPlatform[] = [];
+
+    if (streamToYoutube) {
+      const ytToken = oauthService.getStoredToken('youtube');
+      const accessToken = ytToken?.accessToken || 'rtmp';
+      platforms.push({
+        name: 'youtube',
+        displayName: 'YouTube',
+        isConnected: true,
+        accessToken,
+      });
+    }
+
+    if (streamToFacebook) {
+      // For the Facebook RTMP bridge we only need the Page access token
+      // on the server (FACEBOOK_PAGE_ACCESS_TOKEN in server/.env).
+      // The frontend just needs to indicate that Facebook is enabled.
+      platforms.push({
+        name: 'facebook',
+        displayName: 'Facebook',
+        isConnected: true,
+      });
+    }
+
+    return platforms;
+  };
+
+
+  const handleConnectYoutube = async () => {
+    if (authLoading.youtube) return;
+    try {
+      setAuthLoading(prev => ({ ...prev, youtube: true }));
+      await oauthService.authenticateYouTube();
+      const status = oauthService.getConnectionStatus();
+      setConnectionStatus(status);
+    } catch (err) {
+      console.error('[Display] YouTube authentication failed', err);
+      alert('Failed to connect YouTube. Please check your YouTube streaming setup.');
+    } finally {
+      setAuthLoading(prev => ({ ...prev, youtube: false }));
+    }
+  };
+
+
+  const handleConnectFacebook = async () => {
+    if (authLoading.facebook) return;
+    try {
+      const envToken = (import.meta as any).env?.VITE_FACEBOOK_ACCESS_TOKEN as string | undefined;
+      // If a Page access token is configured in env, treat Facebook as connected without OAuth popup
+      if (envToken) {
+        setConnectionStatus(prev => ({ ...prev, facebook: true }));
+        alert('Facebook Page token is configured. No additional login is required.');
+        return;
+      }
+
+      setAuthLoading(prev => ({ ...prev, facebook: true }));
+      await oauthService.authenticateFacebook();
+      const status = oauthService.getConnectionStatus();
+      setConnectionStatus(status);
+    } catch (err) {
+      console.error('[Display] Facebook authentication failed', err);
+      alert('Failed to connect Facebook. Please check your Facebook streaming setup.');
+    } finally {
+      setAuthLoading(prev => ({ ...prev, facebook: false }));
+    }
+  };
+
+
+  const handleToggleLive = async () => {
+    if (isTogglingLive) return;
+    if (!streamToYoutube && !streamToFacebook) return;
+    if (!activeStream) {
+      alert('No active video feed. Connect a controller or local camera before going live.');
+      return;
+    }
+
+    try {
+      setIsTogglingLive(true);
+
+      if (!isLive) {
+        const platforms = buildPlatforms();
+        if (platforms.length === 0) {
+          alert('No connected platforms. Connect Facebook or YouTube before going live.');
+          return;
+        }
+
+        const settings: StreamSettings = {
+          title: 'Church Live Service',
+          description: 'Live service stream',
+          privacy: 'public',
+          platforms,
+        };
+        const videoSource = programStream || activeStream;
+        if (videoSource) {
+          const mixed = new MediaStream();
+          videoSource.getVideoTracks().forEach(track => {
+            mixed.addTrack(track);
+          });
+
+          const local = localStreamRef.current;
+          if (local) {
+            local.getAudioTracks().forEach(track => {
+              mixed.addTrack(track);
+            });
+          }
+
+          liveStreamService.attachExternalStream(mixed);
+        }
+        await liveStreamService.startStream(settings);
+        setIsLive(true);
+      } else {
+        await liveStreamService.stopStream();
+        setIsLive(false);
+      }
+    } catch (err) {
+      console.error('[Display] Failed to toggle live stream', err);
+      alert('Failed to toggle live stream. Please check your streaming setup.');
+    } finally {
+      setIsTogglingLive(false);
+    }
+  };
+
+
   return (
     <div className="h-screen w-screen bg-black relative">
       <VideoPreview
@@ -257,59 +446,104 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         rotate90={rotate90}
         zoomScale={remoteZoom || undefined}
       />
+      <ProgramOutputCanvas
+        sourceStream={activeStream}
+        lowerThirdConfig={lowerThirdConfig}
+        announcementConfig={announcementConfig}
+        lyricsConfig={lyricsConfig}
+        bibleVerseConfig={bibleVerseConfig}
+        rotate90={rotate90}
+        zoomScale={remoteZoom || undefined}
+        onProgramStreamReady={setProgramStream}
+      />
       {/* Local GO LIVE controls - display owns live state and target platforms */}
-      <div className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700 max-w-md">
-        <div className="space-y-2">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex flex-col gap-1 text-xs text-gray-300">
-              <label className="flex items-center space-x-2 cursor-pointer">
+      {controlsVisible && (
+        <div className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700 max-w-md">
+          <div className="space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex flex-col gap-1 text-xs text-gray-300">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={streamToYoutube}
+                    onChange={() => setStreamToYoutube(p => !p)}
+                    className="form-checkbox h-4 w-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500"
+                  />
+                  <span>Stream to YouTube</span>
+                </label>
+                <div className="flex items-center gap-2 pl-6">
+                  <button
+                    onClick={handleConnectYoutube}
+                    className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-600 text-[11px] disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={authLoading.youtube}
+                  >
+                    {connectionStatus.youtube ? 'Reconnect YouTube' : 'Connect YouTube'}
+                  </button>
+                  <span
+                    className={connectionStatus.youtube ? 'text-green-400 text-[11px]' : 'text-gray-400 text-[11px]'}
+                  >
+                    {connectionStatus.youtube ? 'Connected' : 'Not connected'}
+                  </span>
+                </div>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={streamToFacebook}
+                    onChange={() => setStreamToFacebook(p => !p)}
+                    className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500"
+                  />
+                  <span>Stream to Facebook</span>
+                </label>
+                <div className="flex items-center gap-2 pl-6">
+                  <button
+                    onClick={handleConnectFacebook}
+                    className="px-2 py-1 rounded bg-gray-800 hover:bg-gray-700 border border-gray-600 text-[11px] disabled:opacity-60 disabled:cursor-not-allowed"
+                    disabled={authLoading.facebook}
+                  >
+                    {connectionStatus.facebook ? 'Reconnect Facebook' : 'Connect Facebook'}
+                  </button>
+                  <span
+                    className={connectionStatus.facebook ? 'text-green-400 text-[11px]' : 'text-gray-400 text-[11px]'}
+                  >
+                    {connectionStatus.facebook ? 'Connected' : 'Not connected'}
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={handleToggleLive}
+                className={`w-full sm:w-auto px-4 py-2 rounded-lg font-bold text-sm sm:text-base transition-all duration-300 transform active:scale-95 ${
+                  isLive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
+                } ${(!streamToYoutube && !streamToFacebook) || isTogglingLive ? 'bg-gray-600 cursor-not-allowed hover:bg-gray-600' : ''}`}
+                disabled={!streamToYoutube && !streamToFacebook || isTogglingLive}
+              >
+                {isLive ? 'STOP STREAM' : 'GO LIVE'}
+              </button>
+            </div>
+            <p className="text-[10px] text-gray-400">
+              GoLive controls the live status and audio. The controller only switches cameras and overlays.
+            </p>
+            <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-gray-300">
+              <label className="flex items-center gap-1 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={streamToYoutube}
-                  onChange={() => setStreamToYoutube(p => !p)}
-                  className="form-checkbox h-4 w-4 text-red-600 bg-gray-800 border-gray-600 rounded focus:ring-red-500"
+                  checked={rotate90}
+                  onChange={() => setRotate90(v => !v)}
+                  className="h-3 w-3 text-red-500 bg-gray-800 border-gray-600 rounded"
                 />
-                <span>Stream to YouTube</span>
-              </label>
-              <label className="flex items-center space-x-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={streamToFacebook}
-                  onChange={() => setStreamToFacebook(p => !p)}
-                  className="form-checkbox h-4 w-4 text-blue-600 bg-gray-800 border-gray-600 rounded focus:ring-blue-500"
-                />
-                <span>Stream to Facebook</span>
+                <span>Rotate 90°</span>
               </label>
             </div>
-            <button
-              onClick={() => {
-                if (!streamToYoutube && !streamToFacebook) return;
-                setIsLive(prev => !prev);
-              }}
-              className={`w-full sm:w-auto px-4 py-2 rounded-lg font-bold text-sm sm:text-base transition-all duration-300 transform active:scale-95 ${
-                isLive ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'
-              } ${!streamToYoutube && !streamToFacebook ? 'bg-gray-600 cursor-not-allowed hover:bg-gray-600' : ''}`}
-              disabled={!streamToYoutube && !streamToFacebook}
-            >
-              {isLive ? 'STOP STREAM' : 'GO LIVE'}
-            </button>
-          </div>
-          <p className="text-[10px] text-gray-400">
-            GoLive controls the live status and audio. The controller only switches cameras and overlays.
-          </p>
-          <div className="flex flex-wrap items-center gap-3 mt-1 text-[11px] text-gray-300">
-            <label className="flex items-center gap-1 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={rotate90}
-                onChange={() => setRotate90(v => !v)}
-                className="h-3 w-3 text-red-500 bg-gray-800 border-gray-600 rounded"
-              />
-              <span>Rotate 90°</span>
-            </label>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Small toggle button to show/hide GoLive controls so the video has more space */}
+      <button
+        onClick={() => setControlsVisible(v => !v)}
+        className="absolute bottom-4 right-4 z-30 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-gray-600 text-[11px] font-semibold uppercase tracking-wide text-gray-100 hover:bg-black/80"
+      >
+        {controlsVisible ? 'Hide GoLive Panel' : 'Show GoLive Panel'}
+      </button>
        {!isConnected && !activeStream && (
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
              <div className="bg-[#1e1e1e] p-8 rounded-lg shadow-2xl text-white text-center w-full max-w-md">

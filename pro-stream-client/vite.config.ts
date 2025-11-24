@@ -6,5 +6,12 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    proxy: {
+      '/api': {
+        target: 'https://church-app-server.onrender.com',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
 })

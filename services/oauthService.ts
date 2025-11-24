@@ -16,7 +16,7 @@ class OAuthService {
   private readonly FACEBOOK_CONFIG: OAuthConfig = {
     clientId: (import.meta as any).env?.VITE_FACEBOOK_APP_ID || '',
     redirectUri: `${window.location.origin}/auth/facebook/callback`,
-    scope: 'publish_video,pages_manage_posts'
+    scope: 'public_profile'
   };
 
   private readonly YOUTUBE_CONFIG: OAuthConfig = {
@@ -155,27 +155,73 @@ class OAuthService {
   // Exchange authorization code for access token (Facebook)
   async exchangeFacebookCode(code: string, state: string): Promise<OAuthToken> {
     try {
-      const response = await fetch('/api/auth/facebook/token', {
+      // First try the backend endpoint if available
+      try {
+        const response = await fetch('/api/auth/facebook/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code,
+            state,
+            redirectUri: this.FACEBOOK_CONFIG.redirectUri,
+          }),
+        });
+
+        if (response.ok) {
+          const tokenData = await response.json();
+          this.storeToken('facebook', tokenData);
+          return tokenData;
+        } else {
+          let body: string | undefined;
+          try {
+            body = await response.text();
+          } catch {
+            body = undefined;
+          }
+          console.warn('[OAuth] Backend Facebook token endpoint failed', response.status, body);
+        }
+      } catch (serverError) {
+        console.warn('[OAuth] Backend Facebook token request error, falling back to direct Facebook exchange', serverError);
+      }
+
+      // Fallback: exchange code directly with Facebook OAuth token endpoint (useful for local dev)
+      const fbAppId = (import.meta as any).env?.VITE_FACEBOOK_APP_ID || '';
+      const fbAppSecret = (import.meta as any).env?.VITE_FACEBOOK_APP_SECRET || '';
+      if (!fbAppId || !fbAppSecret) {
+        throw new Error('Facebook app credentials not configured (VITE_FACEBOOK_APP_ID / VITE_FACEBOOK_APP_SECRET).');
+      }
+
+      const tokenResponse = await fetch('https://graph.facebook.com/v18.0/oauth/access_token', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
+          client_id: fbAppId,
+          client_secret: fbAppSecret,
+          redirect_uri: this.FACEBOOK_CONFIG.redirectUri,
           code,
-          state,
-          redirectUri: this.FACEBOOK_CONFIG.redirectUri
-        })
+        }),
       });
 
-      if (!response.ok) {
+      if (!tokenResponse.ok) {
+        const errorBody = await tokenResponse.text();
+        console.error('[OAuth] Direct Facebook token exchange failed', tokenResponse.status, errorBody);
         throw new Error('Failed to exchange Facebook code for token');
       }
 
-      const tokenData = await response.json();
-      
-      // Store token securely
+      const data = await tokenResponse.json();
+      const tokenData: OAuthToken = {
+        accessToken: data.access_token,
+        // Facebook short-lived tokens do not always include refresh_token
+        refreshToken: undefined,
+        expiresIn: data.expires_in ?? 60 * 60 * 2, // default 2 hours if missing
+        tokenType: data.token_type || 'Bearer',
+      };
+
       this.storeToken('facebook', tokenData);
-      
       return tokenData;
     } catch (error) {
       console.error('[OAuth] Facebook token exchange error:', error);
@@ -186,27 +232,73 @@ class OAuthService {
   // Exchange authorization code for access token (YouTube)
   async exchangeYouTubeCode(code: string, state: string): Promise<OAuthToken> {
     try {
-      const response = await fetch('/api/auth/youtube/token', {
+      // First try the backend endpoint if available
+      try {
+        const response = await fetch('/api/auth/youtube/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code,
+            state,
+            redirectUri: this.YOUTUBE_CONFIG.redirectUri,
+          }),
+        });
+
+        if (response.ok) {
+          const tokenData = await response.json();
+          this.storeToken('youtube', tokenData);
+          return tokenData;
+        } else {
+          // Log response for debugging but fall through to direct exchange
+          let body: string | undefined;
+          try {
+            body = await response.text();
+          } catch {
+            body = undefined;
+          }
+          console.warn('[OAuth] Backend YouTube token endpoint failed', response.status, body);
+        }
+      } catch (serverError) {
+        console.warn('[OAuth] Backend YouTube token request error, falling back to direct Google exchange', serverError);
+      }
+
+      // Fallback: exchange code directly with Google OAuth token endpoint (useful for local dev)
+      const clientSecret = (import.meta as any).env?.VITE_YOUTUBE_CLIENT_SECRET || '';
+      if (!clientSecret) {
+        throw new Error('YouTube client secret not configured (VITE_YOUTUBE_CLIENT_SECRET).');
+      }
+
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify({
+        body: new URLSearchParams({
           code,
-          state,
-          redirectUri: this.YOUTUBE_CONFIG.redirectUri
-        })
+          client_id: this.YOUTUBE_CONFIG.clientId,
+          client_secret: clientSecret,
+          redirect_uri: this.YOUTUBE_CONFIG.redirectUri,
+          grant_type: 'authorization_code',
+        }),
       });
 
-      if (!response.ok) {
+      if (!tokenResponse.ok) {
+        const errorBody = await tokenResponse.text();
+        console.error('[OAuth] Direct YouTube token exchange failed', tokenResponse.status, errorBody);
         throw new Error('Failed to exchange YouTube code for token');
       }
 
-      const tokenData = await response.json();
-      
-      // Store token securely
+      const data = await tokenResponse.json();
+      const tokenData: OAuthToken = {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        expiresIn: data.expires_in,
+        tokenType: data.token_type,
+      };
+
       this.storeToken('youtube', tokenData);
-      
       return tokenData;
     } catch (error) {
       console.error('[OAuth] YouTube token exchange error:', error);

@@ -108,31 +108,21 @@ const GoLivePage: React.FC = () => {
         />
 
         {/* Top Header Bar - moved flush to the very top */}
-        <div className="absolute top-0 inset-x-0 z-50 flex items-center justify-between gap-4 px-4 py-2">
-          {/* Session and Back buttons on the left */}
-          <div className="flex items-center gap-2">
-            <button
-              onClick={openConnector}
-              className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
-              title="Open connector"
-            >
-              Session
-            </button>
-            <button
-              onClick={() => window.history.back()}
-              className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
-              title="Go back"
-            >
-              Back
-            </button>
-          </div>
-
-          {/* Live, Kitale bubble on the opposite corner (top-right) */}
-          <div className="flex-1 flex justify-end">
-            <span className="inline-flex items-center px-4 py-1 rounded-full bg-red-700 text-white text-xs font-semibold uppercase tracking-wide">
-              Live, Kitale
-            </span>
-          </div>
+        <div className="absolute top-0 inset-x-0 z-50 flex items-center justify-start gap-2 px-4 py-2">
+          <button
+            onClick={openConnector}
+            className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
+            title="Open connector"
+          >
+            Session
+          </button>
+          <button
+            onClick={() => window.history.back()}
+            className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
+            title="Go back"
+          >
+            Back
+          </button>
         </div>
 
         {showConnector && (

@@ -34,6 +34,8 @@ class LiveStreamService {
   };
   private startTime: number = 0;
   private statsInterval: NodeJS.Timeout | null = null;
+  private ownsStream: boolean = true;
+  private activePlatforms: StreamPlatform[] = [];
 
   // Initialize camera and microphone access
   async initializeMedia(constraints: MediaStreamConstraints = {
@@ -51,12 +53,21 @@ class LiveStreamService {
     try {
       console.log('[LiveStream] Requesting media access...');
       this.mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      this.ownsStream = true;
       console.log('[LiveStream] Media access granted');
       return this.mediaStream;
     } catch (error) {
       console.error('[LiveStream] Media access denied:', error);
       throw new Error('Camera and microphone access required for live streaming');
     }
+  }
+
+  attachExternalStream(stream: MediaStream): void {
+    this.mediaStream = stream;
+    this.ownsStream = false;
+
+    const tracks = stream.getTracks().map(t => `${t.kind}:${t.readyState}`).join(', ');
+    console.log('[LiveStream] attachExternalStream with tracks:', tracks);
   }
 
   // Get available video/audio devices
@@ -132,12 +143,16 @@ class LiveStreamService {
       // Create MediaRecorder for streaming
       const options: MediaRecorderOptions = {
         mimeType: 'video/webm;codecs=vp8,opus',
-        videoBitsPerSecond: 2500000, // 2.5 Mbps
-        audioBitsPerSecond: 128000   // 128 kbps
+        // Target an even lower, more stable bitrate for slow upload
+        // connections: ~700 kbps video + 64 kbps audio.
+        videoBitsPerSecond: 700000,
+        audioBitsPerSecond: 64000,
       };
 
       this.mediaRecorder = new MediaRecorder(this.mediaStream, options);
-      
+
+      console.log('[LiveStream] MediaRecorder created with state:', this.mediaRecorder.state);
+
       // Handle data available for streaming
       this.mediaRecorder.ondataavailable = async (event) => {
         if (event.data.size > 0) {
@@ -149,15 +164,26 @@ class LiveStreamService {
         console.error('[LiveStream] MediaRecorder error:', error);
       };
 
-      // Start recording in chunks
+      this.mediaRecorder.onstart = () => {
+        console.log('[LiveStream] MediaRecorder started, state:', this.mediaRecorder?.state);
+      };
+
+      this.mediaRecorder.onstop = (event) => {
+        console.log('[LiveStream] MediaRecorder stopped, state:', this.mediaRecorder?.state, 'event:', event);
+      };
+
+      // Initialize platform streams (Facebook bridge, YouTube, etc.)
+      // BEFORE starting the recorder so the first WebM chunk with the
+      // EBML header is sent to ffmpeg and not dropped.
+      this.activePlatforms = settings.platforms;
+      await this.initializePlatformStreams(settings);
+
+      // Start recording in chunks once streams are ready
       this.mediaRecorder.start(1000); // 1 second chunks
       
       this.isStreaming = true;
       this.startTime = Date.now();
       this.startStatsTracking();
-
-      // Initialize platform streams
-      await this.initializePlatformStreams(settings);
 
       console.log('[LiveStream] Stream started successfully');
     } catch (error) {
@@ -172,6 +198,7 @@ class LiveStreamService {
       console.log('[LiveStream] Stopping stream...');
       
       if (this.mediaRecorder && this.isStreaming) {
+        console.log('[LiveStream] Stopping MediaRecorder, current state:', this.mediaRecorder.state);
         this.mediaRecorder.stop();
       }
 
@@ -182,6 +209,8 @@ class LiveStreamService {
 
       // Stop platform streams
       await this.stopPlatformStreams();
+
+      this.activePlatforms = [];
 
       this.isStreaming = false;
       console.log('[LiveStream] Stream stopped');
@@ -210,66 +239,51 @@ class LiveStreamService {
 
   // Facebook Live API integration
   private async sendToFacebook(data: Blob, platform: StreamPlatform): Promise<void> {
-    if (!platform.accessToken) return;
+    // For the RTMP bridge, we send each MediaRecorder chunk to the
+    // backend bridge, which forwards data into ffmpeg.
+    const streamId = platform.streamKey;
+    if (!streamId) {
+      console.warn('[LiveStream] Missing Facebook streamId (streamKey)');
+      return;
+    }
 
     try {
-      // Convert blob to base64 for Facebook Live API
-      const arrayBuffer = await data.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
-
-      // Send to Facebook Live API (simplified - real implementation would use RTMP)
-      const response = await fetch(`https://graph.facebook.com/v18.0/me/live_videos`, {
+      const response = await fetch(`http://localhost:3001/api/facebook/live/chunk/${encodeURIComponent(streamId)}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${platform.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          status: 'LIVE_NOW',
-          stream_data: base64
-        })
+        body: data
       });
 
       if (!response.ok) {
-        throw new Error(`Facebook API error: ${response.statusText}`);
+        const body = await response.text().catch(() => '');
+        console.error('[LiveStream] Facebook chunk POST failed', response.status, body);
       }
-
-      console.log('[LiveStream] Data sent to Facebook Live');
     } catch (error) {
-      console.error('[LiveStream] Facebook streaming error:', error);
+      console.error('[LiveStream] Facebook streaming error via bridge:', error);
     }
   }
 
   // YouTube Live API integration
   private async sendToYouTube(data: Blob, platform: StreamPlatform): Promise<void> {
-    if (!platform.accessToken) return;
+    // For the RTMP bridge, we send each MediaRecorder chunk to the
+    // backend bridge, which forwards data into ffmpeg.
+    const streamId = platform.streamKey;
+    if (!streamId) {
+      console.warn('[LiveStream] Missing YouTube streamId (streamKey)');
+      return;
+    }
 
     try {
-      // YouTube Live API integration (simplified)
-      const response = await fetch(`https://www.googleapis.com/youtube/v3/liveBroadcasts`, {
+      const response = await fetch(`http://localhost:3001/api/youtube/live/chunk/${encodeURIComponent(streamId)}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${platform.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          snippet: {
-            title: 'Church Live Stream',
-            scheduledStartTime: new Date().toISOString()
-          },
-          status: {
-            privacyStatus: 'public'
-          }
-        })
+        body: data
       });
 
       if (!response.ok) {
-        throw new Error(`YouTube API error: ${response.statusText}`);
+        const body = await response.text().catch(() => '');
+        console.error('[LiveStream] YouTube chunk POST failed', response.status, body);
       }
-
-      console.log('[LiveStream] Data sent to YouTube Live');
     } catch (error) {
-      console.error('[LiveStream] YouTube streaming error:', error);
+      console.error('[LiveStream] YouTube streaming error via bridge:', error);
     }
   }
 
@@ -292,91 +306,98 @@ class LiveStreamService {
 
   // Initialize Facebook Live stream
   private async initializeFacebookStream(platform: StreamPlatform, settings: StreamSettings): Promise<void> {
-    if (!platform.accessToken) return;
-
     try {
-      const response = await fetch(`https://graph.facebook.com/v18.0/me/live_videos`, {
+      const response = await fetch('http://localhost:3001/api/facebook/live/start', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${platform.accessToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           title: settings.title,
           description: settings.description,
-          privacy: settings.privacy === 'public' ? 'EVERYONE' : 'SELF',
-          status: 'SCHEDULED_UNPUBLISHED'
+          privacy: settings.privacy
         })
       });
 
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        console.error('[LiveStream] Facebook bridge /start failed', response.status, body);
+        return;
+      }
+
       const data = await response.json();
-      platform.streamUrl = data.secure_stream_url;
-      platform.streamKey = data.stream_id;
+      platform.streamUrl = data.secureStreamUrl;
+      platform.streamKey = data.streamId;
       
-      console.log('[LiveStream] Facebook stream initialized');
+      console.log('[LiveStream] Facebook bridge stream initialized', data.streamId);
     } catch (error) {
-      console.error('[LiveStream] Facebook initialization error:', error);
+      console.error('[LiveStream] Facebook initialization error via bridge:', error);
     }
   }
 
   // Initialize YouTube Live stream
   private async initializeYouTubeStream(platform: StreamPlatform, settings: StreamSettings): Promise<void> {
-    if (!platform.accessToken) return;
-
     try {
-      // Create YouTube Live broadcast
-      const broadcastResponse = await fetch(`https://www.googleapis.com/youtube/v3/liveBroadcasts?part=snippet,status`, {
+      const response = await fetch('http://localhost:3001/api/youtube/live/start', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${platform.accessToken}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          snippet: {
-            title: settings.title,
-            description: settings.description,
-            scheduledStartTime: new Date().toISOString()
-          },
-          status: {
-            privacyStatus: settings.privacy
-          }
+          title: settings.title,
+          description: settings.description,
+          privacy: settings.privacy
         })
       });
 
-      const broadcastData = await broadcastResponse.json();
-      
-      // Create YouTube Live stream
-      const streamResponse = await fetch(`https://www.googleapis.com/youtube/v3/liveStreams?part=snippet,cdn`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${platform.accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          snippet: {
-            title: `${settings.title} - Stream`
-          },
-          cdn: {
-            format: '720p',
-            ingestionType: 'rtmp'
-          }
-        })
-      });
+      if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        console.error('[LiveStream] YouTube bridge /start failed', response.status, body);
+        return;
+      }
 
-      const streamData = await streamResponse.json();
-      platform.streamUrl = streamData.cdn.ingestionInfo.ingestionAddress;
-      platform.streamKey = streamData.cdn.ingestionInfo.streamName;
+      const data = await response.json();
+      platform.streamUrl = data.rtmpUrl;
+      platform.streamKey = data.streamId;
       
-      console.log('[LiveStream] YouTube stream initialized');
+      console.log('[LiveStream] YouTube bridge stream initialized', data.streamId);
     } catch (error) {
-      console.error('[LiveStream] YouTube initialization error:', error);
+      console.error('[LiveStream] YouTube initialization error via bridge:', error);
     }
   }
 
   // Stop platform streams
   private async stopPlatformStreams(): Promise<void> {
-    // Implementation for stopping platform-specific streams
     console.log('[LiveStream] Stopping platform streams');
+
+    const platforms = this.activePlatforms || [];
+    for (const platform of platforms) {
+      if (platform.name === 'facebook' && platform.streamKey) {
+        try {
+          await fetch('http://localhost:3001/api/facebook/live/stop', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ streamId: platform.streamKey })
+          });
+        } catch (error) {
+          console.error('[LiveStream] Error stopping Facebook stream via bridge:', error);
+        }
+      } else if (platform.name === 'youtube' && platform.streamKey) {
+        try {
+          await fetch('http://localhost:3001/api/youtube/live/stop', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ streamId: platform.streamKey })
+          });
+        } catch (error) {
+          console.error('[LiveStream] Error stopping YouTube stream via bridge:', error);
+        }
+      }
+    }
   }
 
   // Start tracking stream statistics
@@ -392,7 +413,7 @@ class LiveStreamService {
         
         // Update other stats (would come from actual streaming metrics)
         this.streamStats.viewers = Math.floor(Math.random() * 100); // Mock data
-        this.streamStats.bitrate = 2500; // kbps
+        this.streamStats.bitrate = 2000; // kbps (approximate target bitrate)
       }
     }, 1000);
   }
@@ -415,7 +436,9 @@ class LiveStreamService {
   // Clean up resources
   cleanup(): void {
     if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach(track => track.stop());
+      if (this.ownsStream) {
+        this.mediaStream.getTracks().forEach(track => track.stop());
+      }
       this.mediaStream = null;
     }
 
@@ -429,6 +452,7 @@ class LiveStreamService {
     }
 
     this.isStreaming = false;
+    this.ownsStream = true;
   }
 }
 

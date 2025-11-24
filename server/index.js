@@ -7,6 +7,9 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const facebookLiveRoutes = require('./routes/facebookLiveRoutes');
+const youtubeLiveRoutes = require('./routes/youtubeLiveRoutes');
+
 // Lazy load database
 let database;
 
@@ -23,6 +26,8 @@ const PORT = process.env.PORT || 3001;
 
 // Middleware
 app.use(cors());
+app.use('/api/facebook/live', facebookLiveRoutes);
+app.use('/api/youtube/live', youtubeLiveRoutes);
 app.use(express.json());
 
 const serverPublicDir = path.join(__dirname, 'public');

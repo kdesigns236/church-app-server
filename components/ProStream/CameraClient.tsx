@@ -105,12 +105,13 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
       const highResConstraints: MediaStreamConstraints = {
         video: {
           facingMode,
-          // Target smooth full‑HD instead of pushing 4K/60, which can stutter on motion
-          width: { min: 960, ideal: 1920, max: 1920 },
-          height: { min: 540, ideal: 1080, max: 1080 },
+          // Target smooth 720p instead of heavier 1080p
+          width: { min: 640, ideal: 1280, max: 1280 },
+          height: { min: 360, ideal: 720, max: 720 },
           aspectRatio: { ideal: 16 / 9 },
           frameRate: { ideal: 30, max: 30 },
         } as any,
+        // Controller sends video-only; audio comes from GoLive PC
         audio: false,
       };
 
@@ -123,8 +124,8 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode,
-            width: { min: 960, ideal: 1920 },
-            height: { min: 540, ideal: 1080 },
+            width: { min: 640, ideal: 1280 },
+            height: { min: 360, ideal: 720 },
             aspectRatio: { ideal: 16 / 9 },
             frameRate: { ideal: 30, max: 30 },
           },

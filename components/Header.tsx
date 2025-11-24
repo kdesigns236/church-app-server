@@ -1,22 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { HomeIcon, SermonsIcon, AnnouncementsIcon, EventsIcon, BibleIcon, BookIcon, GivingIcon, MenuIcon, CloseIcon, CrossIcon, MailIcon, ChatBubbleIcon, MoonIcon, BroadcastIcon } from '../constants/icons';
-import { AssistantIcon } from '../constants/icons';
+import { CrossIcon } from '../constants/icons';
 import { useAuth } from '../hooks/useAuth';
+import {
+  FiHome,
+  FiVideo,
+  FiBell,
+  FiCalendar,
+  FiBookOpen,
+  FiBook,
+  FiHeart,
+  FiMenu,
+  FiX,
+  FiMail,
+  FiMessageCircle,
+  FiMoon,
+  FiRadio,
+  FiZap,
+} from 'react-icons/fi';
 
 const navLinks = [
-  { name: 'Home', path: '/', icon: HomeIcon },
-  { name: 'Sermons', path: '/sermons', icon: SermonsIcon },
-  { name: 'Announcements', path: '/announcements', icon: AnnouncementsIcon },
-  { name: 'Events', path: '/events', icon: EventsIcon },
-  { name: 'Bible', path: '/bible', icon: BibleIcon },
-  { name: 'Bible Study', path: '/bible-study', icon: BibleIcon },
-  { name: 'Tenzi la Rohoni', path: '/tenzi', icon: BookIcon },
-  { name: 'Giving', path: '/giving', icon: GivingIcon },
-  { name: 'Go Live', path: '/golive', icon: BroadcastIcon },
-  { name: 'Chat', path: '/chat', icon: ChatBubbleIcon },
-  { name: 'Contact', path: '/contact', icon: MailIcon },
+  { name: 'Home', path: '/', icon: FiHome },
+  { name: 'Sermons', path: '/sermons', icon: FiVideo },
+  { name: 'Announcements', path: '/announcements', icon: FiBell },
+  { name: 'Events', path: '/events', icon: FiCalendar },
+  { name: 'Bible', path: '/bible', icon: FiBookOpen },
+  { name: 'Bible Study', path: '/bible-study', icon: FiBookOpen },
+  { name: 'Tenzi la Rohoni', path: '/tenzi', icon: FiBook },
+  { name: 'Giving', path: '/giving', icon: FiHeart },
+  { name: 'Go Live', path: '/golive', icon: FiRadio },
+  { name: 'Chat', path: '/chat', icon: FiMessageCircle },
+  { name: 'Contact', path: '/contact', icon: FiMail },
 ];
 
 const UserAvatar: React.FC<{ user: NonNullable<ReturnType<typeof useAuth>['user']> }> = ({ user }) => {
@@ -100,7 +115,7 @@ export const Header: React.FC = () => {
                 aria-label="Open AI Assistant"
               >
                 <div className="flex h-full w-full items-center justify-center rounded-full bg-primary dark:bg-gray-900 p-1.5">
-                    <AssistantIcon className="w-6 h-6 text-secondary" />
+                    <FiZap className="w-6 h-6 text-secondary" />
                 </div>
               </Link>
               <ThemeToggle />
@@ -112,7 +127,7 @@ export const Header: React.FC = () => {
               className="p-2 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-navy-light focus:outline-none"
             >
               <span className="sr-only">Open main menu</span>
-              {isOpen ? <CloseIcon className="block h-6 w-6" /> : <MenuIcon className="block h-6 w-6" />}
+              {isOpen ? <FiX className="block h-6 w-6" /> : <FiMenu className="block h-6 w-6" />}
             </button>
           </div>
         </div>
@@ -142,12 +157,12 @@ export const Header: React.FC = () => {
                 onClick={() => setIsOpen(false)}
                 className="flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-navy-light hover:text-white transition-colors"
               >
-                <AssistantIcon className="h-5 w-5" />
+                <FiZap className="h-5 w-5" />
                 <span>Pastor AI</span>
               </Link>
               <div className="flex items-center justify-between w-full px-3 py-2 text-base font-medium text-gray-300">
                 <div className="flex items-center gap-3">
-                    <MoonIcon className="h-5 w-5" />
+                    <FiMoon className="h-5 w-5" />
                     <span>Change Theme</span>
                 </div>
                 <ThemeToggle />
