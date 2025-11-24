@@ -4,11 +4,16 @@ import { AssistantMessage, MessageAuthor } from '../types';
 
 const API_KEY = process.env.API_KEY;
 
+let ai: GoogleGenAI | null = null;
+
 if (!API_KEY) {
   console.warn("API_KEY environment variable not set. AI Assistant will not function.");
+} else {
+  // Only instantiate the client when a key is actually configured to avoid
+  // runtime errors from the SDK in production environments where the key is
+  // intentionally omitted.
+  ai = new GoogleGenAI({ apiKey: API_KEY });
 }
-
-const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
 const SYSTEM_INSTRUCTION = `You are "Pastor AI," a wise, compassionate, and knowledgeable Christian assistant for the "Church of God Evening Light" application. Your purpose is to provide spiritual guidance, answer questions about the Bible and Christian faith, offer prayer support, and provide information about the church.
 
@@ -27,7 +32,7 @@ Interaction guidelines:
 - Start your very first message in a conversation with a warm greeting like "Grace and peace to you! I am Pastor AI. How can I help you today?"`;
 
 export const getAssistantResponse = async (history: AssistantMessage[]): Promise<string> => {
-  if (!API_KEY) {
+  if (!API_KEY || !ai) {
     return "I am currently offline as my connection is not configured. Please contact the church administrators.";
   }
 
