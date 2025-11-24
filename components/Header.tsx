@@ -1,37 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { CrossIcon } from '../constants/icons';
+import { CrossIcon, HomeIcon, SermonsIcon, AnnouncementsIcon, EventsIcon, BibleIcon, BookIcon, GivingIcon, BroadcastIcon, ChatBubbleIcon, MailIcon } from '../constants/icons';
 import { useAuth } from '../hooks/useAuth';
 import {
-  FiHome,
-  FiVideo,
-  FiBell,
-  FiCalendar,
-  FiBookOpen,
-  FiBook,
-  FiHeart,
   FiMenu,
   FiX,
-  FiMail,
-  FiMessageCircle,
   FiMoon,
-  FiRadio,
   FiZap,
 } from 'react-icons/fi';
 
 const navLinks = [
-  { name: 'Home', path: '/', icon: FiHome },
-  { name: 'Sermons', path: '/sermons', icon: FiVideo },
-  { name: 'Announcements', path: '/announcements', icon: FiBell },
-  { name: 'Events', path: '/events', icon: FiCalendar },
-  { name: 'Bible', path: '/bible', icon: FiBookOpen },
-  { name: 'Bible Study', path: '/bible-study', icon: FiBookOpen },
-  { name: 'Tenzi la Rohoni', path: '/tenzi', icon: FiBook },
-  { name: 'Giving', path: '/giving', icon: FiHeart },
-  { name: 'Go Live', path: '/golive', icon: FiRadio },
-  { name: 'Chat', path: '/chat', icon: FiMessageCircle },
-  { name: 'Contact', path: '/contact', icon: FiMail },
+  { name: 'Home', path: '/', icon: HomeIcon },
+  { name: 'Sermons', path: '/sermons', icon: SermonsIcon },
+  { name: 'Announcements', path: '/announcements', icon: AnnouncementsIcon },
+  { name: 'Events', path: '/events', icon: EventsIcon },
+  { name: 'Bible', path: '/bible', icon: BibleIcon },
+  { name: 'Bible Study', path: '/bible-study', icon: BibleIcon },
+  { name: 'Tenzi la Rohoni', path: '/tenzi', icon: BookIcon },
+  { name: 'Giving', path: '/giving', icon: GivingIcon },
+  { name: 'Go Live', path: '/golive', icon: BroadcastIcon },
+  { name: 'Chat', path: '/chat', icon: ChatBubbleIcon },
+  { name: 'Contact', path: '/contact', icon: MailIcon },
 ];
 
 const UserAvatar: React.FC<{ user: NonNullable<ReturnType<typeof useAuth>['user']> }> = ({ user }) => {
@@ -86,13 +76,16 @@ export const Header: React.FC = () => {
                 <Link
                   key={link.name}
                   to={link.path}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
                     location.pathname === link.path
                       ? 'bg-secondary text-primary'
                       : 'text-gray-300 hover:bg-navy-light hover:text-white'
                   }`}
                 >
-                  {link.name}
+                  <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-black/10 dark:bg-white/5 shadow-sm">
+                    <link.icon className="h-4 w-4" />
+                  </span>
+                  <span>{link.name}</span>
                 </Link>
               ))}
               <span className="text-gray-300 text-sm">|</span>
@@ -141,14 +134,16 @@ export const Header: React.FC = () => {
                 key={link.name}
                 to={link.path}
                 onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium transition-colors ${
+                className={`group flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium transition-colors ${
                   location.pathname === link.path
                     ? 'bg-secondary text-primary'
                     : 'text-gray-300 hover:bg-navy-light hover:text-white'
                 }`}
               >
-                <link.icon className="h-5 w-5" />
-                {link.name}
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-white/20 via-white/10 to-black/40 border border-white/25 shadow-lg shadow-black/40 backdrop-blur-md transform transition-all duration-200 group-hover:shadow-2xl group-hover:scale-110 group-hover:-translate-y-0.5">
+                  <link.icon className="h-5 w-5" />
+                </div>
+                <span>{link.name}</span>
               </Link>
             ))}
              <div className="border-t border-navy-light my-2"></div>

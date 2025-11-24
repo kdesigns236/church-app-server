@@ -1,4 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
+import { FaVideo, FaSyncAlt } from 'react-icons/fa';
 
 interface MobileCameraProps {
   slotId: number;
@@ -158,7 +159,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
       {/* Header */}
-      <div className="bg-gray-900 p-4 flex items-center justify-between">
+      <div className="bg-gray-900/95 p-4 flex items-center justify-between shadow-lg shadow-black/40 border-b border-white/5 backdrop-blur-sm">
         <div>
           <h1 className="text-lg font-bold">Mobile Camera</h1>
           <p className="text-sm text-gray-400">Camera Slot {slotId}</p>
@@ -184,9 +185,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center mb-4 mx-auto">
-                <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
+                <FaVideo className="w-8 h-8 text-gray-300" />
               </div>
               <p className="text-gray-400">Camera not active</p>
             </div>
@@ -203,7 +202,7 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
 
         {/* Camera overlay info */}
         {isConnected && (
-          <div className="absolute top-4 left-4 bg-black/50 backdrop-blur-sm px-3 py-2 rounded-lg">
+          <div className="absolute top-4 left-4 bg-black/60 backdrop-blur-sm px-3 py-2 rounded-lg border border-red-500/40 shadow-[0_0_18px_rgba(248,113,113,0.85)]">
             <div className="flex items-center space-x-2">
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
               <span className="text-sm font-semibold">LIVE</span>
@@ -215,11 +214,9 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
         {isConnected && (
           <button
             onClick={switchCamera}
-            className="absolute top-4 right-4 bg-black/50 backdrop-blur-sm p-3 rounded-full hover:bg-black/70 transition-colors"
+            className="absolute top-4 right-4 p-3 rounded-full bg-gradient-to-tr from-blue-500/85 to-indigo-500/85 backdrop-blur-sm border border-white/20 shadow-[0_0_26px_rgba(59,130,246,0.95)] hover:shadow-[0_0_34px_rgba(59,130,246,1)] hover:scale-110 active:scale-95 transition-all duration-300"
           >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <FaSyncAlt className="w-6 h-6 text-white" />
           </button>
         )}
       </div>
@@ -237,14 +234,14 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
           <button
             onClick={startCamera}
             disabled={isConnected}
-            className="flex-1 py-3 bg-green-600 hover:bg-green-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+            className="flex-1 py-3 rounded-lg font-semibold text-white bg-gradient-to-r from-emerald-500 to-green-600 shadow-[0_0_24px_rgba(16,185,129,0.85)] hover:shadow-[0_0_32px_rgba(16,185,129,1)] disabled:bg-gray-600 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-200"
           >
             {isConnected ? 'Camera Active' : 'Start Camera'}
           </button>
           <button
             onClick={stopCamera}
             disabled={!isConnected}
-            className="flex-1 py-3 bg-red-600 hover:bg-red-500 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+            className="flex-1 py-3 rounded-lg font-semibold text-white bg-gradient-to-r from-red-600 to-rose-600 shadow-[0_0_24px_rgba(248,113,113,0.9)] hover:shadow-[0_0_32px_rgba(248,113,113,1)] disabled:bg-gray-600 disabled:shadow-none disabled:cursor-not-allowed transition-all duration-200"
           >
             Stop Camera
           </button>
@@ -275,7 +272,9 @@ const MobileCamera: React.FC<MobileCameraProps> = ({ slotId }) => {
           <button
             onClick={() => setGimbalAssist(prev => !prev)}
             className={`px-3 py-1 rounded-full text-xs font-semibold ${
-              gimbalAssist ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'
+              gimbalAssist
+                ? 'bg-blue-600 hover:bg-blue-500 border border-blue-400/70 shadow-[0_0_18px_rgba(37,99,235,0.9)]'
+                : 'bg-gray-700 hover:bg-gray-600 border border-white/15'
             }`}
           >
             {gimbalAssist ? 'On' : 'Off'}

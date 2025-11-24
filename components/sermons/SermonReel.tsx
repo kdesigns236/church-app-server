@@ -1,7 +1,8 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Sermon } from '../../types';
-import { PlayIcon, SoundOnIcon, SoundOffIcon } from '../../constants/icons';
+import { PlayIcon, PauseIcon, SoundOnIcon, SoundOffIcon } from '../../constants/icons';
+import { FaSyncAlt, FaVideoSlash } from 'react-icons/fa';
 import { SermonOverlay } from './SermonOverlay';
 import { videoStorageService } from '../../services/videoStorageService';
 import { auth, storage } from '../../config/firebase';
@@ -226,15 +227,17 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         </div>
       ) : (
         <div className="text-white text-center p-8 animate-fade-in">
-          <div className="mb-6 relative">
-            <div className="absolute inset-0 bg-red-500/20 blur-3xl rounded-full"></div>
-            <svg className="w-24 h-24 mx-auto text-red-500 relative z-10 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
+          <div className="mb-6 relative flex items-center justify-center">
+            <div className="absolute inset-0 bg-gradient-to-tr from-red-600/40 via-rose-500/30 to-amber-300/20 blur-3xl rounded-full" />
+            <div className="relative z-10 rounded-full p-5 bg-black/60 border border-red-400/60 shadow-[0_0_45px_rgba(248,113,113,0.95)]">
+              <FaVideoSlash className="w-16 h-16 mx-auto text-red-300 drop-shadow-[0_0_26px_rgba(248,250,252,0.95)] animate-pulse" />
+            </div>
           </div>
-          <p className="text-xl font-bold mb-2 text-red-500">No Video Available</p>
+          <p className="text-xl font-bold mb-2 text-red-400">No Video Available</p>
           <p className="text-sm text-white/70 mb-1">This sermon doesn't have a video yet.</p>
-          <p className="text-xs text-white/50 mt-4 px-4 py-2 bg-white/5 rounded-full inline-block">📹 Admin: Upload in Admin Panel</p>
+          <p className="text-xs text-white/60 mt-4 px-4 py-2 bg-white/5 rounded-full inline-block">
+            📹 Admin: Upload in Admin Panel
+          </p>
         </div>
       )}
       
@@ -249,12 +252,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       {/* Center Play Button */}
       {!isPlaying && videoSrc && (
         <button 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-transparent border-none cursor-pointer hover:scale-110 transition-transform active:scale-95"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-transparent border-none cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-300"
           onClick={handleVideoPress}
           aria-label="Play video"
         >
-          <div className="bg-black/50 backdrop-blur-sm rounded-full p-6 shadow-2xl">
-            <PlayIcon className="w-16 h-16 text-white drop-shadow-lg" />
+          <div className="rounded-full p-6 bg-gradient-to-tr from-red-600 via-red-400 to-amber-300 shadow-[0_0_55px_rgba(248,113,113,0.95)] ring-2 ring-red-300/80">
+            <PlayIcon className="w-16 h-16 text-white drop-shadow-[0_0_30px_rgba(248,250,252,0.95)]" />
           </div>
         </button>
       )}
@@ -263,38 +266,32 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       <div className="absolute top-5 right-4 z-30 flex flex-col gap-2.5">
         <button 
           onClick={onToggleMute}
-          className="p-2.5 bg-black/50 backdrop-blur-md rounded-full hover:bg-black/70 hover:scale-110 transition-all duration-300 shadow-xl active:scale-95"
+          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
           aria-label={isMuted ? 'Unmute video' : 'Mute video'}
         >
           {isMuted ? 
             <SoundOffIcon className="w-5 h-5 text-white"/> : 
-            <SoundOnIcon className="w-5 h-5 text-red-500"/>
+            <SoundOnIcon className="w-5 h-5 text-red-400"/>
           }
         </button>
 
         <button 
           onClick={handleRotate}
-          className="p-2.5 bg-black/50 backdrop-blur-md rounded-full hover:bg-black/70 hover:scale-110 transition-all duration-300 shadow-xl active:scale-95"
+          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
           aria-label="Rotate video"
         >
-          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
+          <FaSyncAlt className="w-5 h-5 text-white" />
         </button>
 
         <button 
           onClick={handleVideoPress}
-          className="p-2.5 bg-black/50 backdrop-blur-md rounded-full hover:bg-black/70 hover:scale-110 transition-all duration-300 shadow-xl active:scale-95"
+          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
           aria-label={isPlaying ? 'Pause video' : 'Play video'}
         >
           {isPlaying ? (
-            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
-            </svg>
+            <PauseIcon className="w-5 h-5 text-white" />
           ) : (
-            <svg className="w-5 h-5 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
+            <PlayIcon className="w-5 h-5 text-red-400" />
           )}
         </button>
       </div>

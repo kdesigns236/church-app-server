@@ -40,30 +40,47 @@ import {
   FiSearch,
   FiArrowRight,
 } from 'react-icons/fi';
-import { FaFacebookF, FaTwitter, FaWhatsapp } from 'react-icons/fa';
+import {
+  FaFacebookF,
+  FaTwitter,
+  FaWhatsapp,
+  FaChurch,
+  FaBible,
+  FaBullhorn,
+  FaCalendarAlt,
+  FaBookOpen,
+  FaHandHoldingHeart,
+  FaBroadcastTower,
+  FaPlayCircle,
+  FaPauseCircle,
+  FaVolumeUp,
+  FaVolumeMute,
+  FaComments,
+  FaEnvelope,
+} from 'react-icons/fa';
 
 export const HomeIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <FiHome {...props} />
+  <FaChurch {...props} />
 );
 
 export const SermonsIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <FiVideo {...props} />
+  <FaBookOpen {...props} />
 );
 
 export const AnnouncementsIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <FiBell {...props} />
+  <FaBullhorn {...props} />
 );
 
 export const EventsIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <FiCalendar {...props} />
+  <FaCalendarAlt {...props} />
 );
 
 export const BibleIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <FiBookOpen {...props} />
+  <FaBible {...props} />
 );
 
 export const GivingIcon = (props: React.SVGProps<SVGSVGElement>) => (
-  <FiHeart {...props} />
+  <FaHandHoldingHeart {...props} />
 );
 
 export const SunIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -115,19 +132,23 @@ export const SaveIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export const PlayIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <FiPlay {...props} />
+  <FaPlayCircle {...props} />
+);
+
+export const PauseIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <FaPauseCircle {...props} />
 );
 
 export const SoundOnIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <FiVolume2 {...props} />
+  <FaVolumeUp {...props} />
 );
 
 export const SoundOffIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <FiVolumeX {...props} />
+  <FaVolumeMute {...props} />
 );
 
 export const MailIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <FiMail {...props} />
+  <FaEnvelope {...props} />
 );
 
 export const PhoneIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -143,7 +164,7 @@ export const CogIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export const ChatBubbleIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <FiMessageCircle {...props} />
+  <FaComments {...props} />
 );
 
 export const UsersIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -171,7 +192,7 @@ export const CheckIcon = (props: React.SVGProps<SVGSVGElement>) => (
 );
 
 export const BroadcastIcon = (props: React.SVGProps<SVGSVGElement>) => (
-    <FiRadio {...props} />
+  <FaBroadcastTower {...props} />
 );
 
 export const ExternalLinkIcon = (props: React.SVGProps<SVGSVGElement>) => (

@@ -3,6 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon } from '../constants/icons';
 import { websocketService } from '../services/websocketService';
 import { useAuth } from '../hooks/useAuth';
+import {
+  FaSyncAlt,
+  FaThLarge,
+  FaMicrophone,
+  FaMicrophoneSlash,
+  FaPhoneSlash,
+  FaVideo,
+  FaVideoSlash,
+  FaUser,
+} from 'react-icons/fa';
 
 // Video tile component for each participant
 const VideoTile: React.FC<{ 
@@ -60,9 +70,7 @@ const VideoTile: React.FC<{
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-gray-700">
-          <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-          </svg>
+          <FaUser className="w-16 h-16 text-gray-400" />
         </div>
       )}
       
@@ -74,10 +82,7 @@ const VideoTile: React.FC<{
       {/* Muted indicator */}
       {isMuted && isLocal && (
         <div className="absolute top-2 right-2 bg-red-600 rounded-full p-1">
-          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-          </svg>
+          <FaMicrophoneSlash className="w-4 h-4 text-white" />
         </div>
       )}
     </div>
@@ -681,82 +686,63 @@ const VideoCallPage: React.FC = () => {
 
       {/* Controls */}
       {isCallActive && (
-        <div className="p-6 bg-gray-800 flex items-center justify-center gap-4">
+        <div className="px-4 py-4 bg-gray-800 flex flex-wrap items-center justify-center gap-3 border-t border-gray-700">
           {/* Flip camera button */}
           <button
             onClick={flipCamera}
-            className="p-4 rounded-full bg-gray-700 hover:bg-gray-600 transition-colors"
+            className="p-4 rounded-full bg-gray-700 hover:bg-gray-600 text-white shadow-md shadow-black/40 transition-transform transition-colors active:scale-95"
             title="Flip camera"
           >
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
+            <FaSyncAlt className="w-5 h-5" />
           </button>
 
           {/* Minimize my video button */}
           <button
             onClick={() => setIsLocalMinimized(!isLocalMinimized)}
-            className={`p-4 rounded-full transition-colors ${
+            className={`p-4 rounded-full shadow-md shadow-black/40 transition-transform transition-colors active:scale-95 ${
               isLocalMinimized ? 'bg-secondary hover:bg-gold-light' : 'bg-gray-700 hover:bg-gray-600'
             }`}
             title={isLocalMinimized ? 'Show my video' : 'Minimize my video'}
           >
-            {isLocalMinimized ? (
-              <svg className="w-6 h-6 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-              </svg>
-            ) : (
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
-              </svg>
-            )}
+            <FaThLarge className={isLocalMinimized ? 'w-5 h-5 text-primary' : 'w-5 h-5 text-white'} />
           </button>
 
           {/* Mute button */}
           <button
             onClick={toggleMute}
-            className={`p-4 rounded-full transition-colors ${
+            className={`p-4 rounded-full shadow-md shadow-black/40 transition-transform transition-colors active:scale-95 ${
               isMuted ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
             }`}
+            title={isMuted ? 'Unmute' : 'Mute'}
           >
             {isMuted ? (
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
-              </svg>
+              <FaMicrophoneSlash className="w-5 h-5 text-white" />
             ) : (
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-              </svg>
+              <FaMicrophone className="w-5 h-5 text-white" />
             )}
           </button>
 
           {/* End call button */}
           <button
             onClick={endCall}
-            className="p-4 rounded-full bg-red-600 hover:bg-red-700 transition-colors"
+            className="p-4 rounded-full bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-900/60 transition-transform transition-colors active:scale-95"
+            title="End call"
           >
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 8l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M5 3a2 2 0 00-2 2v1c0 8.284 6.716 15 15 15h1a2 2 0 002-2v-3.28a1 1 0 00-.684-.948l-4.493-1.498a1 1 0 00-1.21.502l-1.13 2.257a11.042 11.042 0 01-5.516-5.517l2.257-1.128a1 1 0 00.502-1.21L9.228 3.683A1 1 0 008.279 3H5z" />
-            </svg>
+            <FaPhoneSlash className="w-5 h-5" />
           </button>
 
           {/* Video toggle button */}
           <button
             onClick={toggleVideo}
-            className={`p-4 rounded-full transition-colors ${
+            className={`p-4 rounded-full shadow-md shadow-black/40 transition-transform transition-colors active:scale-95 ${
               isVideoOff ? 'bg-red-600 hover:bg-red-700' : 'bg-gray-700 hover:bg-gray-600'
             }`}
+            title={isVideoOff ? 'Turn video on' : 'Turn video off'}
           >
             {isVideoOff ? (
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
-              </svg>
+              <FaVideoSlash className="w-5 h-5 text-white" />
             ) : (
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <FaVideo className="w-5 h-5 text-white" />
             )}
           </button>
         </div>

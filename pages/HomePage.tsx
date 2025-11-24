@@ -6,9 +6,15 @@ import { useAppContext } from '../context/AppContext';
 import { linkifyWithLineBreaks } from '../utils/linkify';
 
 const QuickAccessCard: React.FC<{ icon: React.ElementType; title: string; description: string; to: string; }> = ({ icon: Icon, title, description, to }) => (
-    <Link to={to} className="bg-white dark:bg-gray-800 rounded-lg shadow-md hover:shadow-xl transition-shadow duration-300 p-6 flex flex-col items-center text-center animate-slide-in-up">
-        <div className="bg-secondary p-4 rounded-full mb-4">
-            <Icon className="h-8 w-8 text-primary" />
+    <Link
+        to={to}
+        className="bg-white dark:bg-gray-800 rounded-xl shadow-lg shadow-black/10 hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 p-6 flex flex-col items-center text-center border border-white/60 dark:border-white/5 backdrop-blur-sm animate-slide-in-up"
+    >
+        <div className="relative mb-5">
+            <div className="absolute inset-0 rounded-full bg-gradient-to-tr from-yellow-300/70 via-pink-400/60 to-purple-500/70 blur-md opacity-70" />
+            <div className="relative h-16 w-16 rounded-full bg-primary/95 dark:bg-gray-900/95 flex items-center justify-center shadow-xl shadow-black/40 ring-2 ring-secondary/80">
+                <Icon className="h-8 w-8 text-white" />
+            </div>
         </div>
         <h3 className="text-xl font-serif font-bold text-primary dark:text-white mb-2">{title}</h3>
         <p className="text-text-main dark:text-gray-300 flex-grow">{description}</p>

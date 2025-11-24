@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { FiVideo, FiRefreshCw, FiX } from 'react-icons/fi';
+import { IconVideo, IconFlipCamera, IconX } from './icons';
 import { io, Socket } from 'socket.io-client';
 
 
@@ -466,7 +466,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
         {/* Top Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-center" style={{textShadow: '0 1px 5px rgba(0,0,0,0.5)'}}>
-          <div className="flex flex-col items-start space-y-1 p-2 bg-black/30 backdrop-blur-sm rounded-full border border-white/10">
+          <div className="flex flex-col items-start space-y-1 p-2 bg-black/40 backdrop-blur-sm rounded-full border border-red-400/40 shadow-[0_0_22px_rgba(248,113,113,0.9)]">
             <div className="flex items-center space-x-2">
               <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
               <span className="font-semibold tracking-wider text-green-300 text-xs uppercase">LIVE</span>
@@ -482,11 +482,11 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
           </div>
           <button
             onClick={onExit}
-            className="w-12 h-12 rounded-full flex items-center justify-center bg-black/30 backdrop-blur-sm border border-white/10 text-white transition-colors hover:bg-white/20 active:bg-white/30"
+            className="w-12 h-12 rounded-full flex items-center justify-center bg-black/40 backdrop-blur-sm border border-white/20 text-white shadow-[0_0_16px_rgba(15,23,42,0.9)] hover:bg-white/20 active:bg-white/30 transition-all duration-200"
             title="Exit Camera Mode"
             aria-label="Exit Camera Mode"
           >
-            <FiX className="w-6 h-6" />
+            <IconX className="w-6 h-6" />
           </button>
         </div>
 
@@ -495,23 +495,27 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
         <div className="absolute bottom-6 left-4 right-4 flex justify-center items-center space-x-5">
             <button
               onClick={isStreaming ? stopStreaming : startStreaming}
-              className={`w-16 h-16 rounded-full flex items-center justify-center border-2 shadow-lg transition-colors ${
-                isStreaming ? 'bg-red-600/80 border-red-300' : 'bg-gray-600/80 border-gray-300'
+              className={`w-16 h-16 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
+                isStreaming
+                  ? 'bg-red-600/80 border-red-300 shadow-[0_0_34px_rgba(248,113,113,1)] scale-105'
+                  : 'bg-gray-600/80 border-gray-300 shadow-[0_0_22px_rgba(148,163,184,0.9)]'
               }`}
               aria-label={isStreaming ? 'Stop camera stream' : 'Start camera stream'}
             >
               <div
                 className={`w-12 h-12 rounded-full ${
-                  isStreaming ? 'bg-red-500' : 'bg-gray-200'
+                  isStreaming
+                    ? 'bg-red-500 shadow-[0_0_30px_rgba(248,113,113,1)]'
+                    : 'bg-gray-200'
                 }`}
               ></div>
             </button>
             <button 
                 onClick={flipCamera}
-                className="w-14 h-14 rounded-full flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white transition-colors hover:bg-white/20 active:bg-white/30"
+                className="w-14 h-14 rounded-full flex items-center justify-center bg-gradient-to-tr from-blue-500/85 to-indigo-500/85 backdrop-blur-md border border-white/25 text-white shadow-[0_0_26px_rgba(59,130,246,1)] hover:shadow-[0_0_34px_rgba(59,130,246,1)] hover:scale-110 active:scale-95 transition-all duration-300"
                 aria-label="Flip camera"
             >
-                <FiRefreshCw className="w-7 h-7"/>
+                <IconFlipCamera className="w-7 h-7"/>
             </button>
         </div>
 
@@ -540,7 +544,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
         <div className="absolute bottom-4 left-4">
           <button
             onClick={() => setGimbalAssist(prev => !prev)}
-            className="px-3 py-1.5 rounded-full bg-black/50 backdrop-blur-sm border border-white/20 text-[11px] font-semibold uppercase tracking-wide"
+            className="px-3 py-1.5 rounded-full bg-black/55 backdrop-blur-sm border border-white/25 text-[11px] font-semibold uppercase tracking-wide shadow-[0_0_16px_rgba(148,163,184,0.9)] hover:bg-black/75 transition-colors"
           >
             Gimbal Assist: {gimbalAssist ? 'On' : 'Off'}
           </button>
@@ -558,17 +562,24 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
           }}
         >
           <h2 className="text-xl font-semibold mb-2">Rotate your phone</h2>
-          <p className="text-sm text-gray-300">For the best Pro Master quality, hold your device in landscape while recording. Tap anywhere to continue.</p>
+          <p className="text-sm text-gray-300">
+            For the best Pro Master quality, hold your device in landscape while recording. Tap anywhere to continue.
+          </p>
         </div>
       )}
 
 
       {error && (
         <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-4 text-center z-10">
-            <FiVideo className="w-12 h-12 text-red-500 mb-4" />
-            <h2 className="text-2xl font-bold mb-2">Camera Error</h2>
-            <p className="text-gray-300 mb-4">{error}</p>
-            <button onClick={startCamera} className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors">Try Again</button>
+          <IconVideo className="w-12 h-12 text-red-500 mb-4" />
+          <h2 className="text-2xl font-bold mb-2">Camera Error</h2>
+          <p className="text-gray-300 mb-4">{error}</p>
+          <button
+            onClick={startCamera}
+            className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors"
+          >
+            Try Again
+          </button>
         </div>
       )}
     </div>
