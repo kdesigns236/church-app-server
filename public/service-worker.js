@@ -56,6 +56,12 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Only handle GET requests. Cache API does not support PUT/POST/etc
+  // requests, and trying to cache them will throw a runtime error.
+  if (request.method !== 'GET') {
+    return;
+  }
+
   // Skip development files
   if (url.pathname.includes('/@') || 
       url.pathname.includes('?t=') || 
