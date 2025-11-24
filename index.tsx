@@ -18,7 +18,7 @@ window.onerror = function(message, source, lineno, colno, error) {
 };
 
 console.log('[App] Starting Church of God Evening Light App...');
-console.log('[App] API URL:', (import.meta as any).env?.VITE_API_URL);
+console.log('[App] API URL:', (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api');
 
 const rootElement = document.getElementById('root');
 if (!rootElement) {
