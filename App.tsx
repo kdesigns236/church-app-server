@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import UpdateNotification from './components/UpdateNotification';
+import { SermonsIcon, ArrowRightIcon } from './constants/icons';
 import HomePage from './pages/HomePage';
 import SermonsPage from './pages/SermonsPage';
 import AnnouncementsPage from './pages/AnnouncementsPage';
@@ -172,16 +173,12 @@ const App: React.FC = () => {
             className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 animate-slide-down cursor-pointer"
           >
             <div className="bg-secondary text-primary rounded-lg shadow-2xl p-4 flex items-center gap-3 hover:bg-gold-light transition-colors">
-              <svg className="w-10 h-10 text-primary animate-pulse flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <SermonsIcon className="w-10 h-10 text-primary animate-pulse flex-shrink-0" />
               <div className="flex-1">
                 <p className="font-bold text-lg">{meetingNotification.userName} is in a meeting</p>
                 <p className="text-sm opacity-90">Tap anywhere to join!</p>
               </div>
-              <svg className="w-6 h-6 text-primary flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
+              <ArrowRightIcon className="w-6 h-6 text-primary flex-shrink-0" />
             </div>
           </a>
         )}

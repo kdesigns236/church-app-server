@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import VideoPreview from './VideoPreview';
 import ProgramOutputCanvas from './ProgramOutputCanvas';
-import { IconSettings } from './icons';
+import { FiSettings } from 'react-icons/fi';
 import { CameraSlot, LowerThirdConfig, AnnouncementConfig, LyricsConfig, BibleVerseConfig } from './types';
 import { io, Socket } from 'socket.io-client';
 import { liveStreamService, StreamSettings, StreamPlatform } from '../../services/liveStreamService';
@@ -548,7 +548,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
              <div className="bg-[#1e1e1e] p-8 rounded-lg shadow-2xl text-white text-center w-full max-w-md">
                 <div className="animate-pulse flex justify-center items-center mb-4">
-                  <IconSettings className="w-16 h-16 mx-auto text-blue-400" />
+                  <FiSettings className="w-16 h-16 mx-auto text-blue-400" />
                 </div>
                 <h3 className="text-2xl font-bold mb-2">Waiting for Controller</h3>
                 <p className="text-gray-400 mb-6">The live display is ready. Open the controller app to begin.</p>

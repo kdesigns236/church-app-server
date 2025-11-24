@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { IconVideo, IconFlipCamera, IconX } from './icons';
+import { FiVideo, FiRefreshCw, FiX } from 'react-icons/fi';
 import { io, Socket } from 'socket.io-client';
 
 
@@ -486,7 +486,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
             title="Exit Camera Mode"
             aria-label="Exit Camera Mode"
           >
-            <IconX className="w-6 h-6" />
+            <FiX className="w-6 h-6" />
           </button>
         </div>
 
@@ -511,7 +511,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
                 className="w-14 h-14 rounded-full flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white transition-colors hover:bg-white/20 active:bg-white/30"
                 aria-label="Flip camera"
             >
-                <IconFlipCamera className="w-7 h-7"/>
+                <FiRefreshCw className="w-7 h-7"/>
             </button>
         </div>
 
@@ -565,7 +565,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
       {error && (
         <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center p-4 text-center z-10">
-            <IconVideo className="w-12 h-12 text-red-500 mb-4" />
+            <FiVideo className="w-12 h-12 text-red-500 mb-4" />
             <h2 className="text-2xl font-bold mb-2">Camera Error</h2>
             <p className="text-gray-300 mb-4">{error}</p>
             <button onClick={startCamera} className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors">Try Again</button>

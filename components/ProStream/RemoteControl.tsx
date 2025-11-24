@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './Sidebar';
 import { CameraSlot, CameraDevice, TransitionType, LowerThirdConfig, AnnouncementConfig, LyricsConfig, BibleVerseConfig } from './types';
-import { IconSettings, IconVideo, IconX } from './icons';
+import { FiSettings, FiX, FiMonitor } from 'react-icons/fi';
 import { io, Socket } from 'socket.io-client';
 
 
@@ -446,11 +446,11 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
                 className="px-3 py-2 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors text-sm font-semibold flex items-center space-x-2"
                 title="Back"
               >
-                <IconX className="w-4 h-4" />
+                <FiX className="w-4 h-4" />
                 <span>Back</span>
               </button>
             )}
-            <IconSettings className="w-6 h-6 text-blue-400" />
+            <FiSettings className="w-6 h-6 text-blue-400" />
             <h1 className="text-lg font-bold">Church Live Streaming Controller</h1>
           </div>
           <div className="text-xs text-center text-gray-400 flex-1 sm:flex-none">
@@ -478,7 +478,7 @@ const RemoteControl: React.FC<RemoteControlProps> = ({ sessionId, onExit }) => {
               onClick={openDisplayWindow}
               className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors text-sm font-semibold flex items-center space-x-2"
             >
-              <IconVideo className="w-4 h-4" />
+              <FiMonitor className="w-4 h-4" />
               <span>Open Display</span>
             </button>
           </div>

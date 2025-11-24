@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { updateService } from '../services/updateService';
+import { FiDownload } from 'react-icons/fi';
 
 interface AppVersion {
   version: string;
@@ -52,9 +53,7 @@ const UpdateNotification: React.FC = () => {
         {/* Icon */}
         <div className="flex justify-center mb-4">
           <div className="bg-secondary rounded-full p-3">
-            <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
+            <FiDownload className="w-8 h-8 text-primary" />
           </div>
         </div>
 
@@ -99,9 +98,7 @@ const UpdateNotification: React.FC = () => {
             onClick={handleUpdate}
             className={`${updateAvailable.forceUpdate ? 'flex-1' : 'flex-1'} px-4 py-3 bg-primary text-white rounded-lg font-semibold hover:bg-navy-light transition-colors flex items-center justify-center gap-2`}
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
+            <FiDownload className="w-5 h-5" />
             Update Now
           </button>
         </div>
