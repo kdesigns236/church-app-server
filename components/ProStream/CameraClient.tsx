@@ -229,7 +229,9 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
   useEffect(() => {
     const shortSessionId = (sessionId.split(':')[1] || sessionId).trim();
     shortSessionIdRef.current = shortSessionId;
-    const socket = io(SIGNALING_URL, { transports: ['websocket', 'polling'] });
+    // Use polling-only transport for compatibility with Render and to avoid
+    // WebSocket upgrade warnings in development.
+    const socket = io(SIGNALING_URL, { transports: ['polling'] });
     socketRef.current = socket;
     socket.emit('prostream:join', { sessionId: shortSessionId, role: 'camera', slotId });
 

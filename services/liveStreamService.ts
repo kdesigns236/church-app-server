@@ -22,6 +22,15 @@ export interface StreamStats {
   resolution: string;
 }
 
+// Base URL for the streaming bridge (Node sync server).
+// Falls back to localhost for development if VITE_SYNC_SERVER_URL is not set.
+const STREAM_API_BASE = ((import.meta as any).env?.VITE_SYNC_SERVER_URL as string | undefined) || 'http://localhost:3001';
+
+const buildStreamUrl = (path: string): string => {
+  const base = STREAM_API_BASE.replace(/\/+$/, '');
+  return `${base}${path}`;
+};
+
 class LiveStreamService {
   private mediaStream: MediaStream | null = null;
   private mediaRecorder: MediaRecorder | null = null;
@@ -248,7 +257,7 @@ class LiveStreamService {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/facebook/live/chunk/${encodeURIComponent(streamId)}`, {
+      const response = await fetch(buildStreamUrl(`/api/facebook/live/chunk/${encodeURIComponent(streamId)}`), {
         method: 'POST',
         body: data
       });
@@ -273,7 +282,7 @@ class LiveStreamService {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/youtube/live/chunk/${encodeURIComponent(streamId)}`, {
+      const response = await fetch(buildStreamUrl(`/api/youtube/live/chunk/${encodeURIComponent(streamId)}`), {
         method: 'POST',
         body: data
       });
@@ -307,7 +316,7 @@ class LiveStreamService {
   // Initialize Facebook Live stream
   private async initializeFacebookStream(platform: StreamPlatform, settings: StreamSettings): Promise<void> {
     try {
-      const response = await fetch('http://localhost:3001/api/facebook/live/start', {
+      const response = await fetch(buildStreamUrl('/api/facebook/live/start'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -326,9 +335,9 @@ class LiveStreamService {
       }
 
       const data = await response.json();
-      platform.streamUrl = data.secureStreamUrl;
+      platform.streamUrl = data.secureStreamUrl || data.streamUrl;
       platform.streamKey = data.streamId;
-      
+
       console.log('[LiveStream] Facebook bridge stream initialized', data.streamId);
     } catch (error) {
       console.error('[LiveStream] Facebook initialization error via bridge:', error);
@@ -338,7 +347,7 @@ class LiveStreamService {
   // Initialize YouTube Live stream
   private async initializeYouTubeStream(platform: StreamPlatform, settings: StreamSettings): Promise<void> {
     try {
-      const response = await fetch('http://localhost:3001/api/youtube/live/start', {
+      const response = await fetch(buildStreamUrl('/api/youtube/live/start'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -359,7 +368,7 @@ class LiveStreamService {
       const data = await response.json();
       platform.streamUrl = data.rtmpUrl;
       platform.streamKey = data.streamId;
-      
+
       console.log('[LiveStream] YouTube bridge stream initialized', data.streamId);
     } catch (error) {
       console.error('[LiveStream] YouTube initialization error via bridge:', error);
@@ -374,7 +383,7 @@ class LiveStreamService {
     for (const platform of platforms) {
       if (platform.name === 'facebook' && platform.streamKey) {
         try {
-          await fetch('http://localhost:3001/api/facebook/live/stop', {
+          await fetch(buildStreamUrl('/api/facebook/live/stop'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -386,7 +395,7 @@ class LiveStreamService {
         }
       } else if (platform.name === 'youtube' && platform.streamKey) {
         try {
-          await fetch('http://localhost:3001/api/youtube/live/stop', {
+          await fetch(buildStreamUrl('/api/youtube/live/stop'), {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'

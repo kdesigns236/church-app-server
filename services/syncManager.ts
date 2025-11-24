@@ -8,7 +8,7 @@ interface SyncConfig {
 
 class SyncManager {
   private config: SyncConfig = {
-    serverUrl: 'http://localhost:3001/api',
+    serverUrl: ((import.meta as any).env?.VITE_API_URL as string | undefined) || 'https://church-app-server.onrender.com/api',
     syncInterval: 30000, // 30 seconds
     enabled: false // Disabled by default (offline-first)
   };

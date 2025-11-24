@@ -69,6 +69,15 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       existing.getTracks().forEach(track => track.stop());
     }
 
+    const mediaDevices = (navigator as any)?.mediaDevices as MediaDevices | undefined;
+    if (!mediaDevices || typeof mediaDevices.getUserMedia !== 'function') {
+      // On some mobile browsers over HTTP (e.g. LAN dev URLs), getUserMedia is
+      // not available because the context is not secure. In that case, skip
+      // attaching a local camera instead of crashing the whole GoLive page.
+      console.warn('[LiveStream] getUserMedia is not available in this context (requires HTTPS or localhost).');
+      return;
+    }
+
     const constraints: MediaStreamConstraints = {
       video: {
         // Target smooth 16:9 720p for YouTube (lighter on bandwidth)
@@ -84,7 +93,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       },
     };
 
-    navigator.mediaDevices.getUserMedia(constraints)
+    mediaDevices.getUserMedia(constraints)
       .then(stream => {
         localStreamRef.current = stream;
         if (sourceModeRef.current === 'local') {
@@ -109,12 +118,11 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   
   useEffect(() => {
     try {
-      const status = oauthService.getConnectionStatus();
-      const hasEnvFacebookToken = Boolean((import.meta as any).env?.VITE_FACEBOOK_ACCESS_TOKEN);
+      // For the RTMP bridges we only need the stream keys configured on the
+      // server. The frontend does not need Facebook or YouTube access tokens
+      // just to push video, so treat both platforms as available by default.
       setConnectionStatus({
-        facebook: status.facebook || hasEnvFacebookToken,
-        // For RTMP bridge we only need the stream key in server/.env,
-        // so treat YouTube as connected by default.
+        facebook: true,
         youtube: true,
       });
     } catch {}
@@ -157,7 +165,9 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     const shortSessionId = (sessionId.split(':')[1] || sessionId).trim();
     shortSessionIdRef.current = shortSessionId;
     const signalingUrl = import.meta.env.VITE_SYNC_SERVER_URL || 'https://church-app-server.onrender.com';
-    const socket = io(signalingUrl, { transports: ['websocket', 'polling'] });
+    // Use polling-only transport for maximum compatibility with Render and to
+    // avoid noisy WebSocket upgrade failures in the console.
+    const socket = io(signalingUrl, { transports: ['polling'] });
     socketRef.current = socket;
     socket.emit('prostream:join', { sessionId: shortSessionId, role: 'display' });
 
@@ -357,21 +367,12 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const handleConnectFacebook = async () => {
     if (authLoading.facebook) return;
     try {
-      const envToken = (import.meta as any).env?.VITE_FACEBOOK_ACCESS_TOKEN as string | undefined;
-      // If a Page access token is configured in env, treat Facebook as connected without OAuth popup
-      if (envToken) {
-        setConnectionStatus(prev => ({ ...prev, facebook: true }));
-        alert('Facebook Page token is configured. No additional login is required.');
-        return;
-      }
-
       setAuthLoading(prev => ({ ...prev, facebook: true }));
-      await oauthService.authenticateFacebook();
-      const status = oauthService.getConnectionStatus();
-      setConnectionStatus(status);
-    } catch (err) {
-      console.error('[Display] Facebook authentication failed', err);
-      alert('Failed to connect Facebook. Please check your Facebook streaming setup.');
+      // For Facebook RTMP we rely solely on the persistent stream key
+      // configured on the server. Mark Facebook as connected and show
+      // a simple informational message.
+      setConnectionStatus(prev => ({ ...prev, facebook: true }));
+      alert('Facebook streaming uses the server stream key. No additional login is required here.');
     } finally {
       setAuthLoading(prev => ({ ...prev, facebook: false }));
     }
@@ -544,18 +545,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       >
         {controlsVisible ? 'Hide GoLive Panel' : 'Show GoLive Panel'}
       </button>
-       {!isConnected && !activeStream && (
-        <div className="absolute inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-30 p-4">
-             <div className="bg-[#1e1e1e] p-8 rounded-lg shadow-2xl text-white text-center w-full max-w-md">
-                <div className="animate-pulse flex justify-center items-center mb-4">
-                  <FiSettings className="w-16 h-16 mx-auto text-blue-400" />
-                </div>
-                <h3 className="text-2xl font-bold mb-2">Waiting for Controller</h3>
-                <p className="text-gray-400 mb-6">The live display is ready. Open the controller app to begin.</p>
-                <p className="text-xs text-gray-500 mt-4 break-words">Session ID: <code className="bg-black p-1 rounded">{sessionId.split(':')[1]}</code></p>
-            </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -26,3 +26,9 @@ dist-ssr
 # Local environment files
 .env.development
 pro-stream-client/.env.development
+
+.env.production
+pro-stream-client/.env.production
+
+# Built frontend (served by server/index.js)
+server/public

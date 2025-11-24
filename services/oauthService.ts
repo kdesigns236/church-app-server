@@ -261,45 +261,12 @@ class OAuthService {
           console.warn('[OAuth] Backend YouTube token endpoint failed', response.status, body);
         }
       } catch (serverError) {
-        console.warn('[OAuth] Backend YouTube token request error, falling back to direct Google exchange', serverError);
+        console.warn('[OAuth] Backend YouTube token request error; direct Google exchange is disabled for security.', serverError);
       }
 
-      // Fallback: exchange code directly with Google OAuth token endpoint (useful for local dev)
-      const clientSecret = (import.meta as any).env?.VITE_YOUTUBE_CLIENT_SECRET || '';
-      if (!clientSecret) {
-        throw new Error('YouTube client secret not configured (VITE_YOUTUBE_CLIENT_SECRET).');
-      }
-
-      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          code,
-          client_id: this.YOUTUBE_CONFIG.clientId,
-          client_secret: clientSecret,
-          redirect_uri: this.YOUTUBE_CONFIG.redirectUri,
-          grant_type: 'authorization_code',
-        }),
-      });
-
-      if (!tokenResponse.ok) {
-        const errorBody = await tokenResponse.text();
-        console.error('[OAuth] Direct YouTube token exchange failed', tokenResponse.status, errorBody);
-        throw new Error('Failed to exchange YouTube code for token');
-      }
-
-      const data = await tokenResponse.json();
-      const tokenData: OAuthToken = {
-        accessToken: data.access_token,
-        refreshToken: data.refresh_token,
-        expiresIn: data.expires_in,
-        tokenType: data.token_type,
-      };
-
-      this.storeToken('youtube', tokenData);
-      return tokenData;
+      // Fallback disabled: we do not perform direct token exchange from the browser
+      // to avoid embedding OAuth client secrets in the frontend bundle.
+      throw new Error('YouTube token exchange must be handled by the server. Please check /api/auth/youtube/token configuration.');
     } catch (error) {
       console.error('[OAuth] YouTube token exchange error:', error);
       throw error;
