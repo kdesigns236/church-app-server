@@ -56,6 +56,22 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     facebook: false,
     youtube: false,
   });
+  const [isMobileLayout, setIsMobileLayout] = useState(false);
+  const [localZoom, setLocalZoom] = useState<number>(1);
+  const [localFacingMode, setLocalFacingMode] = useState<'environment' | 'user'>('environment');
+  const localFacingModeRef = useRef<'environment' | 'user'>('environment');
+
+  // Detect mobile-sized layout so we can show a simplified camera UI
+  useEffect(() => {
+    const updateLayout = () => {
+      if (typeof window === 'undefined') return;
+      setIsMobileLayout(window.innerWidth <= 768);
+    };
+
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    return () => window.removeEventListener('resize', updateLayout);
+  }, []);
 
   // Ensure we have a live local camera stream when GoLive camera is selected
   function activateLocalIfNeeded() {
@@ -85,7 +101,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         height: { min: 360, ideal: 720, max: 720 },
         aspectRatio: { ideal: 16 / 9 },
         frameRate: { ideal: 30, max: 30 },
-        facingMode: 'environment',
+        facingMode: localFacingModeRef.current,
       } as any,
       audio: {
         echoCancellation: true,
@@ -93,7 +109,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         autoGainControl: true,
       },
     };
-
     mediaDevices.getUserMedia(constraints)
       .then(stream => {
         localStreamRef.current = stream;
@@ -105,6 +120,10 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         // If permission denied or no device, keep waiting for controller
       });
   }
+
+  useEffect(() => {
+    localFacingModeRef.current = localFacingMode;
+  }, [localFacingMode]);
 
   useEffect(() => {
     sourceModeRef.current = sourceMode;
@@ -434,6 +453,22 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     }
   };
 
+  const handleFlipCamera = () => {
+    // Force local source when flipping cameras on mobile
+    setSourceMode('local');
+    sourceModeRef.current = 'local';
+
+    const nextMode: 'environment' | 'user' =
+      localFacingModeRef.current === 'environment' ? 'user' : 'environment';
+    localFacingModeRef.current = nextMode;
+    setLocalFacingMode(nextMode);
+    activateLocalIfNeeded();
+  };
+
+  const handleLocalZoomChange = (value: number) => {
+    setLocalZoom(value);
+  };
+
 
   return (
     <div className="h-screen w-screen bg-black relative">
@@ -446,7 +481,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         lyricsConfig={lyricsConfig}
         bibleVerseConfig={bibleVerseConfig}
         rotate90={rotate90}
-        zoomScale={remoteZoom || undefined}
+        zoomScale={sourceMode === 'controller' ? (remoteZoom || undefined) : localZoom || undefined}
       />
       <ProgramOutputCanvas
         sourceStream={activeStream}
@@ -455,11 +490,12 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         lyricsConfig={lyricsConfig}
         bibleVerseConfig={bibleVerseConfig}
         rotate90={rotate90}
-        zoomScale={remoteZoom || undefined}
+        zoomScale={sourceMode === 'controller' ? (remoteZoom || undefined) : localZoom || undefined}
         onProgramStreamReady={setProgramStream}
       />
-      {/* Local GO LIVE controls - display owns live state and target platforms */}
-      {controlsVisible && (
+
+      {/* Desktop GoLive controls */}
+      {!isMobileLayout && controlsVisible && (
         <div className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700 max-w-md">
           <div className="space-y-2">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -539,16 +575,84 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         </div>
       )}
 
-      {/* Small toggle button to show/hide GoLive controls so the video has more space */}
-      <button
-        onClick={() => setControlsVisible(v => !v)}
-        className="absolute bottom-4 right-4 z-30 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-gray-600 text-[11px] font-semibold uppercase tracking-wide text-gray-100 hover:bg-black/80"
-      >
-        {controlsVisible ? 'Hide GoLive Panel' : 'Show GoLive Panel'}
-      </button>
+      {/* Desktop toggle button for advanced GoLive panel */}
+      {!isMobileLayout && (
+        <button
+          onClick={() => setControlsVisible(v => !v)}
+          className="absolute bottom-4 right-4 z-30 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-gray-600 text-[11px] font-semibold uppercase tracking-wide text-gray-100 hover:bg-black/80"
+        >
+          {controlsVisible ? 'Hide GoLive Panel' : 'Show GoLive Panel'}
+        </button>
+      )}
+
+      {/* Mobile-friendly camera controls overlay */}
+      {isMobileLayout && (
+        <div className="absolute inset-0 z-30 flex flex-col justify-between items-center pointer-events-none">
+          {/* Top area could be used later for indicators; keep minimal for now */}
+          <div className="w-full flex justify-between items-center px-4 pt-6 text-xs text-gray-200 pointer-events-auto">
+            <span className="bg-black/40 px-3 py-1 rounded-full border border-white/10">
+              {sourceMode === 'controller' ? 'Controller Feed' : 'Phone Camera'}
+            </span>
+            {isLive && (
+              <span className="flex items-center gap-2 bg-red-600/80 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide shadow-lg">
+                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                LIVE
+              </span>
+            )}
+          </div>
+
+          {/* Bottom controls: zoom slider + record + flip */}
+          <div className="w-full px-6 pb-8 flex flex-col items-center gap-5 pointer-events-auto">
+            {activeStream && (
+              <div className="w-full max-w-md bg-black/50 backdrop-blur-sm rounded-full border border-white/10 px-4 py-3">
+                <div className="flex items-center justify-between text-[11px] text-gray-200 mb-1">
+                  <span className="font-medium">Zoom</span>
+                  <span className="opacity-80">{localZoom.toFixed(1)}x</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.1}
+                  value={localZoom}
+                  onChange={e => handleLocalZoomChange(Number(e.target.value))}
+                  className="w-full accent-red-500"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center justify-center gap-10">
+              <button
+                onClick={handleToggleLive}
+                className={`w-20 h-20 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
+                  isLive
+                    ? 'border-red-400 bg-red-600/80 shadow-[0_0_36px_rgba(248,113,113,1)] scale-105'
+                    : 'border-gray-200 bg-gray-900/80 shadow-[0_0_22px_rgba(148,163,184,0.9)]'
+                } ${(!streamToYoutube && !streamToFacebook) || isTogglingLive ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
+                disabled={!streamToYoutube && !streamToFacebook || isTogglingLive}
+                aria-label={isLive ? 'Stop live stream' : 'Start live stream'}
+              >
+                <div
+                  className={`w-12 h-12 rounded-full transition-all duration-300 ${
+                    isLive ? 'bg-red-500' : 'bg-gray-200'
+                  }`}
+                />
+              </button>
+
+              <button
+                onClick={handleFlipCamera}
+                className="w-14 h-14 rounded-full flex items-center justify-center bg-black/70 backdrop-blur-sm border border-white/25 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] hover:bg-black/85 active:scale-95 transition-all duration-200"
+                aria-label="Flip camera"
+              >
+                <span className="text-xs font-semibold tracking-wide">FLIP</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+}
 
 
 export default Display;
