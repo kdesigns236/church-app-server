@@ -23,9 +23,16 @@ const SermonsPage: React.FC = () => {
   
   // Sort sermons by date - newest first
   const sortedSermons = [...sermons].sort((a, b) => {
+    const orderA = typeof (a as any).order === 'number' ? (a as any).order : Number.MAX_SAFE_INTEGER;
+    const orderB = typeof (b as any).order === 'number' ? (b as any).order : Number.MAX_SAFE_INTEGER;
+
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+
     const dateA = new Date(a.date).getTime();
     const dateB = new Date(b.date).getTime();
-    return dateB - dateA; // Newest first
+    return dateB - dateA; // Newest first when order is the same or not set
   });
   
   // Get active sermon from sermons array (always up-to-date)

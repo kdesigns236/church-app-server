@@ -27,10 +27,35 @@ const AdminSection: React.FC<{ title: string, children: React.ReactNode }> = ({ 
     </div>
 );
 
-const AdminItem: React.FC<{ title: string, onEdit: () => void, onDelete: () => void }> = ({ title, onEdit, onDelete }) => (
+const AdminItem: React.FC<{ title: string, onEdit: () => void, onDelete: () => void, orderLabel?: string, onMoveUp?: () => void, onMoveDown?: () => void }> = ({ title, onEdit, onDelete, orderLabel, onMoveUp, onMoveDown }) => (
     <div className="flex justify-between items-center p-3 border-b border-gray-200 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 rounded">
-        <p className="text-text-main dark:text-gray-300 truncate pr-4">{title}</p>
-        <div className="space-x-4 flex-shrink-0">
+        <div className="flex items-center gap-3 pr-4">
+            {orderLabel && (
+                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-6 text-right">
+                    {orderLabel}
+                </span>
+            )}
+            <p className="text-text-main dark:text-gray-300 truncate">{title}</p>
+        </div>
+        <div className="space-x-2 flex-shrink-0 flex items-center">
+            {onMoveUp && (
+                <button
+                    type="button"
+                    className="text-xs text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white font-semibold transition-colors"
+                    onClick={onMoveUp}
+                >
+                    ↑
+                </button>
+            )}
+            {onMoveDown && (
+                <button
+                    type="button"
+                    className="text-xs text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-white font-semibold transition-colors"
+                    onClick={onMoveDown}
+                >
+                    ↓
+                </button>
+            )}
             <button className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-semibold transition-colors" onClick={onEdit}>Edit</button>
             <button className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 font-semibold transition-colors" onClick={onDelete}>Delete</button>
         </div>
@@ -276,6 +301,19 @@ const AdminPage: React.FC = () => {
     console.log('[AdminPage] Sermons count:', sermons?.length || 0);
     console.log('[AdminPage] Sermons:', sermons);
 
+    const sortedSermons = [...sermons].sort((a, b) => {
+        const orderA = typeof (a as any).order === 'number' ? (a as any).order : Number.MAX_SAFE_INTEGER;
+        const orderB = typeof (b as any).order === 'number' ? (b as any).order : Number.MAX_SAFE_INTEGER;
+
+        if (orderA !== orderB) {
+            return orderA - orderB;
+        }
+
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return dateB - dateA;
+    });
+
     const [modalConfig, setModalConfig] = useState<ModalConfig>({ isOpen: false, type: null, item: null });
     const [editableSiteContent, setEditableSiteContent] = useState<SiteContent>({
         verseOfTheWeek: siteContent?.verseOfTheWeek || { text: '', citation: '' },
@@ -298,6 +336,36 @@ const AdminPage: React.FC = () => {
 
     const handleCloseModal = () => {
         setModalConfig({ isOpen: false, type: null, item: null });
+    };
+
+    const handleMoveSermon = (id: string, direction: 'up' | 'down') => {
+        if (sortedSermons.length === 0) {
+            return;
+        }
+
+        const index = sortedSermons.findIndex(s => s.id === id);
+        if (index === -1) {
+            return;
+        }
+
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= sortedSermons.length) {
+            return;
+        }
+
+        const withOrder = sortedSermons.map((sermon, idx) => ({
+            ...sermon,
+            order: typeof (sermon as any).order === 'number' ? (sermon as any).order : idx + 1,
+        }));
+
+        const current = withOrder[index];
+        const target = withOrder[targetIndex];
+        const tempOrder = current.order!;
+        current.order = target.order!;
+        target.order = tempOrder;
+
+        updateSermon(current);
+        updateSermon(target);
     };
 
     const handleSave = async (type: 'sermon' | 'announcement' | 'event' | 'bibleStudy', data: any) => {
@@ -639,8 +707,16 @@ const AdminPage: React.FC = () => {
                         <AdminSection title="Manage Sermons">
                             <button className="bg-secondary text-primary font-bold px-4 py-2 rounded-md hover:bg-gold-light transition-colors mb-4" onClick={() => handleOpenModal('sermon')}>Add New Sermon</button>
                             <div className="space-y-1 max-h-96 overflow-y-auto pr-2">
-                                {sermons.map(sermon => (
-                                    <AdminItem key={sermon.id} title={sermon.title} onEdit={() => handleOpenModal('sermon', sermon)} onDelete={() => handleDelete('sermon', sermon.id)} />
+                                {sortedSermons.map((sermon, index) => (
+                                    <AdminItem 
+                                        key={sermon.id} 
+                                        title={sermon.title}
+                                        orderLabel={`${index + 1}`}
+                                        onMoveUp={index === 0 ? undefined : () => handleMoveSermon(sermon.id, 'up')}
+                                        onMoveDown={index === sortedSermons.length - 1 ? undefined : () => handleMoveSermon(sermon.id, 'down')}
+                                        onEdit={() => handleOpenModal('sermon', sermon)} 
+                                        onDelete={() => handleDelete('sermon', sermon.id)} 
+                                    />
                                 ))}
                             </div>
                         </AdminSection>

@@ -66,6 +66,7 @@ export interface Sermon {
   isLiked: boolean;
   isSaved: boolean;
   fullSermonUrl?: string;
+  order?: number;
 }
 
 export interface Event {
