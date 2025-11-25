@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStudy, ChatMessage, User, SermonComment } from '../types';
 import { websocketService } from '../services/websocketService';
 import { notificationService } from '../services/notificationService';
+import { localNotificationService } from '../services/localNotificationService';
 import { initialSiteContent } from '../constants/siteContent';
 import { useAuth } from '../hooks/useAuth';
 
@@ -348,11 +349,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   if (prev.find(msg => msg.id === syncData.data.id)) {
                     return prev;
                   }
+
+                  let shouldNotify = true;
+
+                  try {
+                    const authUserRaw = localStorage.getItem('authUser');
+                    if (authUserRaw) {
+                      const authUser = JSON.parse(authUserRaw);
+                      if (authUser && authUser.id === syncData.data.userId) {
+                        shouldNotify = false;
+                      }
+                    }
+                  } catch (error) {
+                    console.error('[AppContext] Failed to determine current user for chat notification:', error);
+                  }
+
+                  if (window.location.hash.includes('/chat')) {
+                    shouldNotify = false;
+                  }
+
                   // Send notification for new chat message
-                  notificationService.notifyNewChatMessage(
-                    syncData.data.senderName,
-                    syncData.data.content || '📷 Sent a photo'
-                  );
+                  if (shouldNotify) {
+                    localNotificationService.showChatNotification(
+                      syncData.data.senderName,
+                      syncData.data.content || '📷 Sent a photo'
+                    );
+                  }
                   const updated = [...prev, syncData.data];
                   localStorage.setItem('chatMessages', JSON.stringify(updated));
                   return updated;
