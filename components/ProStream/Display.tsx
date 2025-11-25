@@ -85,6 +85,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         height: { min: 360, ideal: 720, max: 720 },
         aspectRatio: { ideal: 16 / 9 },
         frameRate: { ideal: 30, max: 30 },
+        facingMode: 'environment',
       } as any,
       audio: {
         echoCancellation: true,
