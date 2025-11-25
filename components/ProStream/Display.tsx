@@ -57,9 +57,10 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     youtube: false,
   });
   const [isMobileLayout, setIsMobileLayout] = useState(false);
-  const [localZoom, setLocalZoom] = useState<number>(1);
+  const [localZoom] = useState<number>(1);
   const [localFacingMode, setLocalFacingMode] = useState<'environment' | 'user'>('environment');
   const localFacingModeRef = useRef<'environment' | 'user'>('environment');
+  const mobileVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Detect mobile-sized layout so we can show a simplified camera UI
   useEffect(() => {
@@ -129,6 +130,18 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     sourceModeRef.current = sourceMode;
   }, [sourceMode]);
   
+
+  useEffect(() => {
+    if (!isMobileLayout) return;
+    const video = mobileVideoRef.current;
+    if (!video) return;
+    if (activeStream) {
+      (video as any).srcObject = activeStream;
+    } else {
+      (video as any).srcObject = null;
+    }
+  }, [activeStream, isMobileLayout]);
+
 
   useEffect(() => {
     try {
@@ -465,24 +478,29 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     activateLocalIfNeeded();
   };
 
-  const handleLocalZoomChange = (value: number) => {
-    setLocalZoom(value);
-  };
-
-
   return (
     <div className="h-screen w-screen bg-black relative">
-      <VideoPreview
-        stream={activeStream}
-        isLive={isLive}
-        lowerThirdConfig={lowerThirdConfig}
-        lowerThirdAnimationKey={lowerThirdAnimationKey}
-        announcementConfig={announcementConfig}
-        lyricsConfig={lyricsConfig}
-        bibleVerseConfig={bibleVerseConfig}
-        rotate90={rotate90}
-        zoomScale={sourceMode === 'controller' ? (remoteZoom || undefined) : localZoom || undefined}
-      />
+      {isMobileLayout ? (
+        <video
+          ref={mobileVideoRef}
+          autoPlay
+          playsInline
+          muted
+          className="w-full h-full object-cover"
+        />
+      ) : (
+        <VideoPreview
+          stream={activeStream}
+          isLive={isLive}
+          lowerThirdConfig={lowerThirdConfig}
+          lowerThirdAnimationKey={lowerThirdAnimationKey}
+          announcementConfig={announcementConfig}
+          lyricsConfig={lyricsConfig}
+          bibleVerseConfig={bibleVerseConfig}
+          rotate90={rotate90}
+          zoomScale={sourceMode === 'controller' ? (remoteZoom || undefined) : localZoom || undefined}
+        />
+      )}
       <ProgramOutputCanvas
         sourceStream={activeStream}
         lowerThirdConfig={lowerThirdConfig}
@@ -601,47 +619,12 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
             )}
           </div>
 
-          {/* Bottom controls: zoom slider + record + flip */}
+          {/* Bottom controls: keep only a simple Flip button on mobile */}
           <div className="w-full px-6 pb-8 flex flex-col items-center gap-5 pointer-events-auto">
-            {activeStream && (
-              <div className="w-full max-w-md bg-black/50 backdrop-blur-sm rounded-full border border-white/10 px-4 py-3">
-                <div className="flex items-center justify-between text-[11px] text-gray-200 mb-1">
-                  <span className="font-medium">Zoom</span>
-                  <span className="opacity-80">{localZoom.toFixed(1)}x</span>
-                </div>
-                <input
-                  type="range"
-                  min={1}
-                  max={3}
-                  step={0.1}
-                  value={localZoom}
-                  onChange={e => handleLocalZoomChange(Number(e.target.value))}
-                  className="w-full accent-red-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center justify-center gap-10">
-              <button
-                onClick={handleToggleLive}
-                className={`w-20 h-20 rounded-full flex items-center justify-center border-4 transition-all duration-300 ${
-                  isLive
-                    ? 'border-red-400 bg-red-600/80 shadow-[0_0_36px_rgba(248,113,113,1)] scale-105'
-                    : 'border-gray-200 bg-gray-900/80 shadow-[0_0_22px_rgba(148,163,184,0.9)]'
-                } ${(!streamToYoutube && !streamToFacebook) || isTogglingLive ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}`}
-                disabled={!streamToYoutube && !streamToFacebook || isTogglingLive}
-                aria-label={isLive ? 'Stop live stream' : 'Start live stream'}
-              >
-                <div
-                  className={`w-12 h-12 rounded-full transition-all duration-300 ${
-                    isLive ? 'bg-red-500' : 'bg-gray-200'
-                  }`}
-                />
-              </button>
-
+            <div className="flex items-center justify-center">
               <button
                 onClick={handleFlipCamera}
-                className="w-14 h-14 rounded-full flex items-center justify-center bg-black/70 backdrop-blur-sm border border-white/25 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] hover:bg-black/85 active:scale-95 transition-all duration-200"
+                className="w-16 h-16 rounded-full flex items-center justify-center bg-black/70 backdrop-blur-sm border border-white/25 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] hover:bg-black/85 active:scale-95 transition-all duration-200"
                 aria-label="Flip camera"
               >
                 <span className="text-xs font-semibold tracking-wide">FLIP</span>

@@ -10,6 +10,8 @@ const GoLivePage: React.FC = () => {
   const [sessionInput, setSessionInput] = useState('');
   const [showConnector, setShowConnector] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
+  const [isPortrait, setIsPortrait] = useState(false);
+  const [showOrientationHint, setShowOrientationHint] = useState(true);
 
   useEffect(() => {
     // Prevent page scrolling while on GoLive
@@ -39,6 +41,26 @@ const GoLivePage: React.FC = () => {
     };
 
     lockOrientation();
+  }, []);
+
+  useEffect(() => {
+    const updateOrientation = () => {
+      if (typeof window === 'undefined') return;
+      const portrait = window.innerHeight > window.innerWidth;
+      setIsPortrait(portrait);
+      if (!portrait) {
+        setShowOrientationHint(false);
+      }
+    };
+
+    updateOrientation();
+    window.addEventListener('resize', updateOrientation);
+    window.addEventListener('orientationchange', updateOrientation);
+
+    return () => {
+      window.removeEventListener('resize', updateOrientation);
+      window.removeEventListener('orientationchange', updateOrientation);
+    };
   }, []);
 
   useEffect(() => {
@@ -115,8 +137,20 @@ const GoLivePage: React.FC = () => {
           optionally connects to controller when a session is set. */}
       <Display sessionId={effectiveSessionId} />
 
+      {showOrientationHint && isPortrait && (
+        <div
+          className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black/75 px-6 text-center text-white"
+          onClick={() => setShowOrientationHint(false)}
+        >
+          <h2 className="text-xl font-semibold mb-2">Rotate your phone</h2>
+          <p className="text-sm text-gray-300">
+            For the best GoLive view, hold your device in landscape.
+          </p>
+        </div>
+      )}
+
       {/* Top Header Bar - session connector and back button */}
-      <div className="absolute top-0 inset-x-0 z-50 flex items-center justify-start gap-2 px-4 py-2">
+      <div className="absolute top-0 inset-x-0 z-50 hidden md:flex items-center justify-start gap-2 px-4 py-2">
         <button
           onClick={openConnector}
           className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
