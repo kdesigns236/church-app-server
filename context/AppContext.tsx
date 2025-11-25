@@ -284,8 +284,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setChatMessages(chatMessagesData);
             localStorage.setItem('chatMessages', JSON.stringify(chatMessagesData));
           } else if (chatMessagesRes.ok && Array.isArray(chatMessagesData) && chatMessagesData.length === 0) {
-            setChatMessages([]);
-            localStorage.setItem('chatMessages', JSON.stringify([]));
+            const existingChat = localStorage.getItem('chatMessages');
+            if (!existingChat || existingChat === '[]') {
+              setChatMessages([]);
+              localStorage.setItem('chatMessages', JSON.stringify([]));
+            }
           }
           
           // Update last sync timestamp only if we successfully fetched

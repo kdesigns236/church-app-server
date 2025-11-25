@@ -12,6 +12,7 @@ const youtubeLiveRoutes = require('./routes/youtubeLiveRoutes');
 
 // Lazy load database
 let database;
+let useDatabase = false;
 
 const app = express();
 const server = http.createServer(app);
@@ -166,13 +167,42 @@ async function saveDataToFile() {
   }
 }
 
+// Save data to database (if configured) or file
+async function saveData() {
+  if (useDatabase) {
+    if (!database) {
+      database = require('./database');
+    }
+
+    for (const [key, value] of Object.entries(dataStore)) {
+      try {
+        await database.setData(key, value);
+      } catch (err) {
+        console.error(`[Server] Error saving ${key} to database:`, err.message || err);
+      }
+    }
+  } else {
+    await saveDataToFile();
+  }
+}
+
 // Initialize data store
 async function initializeData() {
   try {
-    // Load data from file first
-    await loadDataFromFile();
-    
-    // Start server immediately - move admin user creation to after server start
+    if (!database) {
+      database = require('./database');
+    }
+
+    useDatabase = await database.initDatabase();
+
+    if (useDatabase) {
+      dataStore = await database.getAllData();
+      console.log('[Server] Using PostgreSQL for data storage');
+    } else {
+      await loadDataFromFile();
+      console.log('[Server] Using data.json for data storage');
+    }
+
     return true;
   } catch (error) {
     console.error('[Server] Error initializing data:', error);
@@ -196,7 +226,8 @@ async function ensureAdminUser() {
       createdAt: new Date().toISOString()
     };
     dataStore.users = [adminUser];
-    await saveDataToFile();
+    await saveData();
+
     console.log('[Server] Default admin user created');
   }
 }
@@ -317,7 +348,7 @@ app.post('/api/auth/register', async (req, res) => {
     };
 
     dataStore.users = users.concat(newUser);
-    await saveDataToFile();
+    await saveData();
 
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email, role: newUser.role },
@@ -378,7 +409,7 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
     }
 
     // Save to file
-    await saveDataToFile();
+    await saveData();
 
     // Broadcast update to all connected clients
     broadcastUpdate(syncData);
@@ -426,7 +457,7 @@ app.post('/api/sermons', verifyAdmin, async (req, res) => {
     dataStore.sermons.unshift(newSermon);
     
     // Save to file
-    await saveDataToFile();
+    await saveData();
     
     // Broadcast update
     broadcastUpdate({ type: 'sermons', action: 'add', data: newSermon });

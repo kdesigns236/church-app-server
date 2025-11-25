@@ -413,12 +413,9 @@ const AdminPage: React.FC = () => {
                         setUploadingVideo(false);
                         setUploadProgress(100);
                         
-                        // Show success message
-                        alert('✅ Sermon uploaded successfully!\n\nThe page will refresh to show the new sermon.');
-                        
-                        // Close modal and reload page to show new sermon
+                        // Show success message and close modal (no full page refresh needed)
+                        alert('✅ Sermon uploaded successfully!');
                         handleCloseModal();
-                        window.location.reload();
                         return; // Exit early since Firebase service already saved to database
                         
                     } catch (error) {
