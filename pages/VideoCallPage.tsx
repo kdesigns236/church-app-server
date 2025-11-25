@@ -247,12 +247,13 @@ const VideoCallPage: React.FC = () => {
       
       // Get user media (camera + microphone)
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          facingMode: facingMode,
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
+        video: {
+          facingMode,
+          width: { ideal: 640, max: 960 },
+          height: { ideal: 360, max: 540 },
+          frameRate: { max: 24 },
         },
-        audio: true
+        audio: true,
       });
 
       console.log('[VideoCall] ✅ Got media stream');
@@ -511,22 +512,24 @@ const VideoCallPage: React.FC = () => {
       try {
         console.log(`[VideoCall] Requesting camera with facingMode: ${newFacingMode}`);
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { 
+          video: {
             facingMode: newFacingMode, // Use ideal, not exact
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 640, max: 960 },
+            height: { ideal: 360, max: 540 },
+            frameRate: { max: 24 },
           },
-          audio: true
+          audio: true,
         });
       } catch (error) {
         console.error('[VideoCall] Failed with ideal facingMode, trying without constraints:', error);
         // Fallback: try without facingMode constraint
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 640, max: 960 },
+            height: { ideal: 360, max: 540 },
+            frameRate: { max: 24 },
           },
-          audio: true
+          audio: true,
         });
       }
       
@@ -593,12 +596,13 @@ const VideoCallPage: React.FC = () => {
         console.log('[VideoCall] Attempting to restore previous stream...');
         try {
           const fallbackStream = await navigator.mediaDevices.getUserMedia({
-            video: { 
-              facingMode: facingMode,
-              width: { ideal: 1280 },
-              height: { ideal: 720 }
+            video: {
+              facingMode,
+              width: { ideal: 640, max: 960 },
+              height: { ideal: 360, max: 540 },
+              frameRate: { max: 24 },
             },
-            audio: true
+            audio: true,
           });
           localStreamRef.current = fallbackStream;
           if (localVideoRef.current) {

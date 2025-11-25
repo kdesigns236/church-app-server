@@ -137,8 +137,17 @@ const App: React.FC = () => {
     useEffect(() => {
         if (!isAuthenticated) return;
 
-        const handleMeetingNotification = (data: { userName: string; roomId: string; message: string }) => {
+        const handleMeetingNotification = async (data: { userName: string; roomId: string; message: string }) => {
             console.log('[App] Meeting notification:', data);
+
+            // Show native/local notification on the device
+            try {
+                await localNotificationService.showMeetingNotification(data.userName, data.roomId);
+            } catch (err) {
+                console.error('[App] Failed to show meeting local notification:', err);
+            }
+
+            // Also show in-app banner while app is open
             setMeetingNotification(data);
             
             // Auto-hide after 10 seconds

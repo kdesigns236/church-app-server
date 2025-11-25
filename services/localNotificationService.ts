@@ -128,6 +128,33 @@ export const localNotificationService = {
     }
   },
 
+  // Show a meeting notification
+  async showMeetingNotification(userName: string, roomId: string): Promise<void> {
+    try {
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            title: `📹 Meeting started`,
+            body: `${userName} is in a meeting. Tap to join.`,
+            id: Date.now(),
+            schedule: { at: new Date(Date.now() + 100) },
+            sound: 'default',
+            smallIcon: 'ic_stat_icon_config_sample',
+            iconColor: '#5B3A9D',
+            extra: {
+              type: 'meeting',
+              roomId,
+            },
+          },
+        ],
+      });
+
+      console.log('[LocalNotifications] Meeting notification sent');
+    } catch (error) {
+      console.error('[LocalNotifications] Failed to show meeting notification:', error);
+    }
+  },
+
   // Handle notification click
   setupNotificationHandlers(): void {
     LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
@@ -148,6 +175,9 @@ export const localNotificationService = {
           break;
         case 'announcement':
           window.location.hash = '/announcements';
+          break;
+        case 'meeting':
+          window.location.hash = '/video-call';
           break;
         default:
           window.location.hash = '/';

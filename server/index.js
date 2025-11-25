@@ -235,12 +235,137 @@ async function ensureAdminUser() {
 // Store active Socket.io connections
 const connectedClients = new Map();
 
-// Socket.io connection handling
+// Video call rooms and user data (for /video-call meetings)
+const videoCallRooms = new Map(); // roomId -> Set of socket IDs
+const socketUserData = new Map(); // socketId -> { roomId, userName }
+
+// Socket.io connection handling (real-time updates, ProStream, and video calls)
 io.on('connection', (socket) => {
-  console.log(`[Socket.io] Client connected: ${socket.id}`);
+  console.log(`[Socket.io] Client connected: ${socket.id}. Total clients: ${connectedClients.size + 1}`);
   connectedClients.set(socket.id, socket);
 
+  // Send initial connection confirmation
   socket.emit('connected', { message: 'Connected to sync server' });
+
+  // ==================== VIDEO CALL HANDLERS ====================
+  // Join a video call room
+  socket.on('join-room', ({ roomId, userName }) => {
+    try {
+      console.log(`[VideoCall] ${userName} (${socket.id}) joining room: ${roomId}`);
+
+      // Create room if it doesn't exist
+      if (!videoCallRooms.has(roomId)) {
+        videoCallRooms.set(roomId, new Set());
+        console.log(`[VideoCall] Created new room: ${roomId}`);
+      }
+
+      const room = videoCallRooms.get(roomId);
+      console.log('[VideoCall] Current participants in room before join:', room.size);
+
+      // Send list of existing participants to new user FIRST
+      const existingParticipants = Array.from(room)
+        .filter(id => id !== socket.id)
+        .map(id => ({
+          userId: id,
+          userName: socketUserData.get(id)?.userName || 'Unknown',
+        }));
+
+      console.log(`[VideoCall] Sending ${existingParticipants.length} existing participants to ${userName}`);
+      socket.emit('existing-participants', existingParticipants);
+
+      // Notify existing participants about new user
+      room.forEach(participantId => {
+        console.log(`[VideoCall] Notifying ${participantId} about new user ${userName}`);
+        io.to(participantId).emit('user-joined', {
+          userId: socket.id,
+          userName,
+        });
+      });
+
+      // Add user to room
+      room.add(socket.id);
+      socket.join(roomId);
+      socketUserData.set(socket.id, { roomId, userName });
+
+      console.log(`[VideoCall] Room ${roomId} now has ${room.size} participants`);
+    } catch (err) {
+      console.error('[VideoCall] Error handling join-room:', err);
+    }
+  });
+
+  // WebRTC signaling: offer
+  socket.on('offer', ({ offer, targetUserId }) => {
+    try {
+      console.log(`[VideoCall] Forwarding offer from ${socket.id} to ${targetUserId}`);
+      io.to(targetUserId).emit('offer', {
+        offer,
+        fromUserId: socket.id,
+        fromUserName: socketUserData.get(socket.id)?.userName || 'Unknown',
+      });
+    } catch (err) {
+      console.error('[VideoCall] Error forwarding offer:', err);
+    }
+  });
+
+  // WebRTC signaling: answer
+  socket.on('answer', ({ answer, targetUserId }) => {
+    try {
+      console.log(`[VideoCall] Forwarding answer from ${socket.id} to ${targetUserId}`);
+      io.to(targetUserId).emit('answer', {
+        answer,
+        fromUserId: socket.id,
+      });
+    } catch (err) {
+      console.error('[VideoCall] Error forwarding answer:', err);
+    }
+  });
+
+  // WebRTC signaling: ICE candidate
+  socket.on('ice-candidate', ({ candidate, targetUserId }) => {
+    try {
+      if (!candidate) return;
+      console.log(`[VideoCall] Forwarding ICE candidate from ${socket.id} to ${targetUserId}`);
+      io.to(targetUserId).emit('ice-candidate', {
+        candidate,
+        fromUserId: socket.id,
+      });
+    } catch (err) {
+      console.error('[VideoCall] Error forwarding ICE candidate:', err);
+    }
+  });
+
+  // Meeting started notification
+  socket.on('meeting-started', ({ userName, roomId }) => {
+    try {
+      console.log(`[VideoCall] ${userName} started a meeting in ${roomId}`);
+
+      // Broadcast to all connected clients except sender
+      socket.broadcast.emit('meeting-notification', {
+        userName,
+        roomId,
+        message: `${userName} is in a meeting. Join now!`,
+      });
+
+      // Optional hook for native notifications
+      socket.broadcast.emit('native-push-notification', {
+        title: 'Meeting Started',
+        body: `${userName} is in a meeting. Join now!`,
+        data: {
+          type: 'meeting',
+          roomId,
+          userName,
+          route: '/video-call',
+        },
+      });
+    } catch (err) {
+      console.error('[VideoCall] Error broadcasting meeting-started:', err);
+    }
+  });
+
+  // Explicit leave-room from client
+  socket.on('leave-room', () => {
+    handleUserLeave(socket);
+  });
 
   // --- Pro Stream signaling support (controller / camera / display) ---
   socket.on('prostream:join', ({ sessionId, role, slotId }) => {
@@ -269,7 +394,8 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     connectedClients.delete(socket.id);
-    console.log(`[Socket.io] Client disconnected: ${socket.id}`);
+    console.log(`[Socket.io] Client disconnected: ${socket.id}. Total clients: ${connectedClients.size}`);
+    handleUserLeave(socket);
   });
 });
 
@@ -278,6 +404,34 @@ function broadcastUpdate(syncData) {
   // Emit to all connected clients
   io.emit('sync_update', syncData);
   console.log(`[Socket.io] Broadcasted ${syncData.type} ${syncData.action} to ${connectedClients.size} clients`);
+}
+
+// Handle cleanup when a user leaves a video call room
+function handleUserLeave(socket) {
+  const userData = socketUserData.get(socket.id);
+  if (userData) {
+    const { roomId } = userData;
+    if (roomId && videoCallRooms.has(roomId)) {
+      const room = videoCallRooms.get(roomId);
+      room.delete(socket.id);
+
+      // Notify others in the room
+      socket.to(roomId).emit('user-left', {
+        userId: socket.id,
+      });
+
+      console.log(`[VideoCall] ${socket.id} left room ${roomId}. ${room.size} participants remaining`);
+
+      // Clean up empty rooms
+      if (room.size === 0) {
+        videoCallRooms.delete(roomId);
+        console.log(`[VideoCall] Room ${roomId} deleted (empty)`);
+      }
+    }
+
+    // Clean up user data
+    socketUserData.delete(socket.id);
+  }
 }
 
 // API Routes
