@@ -27,6 +27,21 @@ const GoLivePage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const lockOrientation = async () => {
+      try {
+        const anyScreen: any = window.screen as any;
+        if (anyScreen.orientation && anyScreen.orientation.lock) {
+          await anyScreen.orientation.lock('landscape');
+        }
+      } catch (err) {
+        console.warn('Orientation lock not supported for GoLive.', err);
+      }
+    };
+
+    lockOrientation();
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const raw = params.get('session') || localStorage.getItem('pro_stream_session') || '';
     if (raw) {
