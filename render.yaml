@@ -3,7 +3,12 @@ services:
     name: church-app-server
     env: node
     plan: free
-    buildCommand: npm --prefix server install
+    buildCommand: |
+      apt-get update && \
+      apt-get install -y ffmpeg && \
+      apt-get clean && \
+      rm -rf /var/lib/apt/lists/* && \
+      npm --prefix server install
     startCommand: node server/index.js
     healthCheckPath: /api/health
     envVars:
