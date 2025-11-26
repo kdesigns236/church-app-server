@@ -60,7 +60,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   const [localZoom] = useState<number>(1);
   const [localFacingMode, setLocalFacingMode] = useState<'environment' | 'user'>('environment');
   const localFacingModeRef = useRef<'environment' | 'user'>('environment');
-  const mobileVideoRef = useRef<HTMLVideoElement | null>(null);
 
   // Detect mobile-sized layout so we can show a simplified camera UI
   useEffect(() => {
@@ -129,18 +128,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
   useEffect(() => {
     sourceModeRef.current = sourceMode;
   }, [sourceMode]);
-  
-
-  useEffect(() => {
-    if (!isMobileLayout) return;
-    const video = mobileVideoRef.current;
-    if (!video) return;
-    if (activeStream) {
-      (video as any).srcObject = activeStream;
-    } else {
-      (video as any).srcObject = null;
-    }
-  }, [activeStream, isMobileLayout]);
 
 
   useEffect(() => {
@@ -480,33 +467,22 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       existing.getTracks().forEach(track => track.stop());
       localStreamRef.current = null;
     }
-    setActiveStream(null);
     activateLocalIfNeeded();
   };
 
   return (
     <div className="h-screen w-screen bg-black relative">
-      {isMobileLayout ? (
-        <video
-          ref={mobileVideoRef}
-          autoPlay
-          playsInline
-          muted
-          className="w-full h-full object-cover"
-        />
-      ) : (
-        <VideoPreview
-          stream={activeStream}
-          isLive={isLive}
-          lowerThirdConfig={lowerThirdConfig}
-          lowerThirdAnimationKey={lowerThirdAnimationKey}
-          announcementConfig={announcementConfig}
-          lyricsConfig={lyricsConfig}
-          bibleVerseConfig={bibleVerseConfig}
-          rotate90={rotate90}
-          zoomScale={sourceMode === 'controller' ? (remoteZoom || undefined) : localZoom || undefined}
-        />
-      )}
+      <VideoPreview
+        stream={activeStream}
+        isLive={isLive}
+        lowerThirdConfig={lowerThirdConfig}
+        lowerThirdAnimationKey={lowerThirdAnimationKey}
+        announcementConfig={announcementConfig}
+        lyricsConfig={lyricsConfig}
+        bibleVerseConfig={bibleVerseConfig}
+        rotate90={rotate90}
+        zoomScale={sourceMode === 'controller' ? (remoteZoom || undefined) : localZoom || undefined}
+      />
       <ProgramOutputCanvas
         sourceStream={activeStream}
         lowerThirdConfig={lowerThirdConfig}
@@ -622,15 +598,22 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
             )}
           </div>
 
-          {/* Bottom controls: keep only a simple Flip button on mobile */}
+          {/* Bottom controls: FLIP + quick access to GoLive panel on mobile */}
           <div className="w-full px-6 pb-8 flex flex-col items-center gap-5 pointer-events-auto">
-            <div className="flex items-center justify-center">
+            <div className="flex items-center justify-center gap-4">
               <button
                 onClick={handleFlipCamera}
                 className="w-16 h-16 rounded-full flex items-center justify-center bg-black/70 backdrop-blur-sm border border-white/25 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] hover:bg-black/85 active:scale-95 transition-all duration-200"
                 aria-label="Flip camera"
               >
                 <span className="text-xs font-semibold tracking-wide">FLIP</span>
+              </button>
+              <button
+                onClick={() => setControlsVisible(v => !v)}
+                className="px-4 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/25 text-white text-[11px] font-semibold uppercase tracking-wide shadow-[0_0_16px_rgba(148,163,184,0.9)] hover:bg-black/85 active:scale-95 transition-all duration-200"
+                aria-label="Toggle GoLive panel"
+              >
+                GOLIVE
               </button>
             </div>
           </div>
