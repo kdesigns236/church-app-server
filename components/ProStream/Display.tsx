@@ -475,6 +475,12 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       localFacingModeRef.current === 'environment' ? 'user' : 'environment';
     localFacingModeRef.current = nextMode;
     setLocalFacingMode(nextMode);
+    const existing = localStreamRef.current;
+    if (existing) {
+      existing.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    setActiveStream(null);
     activateLocalIfNeeded();
   };
 
@@ -513,7 +519,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       />
 
       {/* Desktop GoLive controls */}
-      {!isMobileLayout && controlsVisible && (
+      {controlsVisible && (
         <div className="absolute bottom-4 left-4 z-30 bg-black/70 backdrop-blur-sm px-4 py-3 rounded-lg border border-gray-700 max-w-md">
           <div className="space-y-2">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -594,7 +600,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       )}
 
       {/* Desktop toggle button for advanced GoLive panel */}
-      {!isMobileLayout && (
+      {(
         <button
           onClick={() => setControlsVisible(v => !v)}
           className="absolute bottom-4 right-4 z-30 px-3 py-1.5 rounded-full bg-black/70 backdrop-blur-sm border border-gray-600 text-[11px] font-semibold uppercase tracking-wide text-gray-100 hover:bg-black/80"
