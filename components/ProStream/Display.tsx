@@ -603,26 +603,6 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
               </span>
             )}
           </div>
-
-          {/* Bottom controls: FLIP + quick access to GoLive panel on mobile */}
-          <div className="w-full px-6 pb-8 flex flex-col items-center gap-5 pointer-events-auto">
-            <div className="flex items-center justify-center gap-4">
-              <button
-                onClick={handleFlipCamera}
-                className="w-16 h-16 rounded-full flex items-center justify-center bg-black/70 backdrop-blur-sm border border-white/25 text-white shadow-[0_0_20px_rgba(59,130,246,0.9)] hover:bg-black/85 active:scale-95 transition-all duration-200"
-                aria-label="Flip camera"
-              >
-                <span className="text-xs font-semibold tracking-wide">FLIP</span>
-              </button>
-              <button
-                onClick={() => setControlsVisible(v => !v)}
-                className="px-4 py-2 rounded-full bg-black/70 backdrop-blur-sm border border-white/25 text-white text-[11px] font-semibold uppercase tracking-wide shadow-[0_0_16px_rgba(148,163,184,0.9)] hover:bg-black/85 active:scale-95 transition-all duration-200"
-                aria-label="Toggle GoLive panel"
-              >
-                GOLIVE
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>
