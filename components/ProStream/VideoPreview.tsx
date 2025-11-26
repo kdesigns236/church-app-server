@@ -13,6 +13,7 @@ interface VideoPreviewProps {
   bibleVerseConfig: BibleVerseConfig;
   rotate90?: boolean;
   zoomScale?: number | null;
+  unmirrorForUserCamera?: boolean;
 }
 
 
@@ -161,7 +162,7 @@ const BibleVerseOverlay: React.FC<{ config: BibleVerseConfig }> = ({ config }) =
 
 
 
-const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, rotate90, zoomScale }) => {
+const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdConfig, lowerThirdAnimationKey, announcementConfig, lyricsConfig, bibleVerseConfig, rotate90, zoomScale, unmirrorForUserCamera }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [autoRotate90, setAutoRotate90] = React.useState(false);
   const [scale, setScale] = React.useState(1);
@@ -206,7 +207,7 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
 
         const scaleX = cw / displayW;
         const scaleY = ch / displayH;
-        const coverScale = Math.max(scaleX, scaleY);
+        const coverScale = Math.max(scaleX, scaleY, 1);
 
         setScale(coverScale || 1);
       } catch {
@@ -218,11 +219,13 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
     updateRotationAndScale();
     video.addEventListener('loadedmetadata', updateRotationAndScale);
     video.addEventListener('resize', updateRotationAndScale as any);
+    window.addEventListener('resize', updateRotationAndScale);
 
 
     return () => {
       video.removeEventListener('loadedmetadata', updateRotationAndScale);
       video.removeEventListener('resize', updateRotationAndScale as any);
+      window.removeEventListener('resize', updateRotationAndScale);
     };
   }, [stream, rotate90]);
 
@@ -271,8 +274,11 @@ const VideoPreview: React.FC<VideoPreviewProps> = ({ stream, isLive, lowerThirdC
         }
         const zoom = zoomScale && zoomScale > 1 ? zoomScale : 1;
         const totalScale = (scale || 1) * zoom;
-        if (totalScale && totalScale !== 1) {
-          transforms.push(`scale(${totalScale})`);
+        const mirrorX = unmirrorForUserCamera ? -1 : 1;
+        const sx = totalScale * mirrorX;
+        const sy = totalScale;
+        if (totalScale && totalScale !== 1 || mirrorX === -1) {
+          transforms.push(`scale(${sx}, ${sy})`);
         }
 
         const videoStyle = {

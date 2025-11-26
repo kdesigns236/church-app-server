@@ -470,6 +470,11 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
     activateLocalIfNeeded();
   };
 
+  (window as any).__goliveDisplayControls = {
+    flipCamera: handleFlipCamera,
+    togglePanel: () => setControlsVisible(v => !v),
+  };
+
   return (
     <div className="h-screen w-screen bg-black relative">
       <VideoPreview
@@ -482,6 +487,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
         bibleVerseConfig={bibleVerseConfig}
         rotate90={rotate90}
         zoomScale={sourceMode === 'controller' ? (remoteZoom || undefined) : localZoom || undefined}
+        unmirrorForUserCamera={sourceMode === 'local' && localFacingMode === 'user'}
       />
       <ProgramOutputCanvas
         sourceStream={activeStream}

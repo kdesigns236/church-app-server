@@ -131,6 +131,18 @@ const GoLivePage: React.FC = () => {
   const effectiveSessionId = displaySessionId ?? 'golive-standalone';
   const shortSession = (effectiveSessionId.split(':')[1] || effectiveSessionId);
 
+  const handleHeaderFlip = () => {
+    try {
+      (window as any).__goliveDisplayControls?.flipCamera?.();
+    } catch {}
+  };
+
+  const handleHeaderToggleGoLive = () => {
+    try {
+      (window as any).__goliveDisplayControls?.togglePanel?.();
+    } catch {}
+  };
+
   return (
     <div className="h-screen w-screen bg-black relative overflow-hidden touch-none">
       {/* Main GoLive display - works standalone using local camera, and
@@ -149,7 +161,7 @@ const GoLivePage: React.FC = () => {
         </div>
       )}
 
-      {/* Top Header Bar - session connector and back button */}
+      {/* Top Header Bar - session connector, back and quick controls */}
       <div className="absolute top-0 inset-x-0 z-50 flex items-center justify-start gap-2 px-4 py-2">
         <button
           onClick={openConnector}
@@ -164,6 +176,20 @@ const GoLivePage: React.FC = () => {
           title="Go back"
         >
           Back
+        </button>
+        <button
+          onClick={handleHeaderFlip}
+          className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
+          title="Flip camera"
+        >
+          Flip
+        </button>
+        <button
+          onClick={handleHeaderToggleGoLive}
+          className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
+          title="Show GoLive controls"
+        >
+          GoLive
         </button>
       </div>
 

@@ -152,7 +152,7 @@ const ProgramOutputCanvas: React.FC<ProgramOutputCanvasProps> = ({
 
         const scaleX = width / displayW;
         const scaleY = height / displayH;
-        const coverScale = Math.max(scaleX, scaleY);
+        const coverScale = Math.max(scaleX, scaleY, 1);
         const zoom = zoomScale && zoomScale > 1 ? zoomScale : 1;
         const totalScale = coverScale * zoom;
 
