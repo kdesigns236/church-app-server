@@ -607,10 +607,7 @@ const Display: React.FC<DisplayProps> = ({ sessionId }) => {
       {isMobileLayout && (
         <div className="absolute inset-0 z-30 flex flex-col justify-between items-center pointer-events-none">
           {/* Top area could be used later for indicators; keep minimal for now */}
-          <div className="w-full flex justify-between items-center px-4 pt-6 text-xs text-gray-200 pointer-events-auto">
-            <span className="bg-black/40 px-3 py-1 rounded-full border border-white/10">
-              {sourceMode === 'controller' ? 'Controller Feed' : 'Phone Camera'}
-            </span>
+          <div className="w-full flex justify-end items-center px-4 pt-6 text-xs text-gray-200 pointer-events-auto">
             {isLive && (
               <span className="flex items-center gap-2 bg-red-600/80 px-3 py-1 rounded-full text-[11px] font-semibold uppercase tracking-wide shadow-lg">
                 <span className="w-2 h-2 rounded-full bg-white animate-pulse" />

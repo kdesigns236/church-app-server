@@ -132,7 +132,7 @@ const GoLivePage: React.FC = () => {
   const shortSession = (effectiveSessionId.split(':')[1] || effectiveSessionId);
 
   return (
-    <div className="h-screen w-screen bg-black relative overflow-hidden">
+    <div className="h-screen w-screen bg-black relative overflow-hidden touch-none">
       {/* Main GoLive display - works standalone using local camera, and
           optionally connects to controller when a session is set. */}
       <Display sessionId={effectiveSessionId} />
@@ -150,7 +150,7 @@ const GoLivePage: React.FC = () => {
       )}
 
       {/* Top Header Bar - session connector and back button */}
-      <div className="absolute top-0 inset-x-0 z-50 hidden md:flex items-center justify-start gap-2 px-4 py-2">
+      <div className="absolute top-0 inset-x-0 z-50 flex items-center justify-start gap-2 px-4 py-2">
         <button
           onClick={openConnector}
           className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
