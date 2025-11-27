@@ -23,8 +23,13 @@ export interface StreamStats {
 }
 
 // Base URL for the streaming bridge (Node sync server).
-// Falls back to localhost for development if VITE_SYNC_SERVER_URL is not set.
-const STREAM_API_BASE = ((import.meta as any).env?.VITE_SYNC_SERVER_URL as string | undefined) || 'http://localhost:3001';
+// Prefer VITE_SYNC_SERVER_URL; otherwise fall back to VITE_API_URL (without /api)
+// and finally to the deployed Render server URL. This avoids hitting localhost:3001
+// in production builds on real devices.
+const STREAM_API_BASE =
+  ((import.meta as any).env?.VITE_SYNC_SERVER_URL as string | undefined) ||
+  (((import.meta as any).env?.VITE_API_URL as string | undefined)?.replace(/\/api\/?$/, '')) ||
+  'https://church-app-server.onrender.com';
 
 const buildStreamUrl = (path: string): string => {
   const base = STREAM_API_BASE.replace(/\/+$/, '');
@@ -49,9 +54,10 @@ class LiveStreamService {
   // Initialize camera and microphone access
   async initializeMedia(constraints: MediaStreamConstraints = {
     video: { 
-      width: { ideal: 1280 }, 
-      height: { ideal: 720 },
-      frameRate: { ideal: 30 }
+      // Request a lower resolution to reduce CPU and bandwidth requirements.
+      width: { ideal: 854 }, 
+      height: { ideal: 480 },
+      frameRate: { ideal: 24, max: 30 }
     },
     audio: {
       echoCancellation: true,
@@ -101,10 +107,22 @@ class LiveStreamService {
     if (!this.mediaStream) return;
 
     try {
-      const constraints: MediaStreamConstraints = {};
-      
+      const constraints: MediaStreamConstraints = {
+        // Request a lower resolution to reduce CPU and bandwidth requirements.
+        video: {
+          width: { ideal: 854 },
+          height: { ideal: 480 },
+          frameRate: { ideal: 24, max: 30 }
+        },
+        audio: true,
+      };
+
       if (type === 'video') {
-        constraints.video = { deviceId: { exact: deviceId } };
+        constraints.video = { 
+          width: { ideal: 854 }, 
+          height: { ideal: 480 },
+          frameRate: { ideal: 24, max: 30 }
+        };
         constraints.audio = true; // Keep existing audio
       } else {
         constraints.audio = { deviceId: { exact: deviceId } };
