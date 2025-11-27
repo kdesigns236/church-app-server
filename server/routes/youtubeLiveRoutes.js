@@ -54,17 +54,18 @@ router.post('/start', express.json(), (req, res) => {
       '-i', 'pipe:0',
       // Video encoding settings (even lower bitrate for very slow
       // upload connections). Use ultrafast preset and downscale to
-      // 480p to reduce CPU load on the streaming PC.
+      // 360p to reduce CPU load on the streaming PC.
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
-      '-vf', 'scale=-2:480',
-      '-b:v', '800k',
-      '-maxrate', '900k',
-      '-bufsize', '1800k',
+      // Lower resolution and framerate for low-CPU environments
+      '-vf', 'scale=-2:360',
+      '-r', '20',
+      '-g', '40', // Keyframe interval (2x framerate)
+      // Bitrate settings optimized for smoothness over quality
+      '-b:v', '600k',
+      '-maxrate', '750k',
+      '-bufsize', '1500k',
       '-pix_fmt', 'yuv420p',
-      // Force a standard framerate and 2-second keyframe interval
-      '-r', '24',
-      '-g', '48',
       // Audio encoding settings (transcode incoming Opus to AAC)
       '-c:a', 'aac',
       '-b:a', '64k',

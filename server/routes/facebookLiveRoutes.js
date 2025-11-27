@@ -84,13 +84,15 @@ router.post('/start', express.json(), async (req, res) => {
       // ultrafast preset and downscale to 480p to reduce CPU load.
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
-      '-vf', 'scale=-2:480',
-      '-b:v', '800k',
-      '-maxrate', '900k',
-      '-bufsize', '1800k',
+      // Lower resolution and framerate for low-CPU environments
+      '-vf', 'scale=-2:360',
+      '-r', '20',
+      '-g', '40', // Keyframe interval (2x framerate)
+      // Bitrate settings optimized for smoothness over quality
+      '-b:v', '600k',
+      '-maxrate', '750k',
+      '-bufsize', '1500k',
       '-pix_fmt', 'yuv420p',
-      '-r', '24',
-      '-g', '48',
       // Audio encoding
       '-c:a', 'aac',
       '-b:a', '64k',
