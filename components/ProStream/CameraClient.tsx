@@ -390,18 +390,15 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
         .catch((err: any) => console.warn('Failed to apply zoom value', err));
     }
 
-
-    if (!hardwareZoom) {
-      const socket = socketRef.current;
-      if (socket && shortSessionIdRef.current) {
-        socket.emit('prostream:signal', {
-          sessionId: shortSessionIdRef.current,
-          type: 'camera-zoom',
-          slotId,
-          payload: { zoom: value },
-          target: 'controller',
-        });
-      }
+    const socket = socketRef.current;
+    if (socket && shortSessionIdRef.current) {
+      socket.emit('prostream:signal', {
+        sessionId: shortSessionIdRef.current,
+        type: 'camera-zoom',
+        slotId,
+        payload: { zoom: value },
+        target: 'controller',
+      });
     }
   };
 
@@ -436,7 +433,7 @@ const CameraClient: React.FC<CameraClientProps> = ({ sessionId, slotId, onExit }
 
 
   const videoStyle: React.CSSProperties = {};
-  if (!hardwareZoom && zoom !== null && zoom > 1) {
+  if (zoom !== null && zoom > 1) {
     videoStyle.transform = `scale(${zoom})`;
     videoStyle.transformOrigin = 'center center';
   }

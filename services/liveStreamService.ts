@@ -54,9 +54,9 @@ class LiveStreamService {
   // Initialize camera and microphone access
   async initializeMedia(constraints: MediaStreamConstraints = {
     video: { 
-      // Request a lower resolution to reduce CPU and bandwidth requirements.
-      width: { ideal: 854 }, 
-      height: { ideal: 480 },
+      // Request a lower resolution (360p) to further reduce CPU and bandwidth requirements.
+      width: { ideal: 640 }, 
+      height: { ideal: 360 },
       frameRate: { ideal: 24, max: 30 }
     },
     audio: {
@@ -108,10 +108,10 @@ class LiveStreamService {
 
     try {
       const constraints: MediaStreamConstraints = {
-        // Request a lower resolution to reduce CPU and bandwidth requirements.
+        // Request a lower resolution (360p) to further reduce CPU and bandwidth requirements.
         video: {
-          width: { ideal: 854 },
-          height: { ideal: 480 },
+          width: { ideal: 640 },
+          height: { ideal: 360 },
           frameRate: { ideal: 24, max: 30 }
         },
         audio: true,
@@ -119,8 +119,8 @@ class LiveStreamService {
 
       if (type === 'video') {
         constraints.video = { 
-          width: { ideal: 854 }, 
-          height: { ideal: 480 },
+          width: { ideal: 640 }, 
+          height: { ideal: 360 },
           frameRate: { ideal: 24, max: 30 }
         };
         constraints.audio = true; // Keep existing audio
@@ -172,7 +172,7 @@ class LiveStreamService {
         mimeType: 'video/webm;codecs=vp8,opus',
         // Target an even lower, more stable bitrate for slow upload
         // connections: ~700 kbps video + 64 kbps audio.
-        videoBitsPerSecond: 700000,
+        videoBitsPerSecond: 400000,
         audioBitsPerSecond: 64000,
       };
 
