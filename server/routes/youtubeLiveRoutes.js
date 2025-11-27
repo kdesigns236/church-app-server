@@ -57,14 +57,13 @@ router.post('/start', express.json(), (req, res) => {
       // 360p to reduce CPU load on the streaming PC.
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
-      // Lower resolution and framerate for low-CPU environments
-      '-vf', 'scale=-2:360',
-      '-r', '20',
-      '-g', '40', // Keyframe interval (2x framerate)
-      // Bitrate settings optimized for smoothness over quality
-      '-b:v', '600k',
-      '-maxrate', '750k',
-      '-bufsize', '1500k',
+      // Pass through at camera resolution (480p) to save CPU on scaling
+      '-r', '24', // Match camera framerate
+      '-g', '48', // Keyframe interval (2x framerate)
+      // Bitrate settings for 480p
+      '-b:v', '700k',
+      '-maxrate', '850k',
+      '-bufsize', '1700k',
       '-pix_fmt', 'yuv420p',
       // Audio encoding settings (transcode incoming Opus to AAC)
       '-c:a', 'aac',
