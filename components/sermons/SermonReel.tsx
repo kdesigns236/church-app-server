@@ -37,6 +37,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [duration, setDuration] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [rotation, setRotation] = useState(0);
+  const [isLandscape, setIsLandscape] = useState(false);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
 
@@ -112,6 +113,23 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     };
   }, [sermon.videoUrl]);
 
+  // Track orientation to adjust layout (fullscreen video in landscape)
+  useEffect(() => {
+    const updateOrientation = () => {
+      if (typeof window === 'undefined') return;
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+
+    updateOrientation();
+    window.addEventListener('resize', updateOrientation);
+    window.addEventListener('orientationchange', updateOrientation);
+
+    return () => {
+      window.removeEventListener('resize', updateOrientation);
+      window.removeEventListener('orientationchange', updateOrientation);
+    };
+  }, []);
+
   // Control video playback
   useEffect(() => {
     const video = videoRef.current;
@@ -163,7 +181,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     if (controlsTimeoutRef.current) {
       clearTimeout(controlsTimeoutRef.current);
     }
-    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 3000);
+    // Keep controls visible a bit longer so users can clearly see duration and progress
+    controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -193,7 +212,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             key={videoSrc}
             ref={videoRef}
             onClick={handleVideoPress}
-            className="max-w-full max-h-full w-auto h-auto transition-all duration-500 cursor-pointer"
+            className={`transition-all duration-500 cursor-pointer ${isLandscape ? 'w-full h-full object-cover' : 'max-w-full max-h-full w-auto h-auto'}`}
             style={{ transform: `rotate(${rotation}deg)` }}
             loop
             playsInline
@@ -239,14 +258,17 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           </p>
         </div>
       )}
-      
-      <SermonOverlay 
-        sermon={sermon} 
-        onLike={onLike} 
-        onComment={onComment}
-        onShare={onShare}
-        onSave={onSave} 
-      />
+
+      {/* Hide overlay UI in landscape to give more space for fullscreen video */}
+      {!isLandscape && (
+        <SermonOverlay 
+          sermon={sermon} 
+          onLike={onLike} 
+          onComment={onComment}
+          onShare={onShare}
+          onSave={onSave} 
+        />
+      )}
       
       {/* Center Play Button */}
       {!isPlaying && videoSrc && (

@@ -126,8 +126,10 @@ const PastorAiPage: React.FC = () => {
     if (!input.trim() || isLoading) return;
 
     const userMessage: AssistantMessage = { author: MessageAuthor.USER, content: input };
+    // Use only the most recent part of the history to keep responses fast
+    const recentHistory = messages.slice(-8);
     const apiHistory: AssistantMessage[] = [
-        ...messages,
+        ...recentHistory,
         {
             author: MessageAuthor.SYSTEM,
             content: `Please respond in ${language}.`

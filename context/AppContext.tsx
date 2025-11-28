@@ -673,7 +673,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (s.id === sermonId) {
               if (type === 'like') {
                 const isLiked = !s.isLiked;
-                const likes = isLiked ? s.likes + 1 : s.likes - 1;
+                const currentLikes = typeof s.likes === 'number' ? s.likes : 0;
+                const likes = isLiked ? currentLikes + 1 : Math.max(0, currentLikes - 1);
                 updatedSermon = { ...s, isLiked, likes };
                 return updatedSermon;
               }
