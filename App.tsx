@@ -125,6 +125,12 @@ const App: React.FC = () => {
     const { isLoading, isAuthenticated, user } = useAuth();
     const [meetingNotification, setMeetingNotification] = useState<{ userName: string; roomId: string; message: string } | null>(null);
     
+    // Always ask for local notification permission when the app starts
+    useEffect(() => {
+        localNotificationService.initialize();
+        localNotificationService.setupNotificationHandlers();
+    }, []);
+
     // Initialize Local Notifications when user logs in
     useEffect(() => {
         if (user) {
