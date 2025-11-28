@@ -29,6 +29,7 @@ export interface User {
   email: string;
   role: 'admin' | 'member';
   profilePictureUrl?: string;
+  isOnline?: boolean;
 }
 
 export type Priority = 'High' | 'Medium' | 'Low';

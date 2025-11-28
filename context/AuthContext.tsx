@@ -60,6 +60,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initializeAuth();
   }, []);
 
+  // Keep users list in sync with real-time updates (including online status)
+  useEffect(() => {
+    const handleSyncUpdate = (syncData: any) => {
+      if (!syncData || syncData.type !== 'users' || !syncData.action || !syncData.data) return;
+
+      setUsers(prevUsers => {
+        const current = Array.isArray(prevUsers) ? prevUsers : [];
+        switch (syncData.action) {
+          case 'add': {
+            if (current.find(u => u.id === syncData.data.id)) return current;
+            return [...current, syncData.data];
+          }
+          case 'update': {
+            return current.map(u => (u.id === syncData.data.id ? { ...u, ...syncData.data } : u));
+          }
+          case 'delete': {
+            return current.filter(u => u.id !== syncData.data.id);
+          }
+          case 'clear': {
+            return [];
+          }
+          default:
+            return current;
+        }
+      });
+    };
+
+    websocketService.addListener('sync_update', handleSyncUpdate);
+
+    return () => {
+      websocketService.removeListener('sync_update', handleSyncUpdate);
+    };
+  }, []);
+
   const login = async (email: string, pass: string): Promise<void> => {
     try {
       console.log('[AuthContext] Starting login process...');
@@ -168,7 +202,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const logout = () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (token) {
+        const socket = websocketService.getSocket();
+        socket.emit('user-offline', { token });
+      }
+    } catch (err) {
+      console.error('[AuthContext] Error emitting user-offline on logout:', err);
+    }
+
     localStorage.removeItem('authUser');
+    localStorage.removeItem('authToken');
     setUser(null);
   };
   

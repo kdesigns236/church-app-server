@@ -21,7 +21,6 @@ import PastorAiPage from './pages/PastorAiPage';
 import JsonConverterPage from './pages/JsonConverterPage';
 import VideoCallPage from './pages/VideoCallPage';
 import CameraClientPage from './pages/CameraClientPage';
-import TenziPage from './pages/TenziPage';
 import ProStreamApp from './pages/ProStreamApp';
 import { useAuth } from './hooks/useAuth';
 import { LoadingScreen } from './components/LoadingScreen';
@@ -79,7 +78,6 @@ const ProtectedRoutes: React.FC = () => {
                         <Route path="/events" element={<EventsPage />} />
                         <Route path="/bible" element={<BiblePage />} />
                         <Route path="/bible-study" element={<BibleStudyPage />} />
-                        <Route path="/tenzi" element={<TenziPage />} />
                         <Route path="/giving" element={<GivingPage />} />
                         <Route path="/golive" element={<GoLivePage />} />
                         <Route path="/prostream" element={<ProStreamApp />} />
@@ -170,6 +168,27 @@ const App: React.FC = () => {
             socket.off('meeting-notification', handleMeetingNotification);
         };
     }, [isAuthenticated]);
+
+    // Let server know when this user is online
+    useEffect(() => {
+        if (!isAuthenticated || !user) return;
+
+        const socket = websocketService.getSocket();
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        socket.emit('user-online', { token });
+
+        const handleBeforeUnload = () => {
+            socket.emit('user-offline', { token });
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+
+        return () => {
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [isAuthenticated, user]);
     
     if (isLoading) {
         return <LoadingScreen />;

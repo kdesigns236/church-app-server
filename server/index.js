@@ -239,6 +239,9 @@ const connectedClients = new Map();
 const videoCallRooms = new Map(); // roomId -> Set of socket IDs
 const socketUserData = new Map(); // socketId -> { roomId, userName }
 
+// Authenticated user presence mapping (socket.id -> userId)
+const presenceUserMap = new Map();
+
 // Socket.io connection handling (real-time updates, ProStream, and video calls)
 io.on('connection', (socket) => {
   console.log(`[Socket.io] Client connected: ${socket.id}. Total clients: ${connectedClients.size + 1}`);
@@ -246,6 +249,69 @@ io.on('connection', (socket) => {
 
   // Send initial connection confirmation
   socket.emit('connected', { message: 'Connected to sync server' });
+
+  // =============== USER PRESENCE HANDLERS ===============
+  // Mark user online when app connects and sends JWT token
+  socket.on('user-online', ({ token }) => {
+    try {
+      if (!token) return;
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const userId = decoded.id;
+      if (!userId) return;
+
+      presenceUserMap.set(socket.id, userId);
+
+      const users = dataStore.users || [];
+      const index = users.findIndex(u => u.id === userId);
+      if (index === -1) {
+        console.warn('[Presence] User not found for user-online:', userId);
+        return;
+      }
+
+      if (!users[index].isOnline) {
+        users[index].isOnline = true;
+        saveData().catch(err => console.error('[Presence] Error saving data on user-online:', err));
+
+        const { password, ...safeUser } = users[index];
+        broadcastUpdate({ type: 'users', action: 'update', data: safeUser });
+        console.log(`[Presence] Marked user ${userId} online`);
+      }
+    } catch (err) {
+      console.error('[Presence] Error handling user-online:', err.message || err);
+    }
+  });
+
+  // Explicit offline event from client (logout / app close)
+  socket.on('user-offline', ({ token }) => {
+    try {
+      if (!token) return;
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const userId = decoded.id;
+      if (!userId) return;
+
+      presenceUserMap.delete(socket.id);
+
+      const users = dataStore.users || [];
+      const index = users.findIndex(u => u.id === userId);
+      if (index === -1) {
+        console.warn('[Presence] User not found for user-offline:', userId);
+        return;
+      }
+
+      if (users[index].isOnline) {
+        users[index].isOnline = false;
+        saveData().catch(err => console.error('[Presence] Error saving data on user-offline:', err));
+
+        const { password, ...safeUser } = users[index];
+        broadcastUpdate({ type: 'users', action: 'update', data: safeUser });
+        console.log(`[Presence] Marked user ${userId} offline (explicit)`);
+      }
+    } catch (err) {
+      console.error('[Presence] Error handling user-offline:', err.message || err);
+    }
+  });
 
   // ==================== VIDEO CALL HANDLERS ====================
   // Join a video call room
@@ -395,6 +461,23 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     connectedClients.delete(socket.id);
     console.log(`[Socket.io] Client disconnected: ${socket.id}. Total clients: ${connectedClients.size}`);
+
+    // Mark presence offline on disconnect if this socket was associated with a user
+    const userId = presenceUserMap.get(socket.id);
+    if (userId) {
+      const users = dataStore.users || [];
+      const index = users.findIndex(u => u.id === userId);
+      if (index !== -1 && users[index].isOnline) {
+        users[index].isOnline = false;
+        saveData().catch(err => console.error('[Presence] Error saving data on disconnect:', err));
+
+        const { password, ...safeUser } = users[index];
+        broadcastUpdate({ type: 'users', action: 'update', data: safeUser });
+        console.log(`[Presence] Marked user ${userId} offline (disconnect)`);
+      }
+      presenceUserMap.delete(socket.id);
+    }
+
     handleUserLeave(socket);
   });
 });

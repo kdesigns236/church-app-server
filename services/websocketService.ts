@@ -93,7 +93,8 @@ class WebSocketService {
 
   // Apply update to localStorage
   private applyLocalUpdate(syncData: SyncData): void {
-    const storageKey = syncData.type;
+    // For users, keep compatibility with existing auth storage key
+    const storageKey = syncData.type === 'users' ? 'churchUserList' : syncData.type;
     
     try {
       if (syncData.action === 'clear') {

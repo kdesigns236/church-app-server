@@ -763,6 +763,22 @@ const AdminPage: React.FC = () => {
                                             <div>
                                                 <p className="font-semibold text-text-main dark:text-gray-200">{userItem.name}</p>
                                                 <p className="text-sm text-gray-500 dark:text-gray-400">{userItem.email}</p>
+                                                <p className="text-xs mt-1">
+                                                    <span
+                                                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${
+                                                        userItem.isOnline
+                                                          ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                                                          : 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+                                                      }`}
+                                                    >
+                                                      <span
+                                                        className={`w-2 h-2 rounded-full ${
+                                                          userItem.isOnline ? 'bg-green-500' : 'bg-gray-400'
+                                                        }`}
+                                                      />
+                                                      {userItem.isOnline ? 'Online' : 'Offline'}
+                                                    </span>
+                                                </p>
                                             </div>
                                         </div>
                                         <div className="mt-2 sm:mt-0">
