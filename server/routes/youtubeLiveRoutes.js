@@ -62,9 +62,9 @@ router.post('/start', express.json(), (req, res) => {
       '-r', '24', // Match camera framerate
       '-g', '24', // Keyframe interval (1x framerate for faster lock-on)
       // Bitrate settings for 480p
-      '-b:v', '500k',
-      '-maxrate', '500k',
-      '-bufsize', '500k',
+      '-b:v', '900k',
+      '-maxrate', '900k',
+      '-bufsize', '900k',
       '-pix_fmt', 'yuv420p',
       // Audio encoding settings (transcode incoming Opus to AAC)
       '-c:a', 'aac',
