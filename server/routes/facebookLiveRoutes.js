@@ -79,7 +79,7 @@ router.post('/start', express.json(), async (req, res) => {
       '-re',
       '-f', 'webm',
       '-i', 'pipe:0',
-      // Video encoding (match YouTube bridge: 24fps, 2s keyframes,
+      // Video encoding (match YouTube bridge: 24fps, 1s keyframes,
       // with low bitrate for slow upload connections). Use
       // ultrafast preset and downscale to 480p to reduce CPU load.
       '-c:v', 'libx264',
@@ -87,11 +87,11 @@ router.post('/start', express.json(), async (req, res) => {
       '-tune', 'zerolatency',
       // Pass through at camera resolution (480p) to save CPU on scaling
       '-r', '24', // Match camera framerate
-      '-g', '48', // Keyframe interval (2x framerate)
+      '-g', '24', // Keyframe interval (1x framerate for faster lock-on)
       // Bitrate settings for 480p
       '-b:v', '500k',
       '-maxrate', '500k',
-      '-bufsize', '1000k',
+      '-bufsize', '500k',
       '-pix_fmt', 'yuv420p',
       // Audio encoding
       '-c:a', 'aac',

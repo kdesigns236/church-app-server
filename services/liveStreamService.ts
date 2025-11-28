@@ -205,8 +205,8 @@ class LiveStreamService {
       this.activePlatforms = settings.platforms;
       await this.initializePlatformStreams(settings);
 
-      // Start recording in chunks once streams are ready
-      this.mediaRecorder.start(1000); // 1 second chunks
+      // Start recording in smaller chunks once streams are ready to reduce end-to-end latency
+      this.mediaRecorder.start(500); // 0.5 second chunks
       
       this.isStreaming = true;
       this.startTime = Date.now();
