@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Scanner from '../components/ProStream/Scanner';
 import Display from '../components/ProStream/Display';
  
 
 
 const GoLivePage: React.FC = () => {
+  const navigate = useNavigate();
   // Display-only refactor: connect to external controller session
   const [displaySessionId, setDisplaySessionId] = useState<string | null>(null);
   const [sessionInput, setSessionInput] = useState('');
@@ -171,7 +173,7 @@ const GoLivePage: React.FC = () => {
           Session
         </button>
         <button
-          onClick={() => window.history.back()}
+          onClick={() => navigate('/')}
           className="px-3 py-2 bg-gray-900/70 text-white border border-gray-700 rounded-md hover:bg-gray-800 text-sm"
           title="Go back"
         >

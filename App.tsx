@@ -42,7 +42,7 @@ const LoadingFallback: React.FC = () => (
 
 const PageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const location = useLocation();
-    const showFooter = !['/sermons', '/admin', '/chat', '/chat-room', '/create-post', '/bible', '/giving', '/pastor-ai', '/video-call', '/golive', '/prostream'].includes(location.pathname);
+    const showFooter = location.pathname === '/';
     
     return (
         <div className="flex flex-col min-h-screen">

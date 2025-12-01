@@ -284,7 +284,7 @@ const BiblePage: React.FC = () => {
             <div className="container mx-auto py-8 px-4 sm:px-6 lg:px-8 min-h-screen">
                 {/* Header */}
                 <div className="relative text-center mb-8">
-                    <button onClick={() => navigate(-1)} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 md:hidden">
+                    <button onClick={() => navigate('/')} className="absolute left-0 top-1/2 -translate-y-1/2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 md:hidden">
                         <ArrowLeftIcon className="w-6 h-6 text-text-main dark:text-gray-300" />
                     </button>
                     <BibleIcon className="w-16 h-16 text-primary dark:text-secondary mx-auto mb-4" />

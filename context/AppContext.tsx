@@ -771,7 +771,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const newPost: Post = media ? { ...basePost, media } : basePost;
 
-      setPosts(prev => [newPost, ...prev]);
+      setPosts(prev => {
+        const updated = [newPost, ...prev];
+        localStorage.setItem('communityPosts', JSON.stringify(updated));
+        return updated;
+      });
     };
 
     const handlePostInteraction = (postId: number, type: 'like' | 'share') => {

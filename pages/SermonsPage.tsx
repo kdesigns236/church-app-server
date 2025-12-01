@@ -91,7 +91,7 @@ const SermonsPage: React.FC = () => {
     <>
       {/* Back Button */}
       <button
-        onClick={() => navigate(-1)}
+        onClick={() => navigate('/')}
         className="fixed top-5 left-5 z-50 p-2.5 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-black/70 transition-all duration-300 shadow-xl active:scale-95"
         aria-label="Go back"
       >

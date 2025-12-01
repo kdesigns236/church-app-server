@@ -21,7 +21,8 @@ interface Story {
   id: number;
   author: string;
   avatar: string;
-  color: string;
+  content: string;
+  media?: { url: string; type: 'image' | 'video' };
   viewed: boolean;
   // Optional type so we can give video stories longer duration
   type?: 'video' | 'photo' | 'text';
@@ -32,9 +33,15 @@ const CommunityFeedPage: React.FC = () => {
   const navigate = useNavigate();
   const { posts, handlePostInteraction, addPostComment } = useAppContext();
 
-  const initialStories: Story[] = [];
-
-  const [stories, setStories] = useState<Story[]>(initialStories);
+  const [stories, setStories] = useState<Story[]>(() => {
+    try {
+      const stored = localStorage.getItem('communityStories');
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error parsing communityStories from localStorage', error);
+      return [];
+    }
+  });
   const [activeComment, setActiveComment] = useState<number | null>(null);
   const [commentText, setCommentText] = useState('');
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
@@ -110,6 +117,15 @@ const CommunityFeedPage: React.FC = () => {
 
     return () => window.clearTimeout(timer);
   }, [activeStoryIndex, stories.length, viewingStory]);
+
+  // Persist stories when they change (e.g. when new stories are added or marked viewed)
+  useEffect(() => {
+    try {
+      localStorage.setItem('communityStories', JSON.stringify(stories));
+    } catch (error) {
+      console.error('Error saving communityStories to localStorage', error);
+    }
+  }, [stories]);
 
   return (
     <div
@@ -232,7 +248,7 @@ const CommunityFeedPage: React.FC = () => {
                 position: 'relative',
                 flexShrink: 0,
               }}
-              onClick={() => navigate('/create-post')}
+              onClick={() => navigate('/create-post?mode=story')}
             >
               <div
                 style={{
@@ -321,7 +337,6 @@ const CommunityFeedPage: React.FC = () => {
                 }}
               >
                 <div
-                  className={story.color}
                   style={{
                     position: 'absolute',
                     inset: 0,
@@ -329,6 +344,12 @@ const CommunityFeedPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'flex-end',
                     padding: '8px',
+                    background:
+                      story.media && story.media.type === 'video'
+                        ? 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)'
+                        : story.media && story.media.type === 'image'
+                        ? 'linear-gradient(135deg, #10b981 0%, #22c55e 100%)'
+                        : 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)',
                   }}
                 >
                   <div
@@ -1087,16 +1108,42 @@ const CommunityFeedPage: React.FC = () => {
                 height: '80%',
               }}
             >
-              <p
-                style={{
-                  color: 'white',
-                  fontSize: '24px',
-                  textAlign: 'center',
-                  padding: '0 32px',
-                }}
-              >
-                {viewingStory.author}'s Story Content
-              </p>
+              {viewingStory.media ? (
+                viewingStory.media.type === 'image' ? (
+                  <img
+                    src={viewingStory.media.url}
+                    alt="Story media"
+                    style={{
+                      maxWidth: '100%',
+                      maxHeight: '80%',
+                      borderRadius: 16,
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  <video
+                    src={viewingStory.media.url}
+                    controls
+                    style={{
+                      width: '100%',
+                      maxHeight: '80%',
+                      borderRadius: 16,
+                      backgroundColor: '#000',
+                    }}
+                  />
+                )
+              ) : (
+                <p
+                  style={{
+                    color: 'white',
+                    fontSize: '24px',
+                    textAlign: 'center',
+                    padding: '0 32px',
+                  }}
+                >
+                  {viewingStory.content}
+                </p>
+              )}
             </div>
           </div>
         </div>

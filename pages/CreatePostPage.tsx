@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
@@ -11,6 +11,9 @@ const CreatePostPage: React.FC = () => {
   const isDark = theme === 'dark';
   const { createPost } = useAppContext();
   const navigate = useNavigate();
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const isStoryMode = searchParams.get('mode') === 'story';
   const [postContent, setPostContent] = useState('');
   const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -41,12 +44,38 @@ const CreatePostPage: React.FC = () => {
 
   const handlePost = () => {
     if (!user) return;
-    if (postContent.trim()) {
-      createPost(postContent, user, selectedMedia || undefined);
-      setPostContent('');
-      setSelectedMedia(null);
-      navigate('/chat');
+    const trimmed = postContent.trim();
+    if (!trimmed) return;
+
+    if (isStoryMode) {
+      try {
+        const newStory = {
+          id: Date.now(),
+          author: user.name,
+          avatar: user.name.trim().charAt(0).toUpperCase(),
+          content: trimmed,
+          media: selectedMedia || undefined,
+          viewed: false,
+          type: selectedMedia
+            ? selectedMedia.type === 'video'
+              ? 'video'
+              : 'photo'
+            : 'text',
+        };
+        const existing = localStorage.getItem('communityStories');
+        const stories = existing ? JSON.parse(existing) : [];
+        stories.unshift(newStory);
+        localStorage.setItem('communityStories', JSON.stringify(stories));
+      } catch (error) {
+        console.error('Error saving story to localStorage', error);
+      }
+    } else {
+      createPost(trimmed, user, selectedMedia || undefined);
     }
+
+    setPostContent('');
+    setSelectedMedia(null);
+    navigate('/chat');
   };
 
   return (
@@ -85,7 +114,7 @@ const CreatePostPage: React.FC = () => {
               margin: 0,
             }}
           >
-            Create Post
+            {isStoryMode ? 'Create Story' : 'Create Post'}
           </h1>
           <button
             onClick={() => navigate('/chat')}

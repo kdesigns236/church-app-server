@@ -437,7 +437,7 @@ const VideoCallPage: React.FC = () => {
       localStreamRef.current.getTracks().forEach(track => track.stop());
     }
     setIsCallActive(false);
-    navigate(-1);
+    navigate('/');
   };
 
   const toggleMute = () => {
@@ -623,7 +623,7 @@ const VideoCallPage: React.FC = () => {
     <div className="flex flex-col h-screen bg-black">
       {/* Back button only */}
       <button 
-        onClick={() => navigate(-1)} 
+        onClick={() => navigate('/')} 
         className="absolute top-4 left-4 z-50 p-3 rounded-full bg-black/50 backdrop-blur-md hover:bg-black/70 transition-colors"
         style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}
       >

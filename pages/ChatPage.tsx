@@ -137,7 +137,7 @@ const ChatPage: React.FC = () => {
         >
             <header className="flex-shrink-0 bg-primary dark:bg-gray-900 text-white shadow-md p-4 flex items-center justify-between gap-4" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 1rem)' }}>
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/10">
+                    <button onClick={() => navigate('/')} className="p-2 rounded-full hover:bg-white/10">
                         <ArrowLeftIcon className="w-6 h-6" />
                     </button>
                     <ChatBubbleIcon className="h-8 w-8 text-secondary" />
