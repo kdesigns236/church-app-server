@@ -29,8 +29,11 @@ const ReplyPreview: React.FC<{ message: ChatMessage, onCancel: () => void }> = (
 const ChatPage: React.FC = () => {
     const { addChatMessage } = useAppContext();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, users } = useAuth();
     
+    const onlineUsers = Array.isArray(users) ? users.filter(u => u.isOnline) : [];
+    const onlineCount = onlineUsers.length;
+
     const [text, setText] = useState('');
     const [media, setMedia] = useState<{ file: File, previewUrl: string, type: 'image' | 'video' } | null>(null);
     const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
@@ -143,7 +146,9 @@ const ChatPage: React.FC = () => {
                     <ChatBubbleIcon className="h-8 w-8 text-secondary" />
                     <div>
                         <h1 className="text-xl font-bold font-serif">Community Chat</h1>
-                        <p className="text-sm text-gray-300">Mary, Joseph, Faith, and you</p>
+                        <p className="text-sm text-gray-300">
+                            {onlineCount > 0 ? `${onlineCount} online now` : 'No one online right now'}
+                        </p>
                     </div>
                 </div>
                 <button 

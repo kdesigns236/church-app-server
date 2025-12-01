@@ -114,7 +114,7 @@ const verifyAdmin = (req, res, next) => {
   }
 };
 
-// In-memory data store
+// In-memory data store (full default shape, including newer keys like posts/communityStories)
 let dataStore = {
   sermons: [],
   announcements: [],
@@ -135,17 +135,35 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 // Load data from file
 async function loadDataFromFile() {
   try {
+    // Always start from a full default shape so new keys (posts, communityStories, etc.) exist
+    const defaultData = {
+      sermons: [],
+      announcements: [],
+      events: [],
+      siteContent: {},
+      prayerRequests: [],
+      bibleStudies: [],
+      chatMessages: [],
+      users: [],
+      posts: [],
+      comments: [],
+      communityStories: []
+    };
+
     if (fs.existsSync(DATA_FILE)) {
       const fileData = await fs.promises.readFile(DATA_FILE, 'utf8');
-      dataStore = JSON.parse(fileData);
-      console.log('[Server] Loaded existing data from file');
+      const parsed = JSON.parse(fileData);
+      // Merge file data over defaults so any missing keys are still present
+      dataStore = { ...defaultData, ...parsed };
+      console.log('[Server] Loaded existing data from file with defaults merged');
     } else {
-      console.log('[Server] No existing data file, starting fresh');
+      console.log('[Server] No existing data file, starting fresh with defaults');
+      dataStore = defaultData;
       await saveDataToFile();
     }
   } catch (error) {
     console.error('[Server] Error loading data:', error);
-    // Initialize with empty data store if file can't be read
+    // Initialize with default data store if file can't be read
     dataStore = {
       sermons: [],
       announcements: [],
@@ -154,7 +172,10 @@ async function loadDataFromFile() {
       prayerRequests: [],
       bibleStudies: [],
       chatMessages: [],
-      users: []
+      users: [],
+      posts: [],
+      comments: [],
+      communityStories: []
     };
   }
 }
