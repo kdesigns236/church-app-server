@@ -22,6 +22,8 @@ import JsonConverterPage from './pages/JsonConverterPage';
 import VideoCallPage from './pages/VideoCallPage';
 import CameraClientPage from './pages/CameraClientPage';
 import ProStreamApp from './pages/ProStreamApp';
+import CommunityFeedPage from './pages/CommunityFeedPage';
+import CreatePostPage from './pages/CreatePostPage';
 import { useAuth } from './hooks/useAuth';
 import { LoadingScreen } from './components/LoadingScreen';
 import { localNotificationService } from './services/localNotificationService';
@@ -40,7 +42,7 @@ const LoadingFallback: React.FC = () => (
 
 const PageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const location = useLocation();
-    const showFooter = !['/sermons', '/admin', '/chat', '/bible', '/giving', '/pastor-ai', '/video-call', '/golive', '/prostream'].includes(location.pathname);
+    const showFooter = !['/sermons', '/admin', '/chat', '/chat-room', '/create-post', '/bible', '/giving', '/pastor-ai', '/video-call', '/golive', '/prostream'].includes(location.pathname);
     
     return (
         <div className="flex flex-col min-h-screen">
@@ -63,7 +65,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const ProtectedRoutes: React.FC = () => {
     const location = useLocation();
 
-    const showHeader = !['/sermons', '/chat', '/pastor-ai', '/video-call', '/golive', '/prostream'].includes(location.pathname);
+    const showHeader = !['/sermons', '/chat', '/chat-room', '/create-post', '/pastor-ai', '/video-call', '/golive', '/prostream'].includes(location.pathname);
 
     return (
         <>
@@ -81,7 +83,9 @@ const ProtectedRoutes: React.FC = () => {
                         <Route path="/giving" element={<GivingPage />} />
                         <Route path="/golive" element={<GoLivePage />} />
                         <Route path="/prostream" element={<ProStreamApp />} />
-                        <Route path="/chat" element={<ChatPage />} />
+                        <Route path="/chat" element={<CommunityFeedPage />} />
+                        <Route path="/chat-room" element={<ChatPage />} />
+                        <Route path="/create-post" element={<CreatePostPage />} />
                         <Route path="/contact" element={<ContactPage />} />
                         <Route path="/profile" element={<ProfilePage />} />
                         <Route path="/pastor-ai" element={<PastorAiPage />} />

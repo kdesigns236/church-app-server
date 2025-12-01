@@ -253,7 +253,7 @@ class UIConfigService {
         { icon: "home", label: "Home", route: "/" },
         { icon: "video", label: "Sermons", route: "/sermons" },
         { icon: "calendar", label: "Events", route: "/events" },
-        { icon: "chat", label: "Chat", route: "/chat" },
+        { icon: "chat", label: "Church Community", route: "/chat" },
         { icon: "user", label: "Profile", route: "/profile" }
       ]
     };
@@ -289,7 +289,7 @@ class UIConfigService {
         { label: "Home", route: "/", icon: "home" },
         { label: "Sermons", route: "/sermons", icon: "video" },
         { label: "Events", route: "/events", icon: "calendar" },
-        { label: "Chat", route: "/chat", icon: "chat" }
+        { label: "Church Community", route: "/chat", icon: "chat" }
       ],
       footer: {
         showSocialLinks: false,

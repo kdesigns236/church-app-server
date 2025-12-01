@@ -1,0 +1,1118 @@
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  FiMessageCircle,
+  FiShare2,
+  FiX,
+  FiVideo,
+  FiImage,
+  FiSmile,
+  FiThumbsUp,
+  FiMoreHorizontal,
+  FiGlobe,
+} from 'react-icons/fi';
+import { useAuth } from '../hooks/useAuth';
+import { useAppContext } from '../context/AppContext';
+import { Post, Comment } from '../types';
+
+interface Story {
+  id: number;
+  author: string;
+  avatar: string;
+  color: string;
+  viewed: boolean;
+  // Optional type so we can give video stories longer duration
+  type?: 'video' | 'photo' | 'text';
+}
+
+const CommunityFeedPage: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { posts, handlePostInteraction, addPostComment } = useAppContext();
+
+  const initialStories: Story[] = [
+    { id: 1, author: 'Youth Group', avatar: 'YG', color: 'bg-blue-500', viewed: false, type: 'photo' },
+    { id: 2, author: 'Worship Team', avatar: 'WT', color: 'bg-purple-500', viewed: false, type: 'video' },
+    { id: 3, author: 'Pastor John', avatar: 'PJ', color: 'bg-green-500', viewed: false, type: 'text' },
+    { id: 4, author: 'Missions', avatar: 'M', color: 'bg-orange-500', viewed: false, type: 'photo' },
+  ];
+
+  const [stories, setStories] = useState<Story[]>(initialStories);
+  const [activeComment, setActiveComment] = useState<number | null>(null);
+  const [commentText, setCommentText] = useState('');
+  const [viewingStory, setViewingStory] = useState<Story | null>(null);
+  const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
+
+  const getStoryDurationMs = (story: Story | null): number => {
+    if (!story) return 5000;
+    return story.type === 'video' ? 30000 : 5000;
+  };
+
+  const activeCommentPost =
+    activeComment !== null ? posts.find((p) => p.id === activeComment) : null;
+
+  const isDark =
+    typeof document !== 'undefined' &&
+    document.documentElement.classList.contains('dark');
+
+  const currentUserName = user?.name || 'You';
+  const currentUserAvatar =
+    (user?.name && user.name.trim().charAt(0).toUpperCase()) || 'ME';
+
+  const handleLike = (postId: number) => {
+    handlePostInteraction(postId, 'like');
+  };
+
+  const handleComment = (postId: number) => {
+    if (!user) return;
+    if (commentText.trim()) {
+      addPostComment(postId, commentText, user);
+      setCommentText('');
+    }
+  };
+
+  const handleShare = (postId: number) => {
+    handlePostInteraction(postId, 'share');
+    alert('Post shared!');
+  };
+
+  const viewStory = (story: Story) => {
+    const index = stories.findIndex((s) => s.id === story.id);
+    if (index === -1) return;
+    setActiveStoryIndex(index);
+    setViewingStory(story);
+    setStories((prev) =>
+      prev.map((s) => (s.id === story.id ? { ...s, viewed: true } : s)),
+    );
+  };
+
+  const closeStory = () => {
+    setViewingStory(null);
+    setActiveStoryIndex(null);
+  };
+
+  // Auto-advance stories with a simple timer, similar to Facebook/Instagram
+  useEffect(() => {
+    if (activeStoryIndex === null || !viewingStory) return;
+
+    const duration = getStoryDurationMs(viewingStory);
+    const timer = window.setTimeout(() => {
+      const nextIndex = activeStoryIndex + 1;
+      if (nextIndex >= stories.length) {
+        closeStory();
+      } else {
+        const nextStory = stories[nextIndex];
+        setActiveStoryIndex(nextIndex);
+        setViewingStory(nextStory);
+        setStories((prev) =>
+          prev.map((s) =>
+            s.id === nextStory.id ? { ...s, viewed: true } : s,
+          ),
+        );
+      }
+    }, duration);
+
+    return () => window.clearTimeout(timer);
+  }, [activeStoryIndex, stories.length, viewingStory]);
+
+  return (
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: isDark ? '#020617' : '#f0f2f5',
+        color: isDark ? '#e5e7eb' : '#111827',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          backgroundColor: isDark ? '#020617' : 'white',
+          borderBottom: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}
+      >
+        <div
+          style={{
+            maxWidth: '672px',
+            margin: '0 auto',
+            padding: '12px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <h1
+            style={{
+              fontSize: '20px',
+              fontWeight: 'bold',
+              color: '#2563eb',
+              margin: 0,
+            }}
+          >
+            Church Community
+          </h1>
+          <Link
+            to="/chat-room"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '6px 12px',
+              borderRadius: 9999,
+              backgroundColor: '#2563eb',
+              color: 'white',
+              fontSize: 14,
+              fontWeight: 500,
+              textDecoration: 'none',
+              border: 'none',
+              cursor: 'pointer',
+            }}
+          >
+            <FiMessageCircle size={18} />
+            <span>Open Chat</span>
+          </Link>
+        </div>
+      </div>
+
+      <div
+        style={{ maxWidth: '680px', margin: '0 auto', padding: '16px 16px 32px' }}
+      >
+        {/* Stories Section */}
+        <div
+          style={{
+            backgroundColor: isDark ? '#020617' : 'white',
+            borderRadius: '10px',
+            padding: '16px',
+            marginBottom: '16px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              overflowX: 'auto',
+              paddingBottom: '4px',
+            }}
+          >
+            {/* Your Story - card style */}
+            <div
+              style={{
+                minWidth: '110px',
+                height: '190px',
+                borderRadius: '12px',
+                overflow: 'hidden',
+                backgroundColor: isDark ? '#020617' : 'white',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+                cursor: 'pointer',
+                position: 'relative',
+                flexShrink: 0,
+              }}
+              onClick={() => navigate('/create-post')}
+            >
+              <div
+                style={{
+                  height: '70%',
+                  background:
+                    'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)',
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 8,
+                  left: 8,
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  backgroundColor: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#3b82f6',
+                  fontWeight: 'bold',
+                  fontSize: 14,
+                }}
+              >
+                {currentUserAvatar}
+              </div>
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: 40,
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  backgroundColor: 'white',
+                  borderRadius: 9999,
+                  padding: '4px 10px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  fontSize: 12,
+                  fontWeight: 500,
+                }}
+              >
+                <span
+                  style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: '50%',
+                    backgroundColor: '#1877f2',
+                    color: 'white',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 14,
+                    lineHeight: 1,
+                  }}
+                >
+                  +
+                </span>
+                <span>Create story</span>
+              </div>
+              <div
+                style={{
+                  padding: '8px',
+                  fontSize: 12,
+                  fontWeight: 600,
+                }}
+              >
+                Your story
+              </div>
+            </div>
+
+            {stories.map((story) => (
+              <div
+                key={story.id}
+                onClick={() => viewStory(story)}
+                style={{
+                  minWidth: '110px',
+                  height: '190px',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  flexShrink: 0,
+                  backgroundColor: '#000',
+                }}
+              >
+                <div
+                  className={story.color}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    opacity: story.viewed ? 0.7 : 1,
+                    display: 'flex',
+                    alignItems: 'flex-end',
+                    padding: '8px',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: '50%',
+                        backgroundColor: 'rgba(15,23,42,0.9)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontWeight: 'bold',
+                        fontSize: 13,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {story.avatar}
+                    </div>
+                    <span
+                      style={{
+                        color: 'white',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                      }}
+                    >
+                      {story.author}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Create Post */}
+        <div
+          style={{
+            backgroundColor: 'white',
+            borderRadius: '10px',
+            padding: '12px 16px',
+            marginBottom: '16px',
+            boxShadow: '0 1px 2px rgba(0,0,0,0.08)',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '8px',
+            }}
+          >
+            <div
+              style={{
+                width: '36px',
+                height: '36px',
+                borderRadius: '50%',
+                backgroundColor: '#3b82f6',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'white',
+                fontWeight: 'bold',
+                fontSize: '14px',
+                flexShrink: 0,
+              }}
+            >
+              {currentUserAvatar}
+            </div>
+            <button
+              onClick={() => navigate('/create-post')}
+              style={{
+                flex: 1,
+                backgroundColor: '#f3f4f6',
+                borderRadius: 9999,
+                padding: '10px 16px',
+                textAlign: 'left',
+                color: '#6b7280',
+                border: '1px solid #e5e7eb',
+                cursor: 'pointer',
+                fontSize: 15,
+              }}
+            >
+              {`What's on your mind, ${currentUserName.split(' ')[0]}?`}
+            </button>
+          </div>
+          <div
+            style={{
+              borderTop: '1px solid #e5e7eb',
+              paddingTop: '8px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '8px',
+              fontSize: '13px',
+            }}
+          >
+            <button
+              onClick={() => navigate('/create-post')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                border: 'none',
+                background: 'transparent',
+                color: '#ef4444',
+                cursor: 'pointer',
+                padding: '6px 0',
+                fontWeight: 500,
+              }}
+            >
+              <FiVideo size={18} />
+              <span>Video</span>
+            </button>
+            <button
+              onClick={() => navigate('/create-post')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                border: 'none',
+                background: 'transparent',
+                color: '#22c55e',
+                cursor: 'pointer',
+                padding: '6px 0',
+                fontWeight: 500,
+              }}
+            >
+              <FiImage size={18} />
+              <span>Photo</span>
+            </button>
+            <button
+              onClick={() => navigate('/create-post')}
+              style={{
+                flex: 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                border: 'none',
+                background: 'transparent',
+                color: '#f97316',
+                cursor: 'pointer',
+                padding: '6px 0',
+                fontWeight: 500,
+              }}
+            >
+              <FiSmile size={18} />
+              <span>Feeling</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Posts Feed */}
+        {posts.map((post) => (
+          <div
+            key={post.id}
+            style={{
+              backgroundColor: isDark ? '#020617' : 'white',
+              borderRadius: '8px',
+              marginBottom: '16px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+            }}
+          >
+            {/* Post Header */}
+            <div
+              style={{
+                padding: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px',
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '50%',
+                  backgroundColor: '#3b82f6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: 'white',
+                  fontWeight: 'bold',
+                  fontSize: '14px',
+                }}
+              >
+                {post.avatar}
+              </div>
+              <div style={{ flex: 1 }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontWeight: 600,
+                    fontSize: '15px',
+                  }}
+                >
+                  {post.author}
+                </h3>
+                <div
+                  style={{
+                    marginTop: 2,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    fontSize: '12px',
+                    color: '#6b7280',
+                  }}
+                >
+                  <span>{post.time}</span>
+                  <span>&bull;</span>
+                  <FiGlobe size={12} />
+                  <span>Public</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#9ca3af',
+                }}
+              >
+                <FiMoreHorizontal size={18} />
+              </button>
+            </div>
+
+            {/* Post Content */}
+            <div style={{ padding: '0 16px 12px' }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: isDark ? '#e5e7eb' : '#1f2937',
+                  fontSize: '15px',
+                  lineHeight: 1.5,
+                }}
+              >
+                {post.content}
+              </p>
+            </div>
+
+            {/* Post Media Demo (optional) */}
+            {post.mediaType === 'image' && (
+              <div style={{ padding: '0 16px 12px' }}>
+                <div
+                  style={{
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    background:
+                      'linear-gradient(135deg, #0ea5e9 0%, #6366f1 50%, #ec4899 100%)',
+                    height: 260,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 600,
+                    fontSize: 14,
+                    textShadow: '0 1px 2px rgba(0,0,0,0.4)',
+                  }}
+                >
+                  Photo post demo
+                </div>
+              </div>
+            )}
+            {post.mediaType === 'video' && (
+              <div style={{ padding: '0 16px 12px' }}>
+                <div
+                  style={{
+                    borderRadius: 10,
+                    overflow: 'hidden',
+                    backgroundColor: '#111827',
+                    height: 260,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#e5e7eb',
+                    fontWeight: 500,
+                    fontSize: 14,
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: '9999px',
+                      border: '3px solid rgba(255,255,255,0.7)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <FiVideo size={28} />
+                  </div>
+                  <span>Video post demo (tap to play in future)</span>
+                </div>
+              </div>
+            )}
+
+            {/* Post Stats */}
+            <div
+              style={{
+                padding: '8px 16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '13px',
+                color: '#6b7280',
+                borderTop: '1px solid #e5e7eb',
+                borderBottom: '1px solid #e5e7eb',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div
+                  style={{
+                    width: '18px',
+                    height: '18px',
+                    borderRadius: '9999px',
+                    backgroundColor: '#1877f2',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontSize: '10px',
+                  }}
+                >
+                  <FiThumbsUp size={10} />
+                </div>
+                <span>{post.likes}</span>
+              </div>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <span>{post.comments.length} comments</span>
+                <span>{post.shares} shares</span>
+              </div>
+            </div>
+
+            {/* Post Actions */}
+            <div
+              style={{
+                padding: '8px 16px',
+                display: 'flex',
+                justifyContent: 'space-around',
+              }}
+            >
+              <button
+                onClick={() => handleLike(post.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  border: 'none',
+                  backgroundColor: post.liked
+                    ? 'rgba(24, 119, 242, 0.08)'
+                    : 'transparent',
+                  cursor: 'pointer',
+                  color: post.liked ? '#1877f2' : '#6b7280',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  borderRadius: 6,
+                }}
+              >
+                <FiThumbsUp
+                  size={20}
+                  fill={post.liked ? 'currentColor' : 'none'}
+                />
+                <span>Like</span>
+              </button>
+              <button
+                onClick={() => setActiveComment(post.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                <FiMessageCircle size={20} />
+                <span>Comment</span>
+              </button>
+              <button
+                onClick={() => handleShare(post.id)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                }}
+              >
+                <FiShare2 size={20} />
+                <span>Share</span>
+              </button>
+            </div>
+
+            {/* Comments Section */}
+            {/* Comment Input */}
+          </div>
+        ))}
+      </div>
+
+      {activeCommentPost && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 60,
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: isDark ? '#020617' : 'white',
+              borderRadius: '12px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
+            }}
+          >
+            <div
+              style={{
+                padding: '16px',
+                borderBottom: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    backgroundColor: isDark ? '#1d4ed8' : '#3b82f6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    flexShrink: 0,
+                  }}
+                >
+                  {activeCommentPost.avatar}
+                </div>
+                <div>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontWeight: 600,
+                      fontSize: '14px',
+                      color: isDark ? '#e5e7eb' : '#111827',
+                    }}
+                  >
+                    {activeCommentPost.author}
+                  </p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: '12px',
+                      color: isDark ? '#9ca3af' : '#6b7280',
+                    }}
+                  >
+                    {activeCommentPost.time}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveComment(null);
+                  setCommentText('');
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                  color: '#6b7280',
+                }}
+              >
+                <FiX size={22} />
+              </button>
+            </div>
+
+            <div
+              style={{
+                padding: '12px 16px',
+                borderBottom: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: '14px',
+                  color: isDark ? '#e5e7eb' : '#111827',
+                  lineHeight: 1.5,
+                }}
+              >
+                {activeCommentPost.content}
+              </p>
+            </div>
+
+            <div
+              style={{
+                padding: '12px 16px',
+                flex: 1,
+                overflowY: 'auto',
+              }}
+            >
+              {activeCommentPost.comments.length === 0 && (
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: '13px',
+                    color: isDark ? '#6b7280' : '#9ca3af',
+                  }}
+                >
+                  No comments yet. Be the first to share something!
+                </p>
+              )}
+              {activeCommentPost.comments.map((comment) => (
+                <div
+                  key={comment.id}
+                  style={{
+                    marginTop: '12px',
+                    display: 'flex',
+                    gap: '8px',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      backgroundColor: isDark ? '#4b5563' : '#9ca3af',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: '12px',
+                      fontWeight: 'bold',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {comment.author.charAt(0)}
+                  </div>
+                  <div
+                    style={{
+                      backgroundColor: isDark ? '#020617' : '#f3f4f6',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      flex: 1,
+                    }}
+                  >
+                    <p
+                      style={{
+                        margin: 0,
+                        fontWeight: 600,
+                        fontSize: '13px',
+                        color: isDark ? '#e5e7eb' : '#111827',
+                      }}
+                    >
+                      {comment.author}
+                    </p>
+                    <p
+                      style={{
+                        margin: '4px 0 0',
+                        fontSize: '14px',
+                        color: isDark ? '#e5e7eb' : '#111827',
+                      }}
+                    >
+                      {comment.text}
+                    </p>
+                    <p
+                      style={{
+                        margin: '4px 0 0',
+                        fontSize: '11px',
+                        color: isDark ? '#9ca3af' : '#6b7280',
+                      }}
+                    >
+                      {comment.time}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                padding: '12px 16px',
+                borderTop: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
+              }}
+            >
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={commentText}
+                  onChange={(e) => setCommentText(e.target.value)}
+                  placeholder="Write a comment..."
+                  style={{
+                    flex: 1,
+                    border: `1px solid ${isDark ? '#374151' : '#d1d5db'}`,
+                    borderRadius: 9999,
+                    padding: '8px 16px',
+                    outline: 'none',
+                    fontSize: '14px',
+                    backgroundColor: isDark ? '#020617' : 'white',
+                    color: isDark ? '#e5e7eb' : '#111827',
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && activeCommentPost) {
+                      e.preventDefault();
+                      handleComment(activeCommentPost.id);
+                    }
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (activeCommentPost) {
+                      handleComment(activeCommentPost.id);
+                    }
+                  }}
+                  style={{
+                    backgroundColor: isDark ? '#1d4ed8' : '#3b82f6',
+                    color: 'white',
+                    padding: '8px 24px',
+                    borderRadius: 9999,
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontWeight: 500,
+                    fontSize: '14px',
+                  }}
+                >
+                  Post
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Story Viewer */}
+      {viewingStory && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'black',
+            zIndex: 50,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              maxWidth: '448px',
+              width: '100%',
+              height: '100%',
+              background:
+                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              position: 'relative',
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                top: 8,
+                left: 8,
+                right: 8,
+                display: 'flex',
+                gap: 4,
+              }}
+            >
+              {stories.map((story, index) => (
+                <div
+                  key={story.id}
+                  style={{
+                    flex: 1,
+                    height: 3,
+                    borderRadius: 9999,
+                    backgroundColor: 'rgba(148, 163, 184, 0.5)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width:
+                        activeStoryIndex === null
+                          ? '0%'
+                          : index < activeStoryIndex
+                          ? '100%'
+                          : index === activeStoryIndex
+                          ? '100%'
+                          : '0%',
+                      backgroundColor: '#f9fafb',
+                      transition:
+                        index === activeStoryIndex
+                          ? `width ${getStoryDurationMs(story) / 1000}s linear`
+                          : 'none',
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                padding: '16px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    backgroundColor: 'white',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                  }}
+                >
+                  {viewingStory.avatar}
+                </div>
+                <span
+                  style={{ color: 'white', fontWeight: 600 }}
+                >
+                  {viewingStory.author}
+                </span>
+              </div>
+              <button
+                onClick={closeStory}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'white',
+                  cursor: 'pointer',
+                }}
+              >
+                <FiX size={24} />
+              </button>
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '80%',
+              }}
+            >
+              <p
+                style={{
+                  color: 'white',
+                  fontSize: '24px',
+                  textAlign: 'center',
+                  padding: '0 32px',
+                }}
+              >
+                {viewingStory.author}'s Story Content
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CommunityFeedPage;

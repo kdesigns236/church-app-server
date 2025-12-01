@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStudy, ChatMessage, User, SermonComment } from '../types';
+import { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStudy, ChatMessage, User, SermonComment, Post, Comment } from '../types';
 import { websocketService } from '../services/websocketService';
 import { notificationService } from '../services/notificationService';
 import { localNotificationService } from '../services/localNotificationService';
@@ -14,6 +14,7 @@ interface AppContextType {
     prayerRequests: PrayerRequest[];
     bibleStudies: BibleStudy[];
     chatMessages: ChatMessage[];
+    posts: Post[];
     updateSermon: (sermon: Sermon) => void;
     addSermon: (sermon: Omit<Sermon, 'id' | 'likes' | 'comments' | 'isLiked' | 'isSaved' | 'date'>) => void;
     deleteSermon: (id: string) => void;
@@ -34,6 +35,9 @@ interface AppContextType {
     deleteBibleStudy: (id: string) => void;
     addChatMessage: (messageData: { content?: string; media?: { url: string; type: 'image' | 'video' | 'audio'; }; replyTo?: ChatMessage; }, user: User) => void;
     deleteChatMessage: (messageId: string) => void;
+    createPost: (content: string, user: User) => void;
+    handlePostInteraction: (postId: number, type: 'like' | 'share') => void;
+    addPostComment: (postId: number, commentText: string, user: User) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -42,6 +46,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const APP_VERSION = '2.0.0'; // Increment this to clear all localStorage
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
+
     // Clear old localStorage data if app version changed (but preserve user auth)
     React.useEffect(() => {
       const storedVersion = localStorage.getItem('appVersion');
@@ -146,6 +152,126 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     });
 
+    const [posts, setPosts] = useState<Post[]>(() => {
+      try {
+        const storedPosts = localStorage.getItem('communityPosts');
+        const initialPosts: Post[] = [
+          {
+            id: 1,
+            author: 'Pastor John',
+            avatar: 'PJ',
+            time: '2 hours ago',
+            content:
+              'Blessed Sunday service today! Thank you all for joining us in worship. Remember, "The Lord is my strength and my shield." - Psalm 28:7',
+            likes: 24,
+            comments: [],
+            shares: 3,
+            liked: false,
+          },
+          {
+            id: 2,
+            author: 'Sarah M.',
+            avatar: 'SM',
+            time: '5 hours ago',
+            content:
+              'Prayer request: Please pray for my grandmother who is recovering from surgery. Thank you church family!',
+            likes: 45,
+            comments: [
+              { id: 1, author: 'Mary K.', text: 'Praying for your grandmother! 🙏', time: '4 hours ago' },
+            ],
+            shares: 2,
+            liked: false,
+          },
+          {
+            id: 3,
+            author: 'Media Team',
+            avatar: 'MT',
+            time: 'Yesterday',
+            content: 'Photos from our youth outreach service. Praise God for a wonderful time together! (Image demo)',
+            mediaType: 'image',
+            likes: 32,
+            comments: [],
+            shares: 4,
+            liked: false,
+          },
+          {
+            id: 4,
+            author: 'Livestream Team',
+            avatar: 'LT',
+            time: '2 days ago',
+            content: 'Short highlight from last Sunday\'s worship (Video demo).',
+            mediaType: 'video',
+            likes: 58,
+            comments: [],
+            shares: 10,
+            liked: false,
+          },
+        ];
+        return storedPosts ? JSON.parse(storedPosts) : initialPosts;
+      } catch (error) {
+        console.error('Error parsing posts from localStorage', error);
+        return [];
+      }
+    });
+
+    const [comments, setComments] = useState<Comment[]>(() => {
+      try {
+        const storedComments = localStorage.getItem('communityComments');
+        return storedComments ? JSON.parse(storedComments) : [];
+      } catch (error) {
+        console.error('Error parsing comments from localStorage', error);
+        return [];
+      }
+    });
+
+    useEffect(() => {
+      setPosts(prev => {
+        const hasImageDemo = prev.some(p => p.mediaType === 'image');
+        const hasVideoDemo = prev.some(p => p.mediaType === 'video');
+        if (hasImageDemo && hasVideoDemo) {
+          return prev;
+        }
+
+        const demoPosts: Post[] = [
+          {
+            id: 3,
+            author: 'Media Team',
+            avatar: 'MT',
+            time: 'Yesterday',
+            content:
+              'Photos from our youth outreach service. Praise God for a wonderful time together! (Image demo)',
+            mediaType: 'image',
+            likes: 32,
+            comments: [],
+            shares: 4,
+            liked: false,
+          },
+          {
+            id: 4,
+            author: 'Livestream Team',
+            avatar: 'LT',
+            time: '2 days ago',
+            content: "Short highlight from last Sunday's worship (Video demo).",
+            mediaType: 'video',
+            likes: 58,
+            comments: [],
+            shares: 10,
+            liked: false,
+          },
+        ];
+
+        const merged = [...prev];
+        demoPosts.forEach(demo => {
+          if (!merged.some(p => p.id === demo.id)) {
+            merged.push(demo);
+          }
+        });
+
+        localStorage.setItem('communityPosts', JSON.stringify(merged));
+        return merged;
+      });
+    }, []);
+
     // Helper function to save data and update sync timestamp
     const saveToLocalStorage = (key: string, data: any) => {
       localStorage.setItem(key, JSON.stringify(data));
@@ -184,7 +310,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             ]);
           };
           
-          const [sermonsRes, announcementsRes, eventsRes, siteContentRes, prayerRequestsRes, bibleStudiesRes, chatMessagesRes] = await Promise.all([
+          const [sermonsRes, announcementsRes, eventsRes, siteContentRes, prayerRequestsRes, bibleStudiesRes, chatMessagesRes, postsRes, commentsRes] = await Promise.all([
             fetchWithTimeout(`${apiUrl}/sermons`).catch(err => {
               console.error('[AppContext] Error fetching sermons:', err);
               return { ok: false, json: () => Promise.resolve([]) };
@@ -213,9 +339,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               console.error('[AppContext] Error fetching chat messages:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
+            fetchWithTimeout(`${apiUrl}/community-posts`).catch(err => {
+              console.error('[AppContext] Error fetching community posts:', err);
+              return { ok: false, json: () => Promise.resolve([]) };
+            }),
+            fetchWithTimeout(`${apiUrl}/community-comments`).catch(err => {
+              console.error('[AppContext] Error fetching community comments:', err);
+              return { ok: false, json: () => Promise.resolve([]) };
+            }),
           ]);
 
-          const [sermonsData, announcementsData, eventsData, siteContentData, prayerRequestsData, bibleStudiesData, chatMessagesData] = await Promise.all([
+          const [sermonsData, announcementsData, eventsData, siteContentData, prayerRequestsData, bibleStudiesData, chatMessagesData, postsData, commentsData] = await Promise.all([
             sermonsRes.json(),
             announcementsRes.json(),
             eventsRes.json(),
@@ -223,6 +357,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             prayerRequestsRes.json(),
             bibleStudiesRes.json(),
             chatMessagesRes.json(),
+            postsRes.json(),
+            commentsRes.json(),
           ]);
 
           console.log('[AppContext] ✅ Fetched initial data:', {
@@ -231,6 +367,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             events: eventsData.length,
             prayerRequests: prayerRequestsData.length,
             chatMessages: chatMessagesData.length,
+            posts: postsData.length,
+            comments: commentsData.length,
           });
 
           // Only update if we got valid data (not empty from failed fetch)
@@ -290,6 +428,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setChatMessages([]);
               localStorage.setItem('chatMessages', JSON.stringify([]));
             }
+          }
+          
+          if (Array.isArray(postsData) && postsData.length > 0) {
+            // Only overwrite local posts when server actually has data
+            setPosts(postsData);
+            localStorage.setItem('communityPosts', JSON.stringify(postsData));
+          }
+          
+          if (Array.isArray(commentsData) && commentsData.length > 0) {
+            setComments(commentsData);
+            localStorage.setItem('communityComments', JSON.stringify(commentsData));
+          } else if (commentsRes.ok && Array.isArray(commentsData) && commentsData.length === 0) {
+            setComments([]);
+            localStorage.setItem('communityComments', JSON.stringify([]));
           }
           
           // Update last sync timestamp only if we successfully fetched
@@ -533,6 +685,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setSiteContent(syncData.data);
               }
               break;
+            case 'posts':
+              if (syncData.action === 'add') {
+                setPosts(prev => {
+                  // Prevent duplicates
+                  if (prev.find(p => p.id === syncData.data.id)) {
+                    return prev;
+                  }
+                  return [syncData.data, ...prev];
+                });
+              } else if (syncData.action === 'update') {
+                setPosts(prev => prev.map(p => p.id === syncData.data.id ? syncData.data : p));
+              } else if (syncData.action === 'delete') {
+                setPosts(prev => prev.filter(p => p.id !== syncData.data.id));
+              }
+              break;
+            case 'comments':
+              if (syncData.action === 'add') {
+                setComments(prev => {
+                  // Prevent duplicates
+                  if (prev.find(c => c.id === syncData.data.id)) {
+                    return prev;
+                  }
+                  return [syncData.data, ...prev];
+                });
+              } else if (syncData.action === 'update') {
+                setComments(prev => prev.map(c => c.id === syncData.data.id ? syncData.data : c));
+              } else if (syncData.action === 'delete') {
+                setComments(prev => prev.filter(c => c.id !== syncData.data.id));
+              }
+              break;
           }
         }
         
@@ -556,6 +738,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             : (syncData.chatMessages ? [syncData.chatMessages] : []);
           setChatMessages(messages);
         }
+        // For now, keep community posts local/demo-only and do not
+        // overwrite them with full WebSocket sync payloads.
+        if (syncData.comments && Array.isArray(syncData.comments)) {
+          setComments(syncData.comments);
+        }
       });
 
       // Initial sync on app load
@@ -573,6 +760,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               : (syncData.chatMessages ? [syncData.chatMessages] : []);
             setChatMessages(messages);
           }
+          if (syncData.posts) setPosts(syncData.posts);
+          if (syncData.comments) setComments(syncData.comments);
         }
       }).catch((error) => {
         console.log('[AppContext] Initial sync failed (offline mode):', error.message);
@@ -620,10 +809,70 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('prayerRequests', JSON.stringify(prayerRequests));
     }, [prayerRequests]);
 
+    useEffect(() => {
+      localStorage.setItem('communityPosts', JSON.stringify(posts));
+    }, [posts]);
 
-    
-    // Note: useAuth can't be used here directly as AppProvider is a sibling of AuthProvider.
-    // The user object needs to be passed into functions that need it.
+    useEffect(() => {
+      localStorage.setItem('communityComments', JSON.stringify(comments));
+    }, [comments]);
+
+    const createPost = (content: string, user: User) => {
+      if (!user) return;
+
+      const newPost: Post = {
+        id: Date.now(),
+        author: user.name,
+        avatar: user.name.trim().charAt(0).toUpperCase(),
+        time: 'Just now',
+        content,
+        likes: 0,
+        comments: [],
+        shares: 0,
+        liked: false,
+      };
+
+      setPosts(prev => [newPost, ...prev]);
+    };
+
+    const handlePostInteraction = (postId: number, type: 'like' | 'share') => {
+      setPosts(prev =>
+        prev.map(post => {
+          if (post.id === postId) {
+            if (type === 'like') {
+              const liked = !post.liked;
+              const likes = liked ? post.likes + 1 : Math.max(0, post.likes - 1);
+              return { ...post, liked, likes };
+            }
+            if (type === 'share') {
+              return { ...post, shares: post.shares + 1 };
+            }
+          }
+          return post;
+        }),
+      );
+    };
+
+    const addPostComment = (postId: number, commentText: string, user: User) => {
+      const newComment: Comment = {
+        id: Date.now(),
+        author: user.name,
+        text: commentText,
+        time: 'Just now',
+      };
+
+      setPosts(prev =>
+        prev.map(post => {
+          if (post.id === postId) {
+            return {
+              ...post,
+              comments: [...post.comments, newComment],
+            };
+          }
+          return post;
+        }),
+      );
+    };
 
     const updateSermon = (updatedSermon: Sermon) => {
         setSermons(sermons.map(s => s.id === updatedSermon.id ? updatedSermon : s));
@@ -940,8 +1189,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
     };
 
-
-
     const value = {
         sermons,
         announcements,
@@ -950,6 +1197,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         prayerRequests,
         bibleStudies,
         chatMessages,
+        posts,
+        comments,
         updateSermon,
         addSermon,
         deleteSermon,
@@ -970,6 +1219,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         deleteBibleStudy,
         addChatMessage,
         deleteChatMessage,
+        createPost,
+        handlePostInteraction,
+        addPostComment,
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

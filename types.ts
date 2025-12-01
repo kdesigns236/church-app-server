@@ -1,4 +1,3 @@
-
 export enum MessageAuthor {
   USER = 'user',
   ASSISTANT = 'assistant',
@@ -43,15 +42,36 @@ export interface Announcement {
     date: string;
 }
 
+export interface Post {
+  id: number;
+  author: string;
+  avatar: string;
+  time: string;
+  content: string;
+  // Optional media demo fields for the community feed
+  mediaType?: 'image' | 'video';
+  likes: number;
+  comments: Comment[];
+  shares: number;
+  liked: boolean;
+}
+
+export interface Comment {
+  id: number;
+  author: string;
+  text: string;
+  time: string;
+}
+
 export interface SermonComment {
+  id: string;
+  user: {
     id: string;
-    user: {
-        id: string;
-        name: string;
-        profilePictureUrl?: string;
-    };
-    content: string;
-    timestamp: string;
+    name: string;
+    profilePictureUrl?: string;
+  };
+  content: string;
+  timestamp: string;
 }
 
 export interface Sermon {

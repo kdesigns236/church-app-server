@@ -19,7 +19,7 @@ const navLinks = [
   { name: 'Bible Study', path: '/bible-study', icon: BibleIcon },
   { name: 'Giving', path: '/giving', icon: GivingIcon },
   // Go Live route remains available internally but is hidden from the main navigation for now
-  { name: 'Chat', path: '/chat', icon: ChatBubbleIcon },
+  { name: 'Church Community', path: '/chat', icon: ChatBubbleIcon },
   { name: 'Contact', path: '/contact', icon: MailIcon },
 ];
 

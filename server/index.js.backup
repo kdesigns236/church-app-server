@@ -947,7 +947,7 @@ app.get('/api/ui/home-layout', (req, res) => {
           { icon: "video", label: "Sermons", route: "/sermons", color: "#d4af37" },
           { icon: "calendar", label: "Events", route: "/events", color: "#10b981" },
           { icon: "heart", label: "Giving", route: "/giving", color: "#ef4444" },
-          { icon: "chat", label: "Chat", route: "/chat", color: "#3b82f6" }
+          { icon: "chat", label: "Church Community", route: "/chat", color: "#3b82f6" }
         ]
       },
       {
@@ -979,7 +979,7 @@ app.get('/api/ui/home-layout', (req, res) => {
       { icon: "home", label: "Home", route: "/" },
       { icon: "video", label: "Sermons", route: "/sermons" },
       { icon: "calendar", label: "Events", route: "/events" },
-      { icon: "chat", label: "Chat", route: "/chat" },
+      { icon: "chat", label: "Church Community", route: "/chat" },
       { icon: "user", label: "Profile", route: "/profile" }
     ]
   });
@@ -1025,7 +1025,7 @@ app.get('/api/ui/navigation', (req, res) => {
       { label: "Events", route: "/events", icon: "calendar" },
       { label: "Bible Study", route: "/bible-study", icon: "book" },
       { label: "Giving", route: "/giving", icon: "heart" },
-      { label: "Chat", route: "/chat", icon: "chat" },
+      { label: "Church Community", route: "/chat", icon: "chat" },
       { label: "Pastor AI", route: "/pastor-ai", icon: "sparkles" }
     ],
     footer: {
