@@ -355,37 +355,60 @@ const CommunityFeedPage: React.FC = () => {
                   <div
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 4,
                     }}
                   >
                     <div
                       style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        backgroundColor: 'rgba(15,23,42,0.9)',
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        fontWeight: 'bold',
-                        fontSize: 13,
-                        flexShrink: 0,
+                        gap: 6,
                       }}
                     >
-                      {story.avatar}
+                      <div
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          backgroundColor: 'rgba(15,23,42,0.9)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontWeight: 'bold',
+                          fontSize: 13,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {story.avatar}
+                      </div>
+                      <span
+                        style={{
+                          color: 'white',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          textShadow: '0 1px 2px rgba(0,0,0,0.6)',
+                        }}
+                      >
+                        {story.author}
+                      </span>
                     </div>
-                    <span
-                      style={{
-                        color: 'white',
-                        fontSize: 12,
-                        fontWeight: 600,
-                        textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-                      }}
-                    >
-                      {story.author}
-                    </span>
+                    {story.content && (
+                      <p
+                        style={{
+                          margin: 0,
+                          fontSize: 11,
+                          color: 'white',
+                          maxHeight: 32,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                        }}
+                      >
+                        {story.content}
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

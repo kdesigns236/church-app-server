@@ -48,25 +48,29 @@ const APP_VERSION = '2.0.0'; // Increment this to clear all localStorage
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user } = useAuth();
 
-    // Clear old localStorage data if app version changed (but preserve user auth)
+    // Clear old localStorage data if app version changed (but preserve user auth and community data)
     React.useEffect(() => {
       const storedVersion = localStorage.getItem('appVersion');
       if (storedVersion !== APP_VERSION) {
         console.log('[AppContext] 🔄 New app version detected, clearing old data...');
-        
-        // Preserve user authentication data
+
+        // Preserve critical data
         const authUser = localStorage.getItem('authUser');
         const authToken = localStorage.getItem('authToken');
-        
+        const communityPosts = localStorage.getItem('communityPosts');
+        const communityStories = localStorage.getItem('communityStories');
+
         // Clear everything
         localStorage.clear();
-        
-        // Restore user auth
+
+        // Restore preserved data
         if (authUser) localStorage.setItem('authUser', authUser);
         if (authToken) localStorage.setItem('authToken', authToken);
-        
+        if (communityPosts) localStorage.setItem('communityPosts', communityPosts);
+        if (communityStories) localStorage.setItem('communityStories', communityStories);
+
         localStorage.setItem('appVersion', APP_VERSION);
-        console.log('[AppContext] ✅ Old data cleared, user auth preserved!');
+        console.log('[AppContext] ✅ Old data cleared, auth and community data preserved!');
       }
     }, []);
 
@@ -697,7 +701,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               : (syncData.chatMessages ? [syncData.chatMessages] : []);
             setChatMessages(messages);
           }
-          if (syncData.posts) setPosts(syncData.posts);
+          if (syncData.posts && Array.isArray(syncData.posts) && syncData.posts.length > 0) {
+            // Only apply server posts when there are no existing local posts
+            setPosts((prevPosts) => {
+              if (Array.isArray(prevPosts) && prevPosts.length > 0) {
+                return prevPosts;
+              }
+              return syncData.posts as Post[];
+            });
+          }
           if (syncData.comments) setComments(syncData.comments);
         }
       }).catch((error) => {
