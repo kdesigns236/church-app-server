@@ -123,7 +123,10 @@ let dataStore = {
   prayerRequests: [],
   bibleStudies: [],
   chatMessages: [],
-  users: []
+  users: [],
+  posts: [],
+  comments: [],
+  communityStories: []
 };
 
 // Data file path
@@ -735,6 +738,16 @@ app.get('/api/bible-studies', (req, res) => {
 app.get('/api/chat-messages', (req, res) => {
   console.log('[Server] Fetching all chat messages');
   res.json(dataStore.chatMessages || []);
+});
+
+app.get('/api/community-posts', (req, res) => {
+  console.log('[Server] Fetching all community posts');
+  res.json(dataStore.posts || []);
+});
+
+app.get('/api/community-comments', (req, res) => {
+  console.log('[Server] Fetching all community comments');
+  res.json(dataStore.comments || []);
 });
 
 // Health check endpoint

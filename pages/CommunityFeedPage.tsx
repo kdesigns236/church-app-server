@@ -15,6 +15,7 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
+import { websocketService } from '../services/websocketService';
 import { Post, Comment } from '../types';
 
 interface Story {
@@ -117,6 +118,33 @@ const CommunityFeedPage: React.FC = () => {
 
     return () => window.clearTimeout(timer);
   }, [activeStoryIndex, stories.length, viewingStory]);
+
+  useEffect(() => {
+    const handleSyncUpdate = (syncData: any) => {
+      if (!syncData || syncData.type !== 'communityStories') return;
+
+      if (syncData.action === 'add') {
+        setStories(prev => {
+          if (prev.find((s) => s.id === syncData.data.id)) {
+            return prev;
+          }
+          return [syncData.data, ...prev];
+        });
+      } else if (syncData.action === 'update') {
+        setStories(prev =>
+          prev.map((s) => (s.id === syncData.data.id ? syncData.data : s)),
+        );
+      } else if (syncData.action === 'delete') {
+        setStories(prev => prev.filter((s) => s.id !== syncData.data.id));
+      }
+    };
+
+    websocketService.addListener('sync_update', handleSyncUpdate);
+
+    return () => {
+      websocketService.removeListener('sync_update', handleSyncUpdate);
+    };
+  }, []);
 
   // Persist stories when they change (e.g. when new stories are added or marked viewed)
   useEffect(() => {

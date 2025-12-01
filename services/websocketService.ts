@@ -2,7 +2,18 @@
 import { io, Socket } from 'socket.io-client';
 
 interface SyncData {
-  type: 'sermons' | 'announcements' | 'events' | 'siteContent' | 'prayerRequests' | 'bibleStudies' | 'chatMessages' | 'users';
+  type:
+    | 'sermons'
+    | 'announcements'
+    | 'events'
+    | 'siteContent'
+    | 'prayerRequests'
+    | 'bibleStudies'
+    | 'chatMessages'
+    | 'users'
+    | 'posts'
+    | 'comments'
+    | 'communityStories';
   action: 'add' | 'update' | 'delete' | 'clear';
   data: any;
   timestamp?: number;
@@ -217,6 +228,15 @@ class WebSocketService {
         }
         if (data.users && Array.isArray(data.users) && data.users.length > 0) {
           localStorage.setItem('churchUserList', JSON.stringify(data.users));
+        }
+        if (data.posts && Array.isArray(data.posts) && data.posts.length > 0) {
+          localStorage.setItem('communityPosts', JSON.stringify(data.posts));
+        }
+        if (data.comments && Array.isArray(data.comments) && data.comments.length > 0) {
+          localStorage.setItem('communityComments', JSON.stringify(data.comments));
+        }
+        if (data.communityStories && Array.isArray(data.communityStories) && data.communityStories.length > 0) {
+          localStorage.setItem('communityStories', JSON.stringify(data.communityStories));
         }
       }
       

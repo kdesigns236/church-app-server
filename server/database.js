@@ -96,7 +96,7 @@ async function setData(key, value) {
 async function getAllData() {
   try {
     const result = await pool.query('SELECT key, value FROM app_data');
-    const data = {
+    const defaultData = {
       sermons: [],
       announcements: [],
       events: [],
@@ -104,8 +104,13 @@ async function getAllData() {
       prayerRequests: [],
       bibleStudies: [],
       chatMessages: [],
-      users: []
+      users: [],
+      posts: [],
+      comments: [],
+      communityStories: []
     };
+    
+    const data = { ...defaultData };
     
     result.rows.forEach(row => {
       try {

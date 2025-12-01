@@ -788,24 +788,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         localStorage.setItem('communityPosts', JSON.stringify(updated));
         return updated;
       });
+
+      websocketService.pushUpdate({
+        type: 'posts',
+        action: 'add',
+        data: newPost,
+      });
     };
 
     const handlePostInteraction = (postId: number, type: 'like' | 'share') => {
+      let updatedPost: Post | null = null;
+
       setPosts(prev =>
         prev.map(post => {
           if (post.id === postId) {
             if (type === 'like') {
               const liked = !post.liked;
               const likes = liked ? post.likes + 1 : Math.max(0, post.likes - 1);
-              return { ...post, liked, likes };
+              updatedPost = { ...post, liked, likes };
+              return updatedPost;
             }
             if (type === 'share') {
-              return { ...post, shares: post.shares + 1 };
+              updatedPost = { ...post, shares: post.shares + 1 };
+              return updatedPost;
             }
           }
           return post;
         }),
       );
+
+      if (updatedPost) {
+        websocketService.pushUpdate({
+          type: 'posts',
+          action: 'update',
+          data: updatedPost,
+        });
+      }
     };
 
     const addPostComment = (postId: number, commentText: string, user: User) => {
@@ -816,17 +834,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         time: 'Just now',
       };
 
+      let updatedPost: Post | null = null;
+
       setPosts(prev =>
         prev.map(post => {
           if (post.id === postId) {
-            return {
+            updatedPost = {
               ...post,
               comments: [...post.comments, newComment],
             };
+            return updatedPost;
           }
           return post;
         }),
       );
+
+      if (updatedPost) {
+        websocketService.pushUpdate({
+          type: 'posts',
+          action: 'update',
+          data: updatedPost,
+        });
+      }
     };
 
     const updateSermon = (updatedSermon: Sermon) => {

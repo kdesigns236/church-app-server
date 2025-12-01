@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
+import { websocketService } from '../services/websocketService';
 import { FiX, FiImage, FiVideo, FiSmile } from 'react-icons/fi';
 
 const CreatePostPage: React.FC = () => {
@@ -66,6 +67,12 @@ const CreatePostPage: React.FC = () => {
         const stories = existing ? JSON.parse(existing) : [];
         stories.unshift(newStory);
         localStorage.setItem('communityStories', JSON.stringify(stories));
+
+        websocketService.pushUpdate({
+          type: 'communityStories',
+          action: 'add',
+          data: newStory,
+        });
       } catch (error) {
         console.error('Error saving story to localStorage', error);
       }
