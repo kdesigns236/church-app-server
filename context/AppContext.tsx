@@ -155,59 +155,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [posts, setPosts] = useState<Post[]>(() => {
       try {
         const storedPosts = localStorage.getItem('communityPosts');
-        const initialPosts: Post[] = [
-          {
-            id: 1,
-            author: 'Pastor John',
-            avatar: 'PJ',
-            time: '2 hours ago',
-            content:
-              'Blessed Sunday service today! Thank you all for joining us in worship. Remember, "The Lord is my strength and my shield." - Psalm 28:7',
-            likes: 24,
-            comments: [],
-            shares: 3,
-            liked: false,
-          },
-          {
-            id: 2,
-            author: 'Sarah M.',
-            avatar: 'SM',
-            time: '5 hours ago',
-            content:
-              'Prayer request: Please pray for my grandmother who is recovering from surgery. Thank you church family!',
-            likes: 45,
-            comments: [
-              { id: 1, author: 'Mary K.', text: 'Praying for your grandmother! 🙏', time: '4 hours ago' },
-            ],
-            shares: 2,
-            liked: false,
-          },
-          {
-            id: 3,
-            author: 'Media Team',
-            avatar: 'MT',
-            time: 'Yesterday',
-            content: 'Photos from our youth outreach service. Praise God for a wonderful time together! (Image demo)',
-            mediaType: 'image',
-            likes: 32,
-            comments: [],
-            shares: 4,
-            liked: false,
-          },
-          {
-            id: 4,
-            author: 'Livestream Team',
-            avatar: 'LT',
-            time: '2 days ago',
-            content: 'Short highlight from last Sunday\'s worship (Video demo).',
-            mediaType: 'video',
-            likes: 58,
-            comments: [],
-            shares: 10,
-            liked: false,
-          },
-        ];
-        return storedPosts ? JSON.parse(storedPosts) : initialPosts;
+        return storedPosts ? JSON.parse(storedPosts) : [];
       } catch (error) {
         console.error('Error parsing posts from localStorage', error);
         return [];
@@ -224,51 +172,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     });
 
+    // Clean up any legacy demo community posts that may be in localStorage
     useEffect(() => {
       setPosts(prev => {
-        const hasImageDemo = prev.some(p => p.mediaType === 'image');
-        const hasVideoDemo = prev.some(p => p.mediaType === 'video');
-        if (hasImageDemo && hasVideoDemo) {
+        if (!Array.isArray(prev) || prev.length === 0) {
           return prev;
         }
 
-        const demoPosts: Post[] = [
-          {
-            id: 3,
-            author: 'Media Team',
-            avatar: 'MT',
-            time: 'Yesterday',
-            content:
-              'Photos from our youth outreach service. Praise God for a wonderful time together! (Image demo)',
-            mediaType: 'image',
-            likes: 32,
-            comments: [],
-            shares: 4,
-            liked: false,
-          },
-          {
-            id: 4,
-            author: 'Livestream Team',
-            avatar: 'LT',
-            time: '2 days ago',
-            content: "Short highlight from last Sunday's worship (Video demo).",
-            mediaType: 'video',
-            likes: 58,
-            comments: [],
-            shares: 10,
-            liked: false,
-          },
-        ];
-
-        const merged = [...prev];
-        demoPosts.forEach(demo => {
-          if (!merged.some(p => p.id === demo.id)) {
-            merged.push(demo);
+        const filtered = prev.filter(post => {
+          if (!post || typeof post !== 'object') {
+            return true;
           }
+          const anyPost: any = post;
+          const content: string = anyPost.content || '';
+          const author: string = anyPost.author || '';
+
+          const isDemo =
+            (author === 'Media Team' && content.includes('(Image demo)')) ||
+            (author === 'Livestream Team' && content.includes('(Video demo)')) ||
+            content.includes('Blessed Sunday service today! Thank you all for joining us in worship.') ||
+            content.includes('Prayer request: Please pray for my grandmother who is recovering from surgery');
+
+          return !isDemo;
         });
 
-        localStorage.setItem('communityPosts', JSON.stringify(merged));
-        return merged;
+        if (filtered.length !== prev.length) {
+          localStorage.setItem('communityPosts', JSON.stringify(filtered));
+          console.log('[AppContext] Removed legacy community demo posts from localStorage');
+        }
+
+        return filtered;
       });
     }, []);
 

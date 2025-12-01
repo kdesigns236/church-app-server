@@ -10,8 +10,10 @@ import {
   FiThumbsUp,
   FiMoreHorizontal,
   FiGlobe,
+  FiArrowLeft,
 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
 import { Post, Comment } from '../types';
 
@@ -30,12 +32,7 @@ const CommunityFeedPage: React.FC = () => {
   const navigate = useNavigate();
   const { posts, handlePostInteraction, addPostComment } = useAppContext();
 
-  const initialStories: Story[] = [
-    { id: 1, author: 'Youth Group', avatar: 'YG', color: 'bg-blue-500', viewed: false, type: 'photo' },
-    { id: 2, author: 'Worship Team', avatar: 'WT', color: 'bg-purple-500', viewed: false, type: 'video' },
-    { id: 3, author: 'Pastor John', avatar: 'PJ', color: 'bg-green-500', viewed: false, type: 'text' },
-    { id: 4, author: 'Missions', avatar: 'M', color: 'bg-orange-500', viewed: false, type: 'photo' },
-  ];
+  const initialStories: Story[] = [];
 
   const [stories, setStories] = useState<Story[]>(initialStories);
   const [activeComment, setActiveComment] = useState<number | null>(null);
@@ -51,9 +48,8 @@ const CommunityFeedPage: React.FC = () => {
   const activeCommentPost =
     activeComment !== null ? posts.find((p) => p.id === activeComment) : null;
 
-  const isDark =
-    typeof document !== 'undefined' &&
-    document.documentElement.classList.contains('dark');
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
 
   const currentUserName = user?.name || 'You';
   const currentUserAvatar =
@@ -143,16 +139,42 @@ const CommunityFeedPage: React.FC = () => {
             justifyContent: 'space-between',
           }}
         >
-          <h1
+          <div
             style={{
-              fontSize: '20px',
-              fontWeight: 'bold',
-              color: '#2563eb',
-              margin: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
             }}
           >
-            Church Community
-          </h1>
+            <button
+              type="button"
+              onClick={() => navigate(-1)}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                cursor: 'pointer',
+                marginRight: 4,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 4,
+                borderRadius: 9999,
+                color: isDark ? '#e5e7eb' : '#111827',
+              }}
+            >
+              <FiArrowLeft size={20} />
+            </button>
+            <h1
+              style={{
+                fontSize: '20px',
+                fontWeight: 'bold',
+                color: '#2563eb',
+                margin: 0,
+              }}
+            >
+              Church Community
+            </h1>
+          </div>
           <Link
             to="/chat-room"
             style={{
@@ -171,7 +193,7 @@ const CommunityFeedPage: React.FC = () => {
             }}
           >
             <FiMessageCircle size={18} />
-            <span>Open Chat</span>
+            <span>Group Chat</span>
           </Link>
         </div>
       </div>
@@ -560,66 +582,6 @@ const CommunityFeedPage: React.FC = () => {
                 {post.content}
               </p>
             </div>
-
-            {/* Post Media Demo (optional) */}
-            {post.mediaType === 'image' && (
-              <div style={{ padding: '0 16px 12px' }}>
-                <div
-                  style={{
-                    borderRadius: 10,
-                    overflow: 'hidden',
-                    background:
-                      'linear-gradient(135deg, #0ea5e9 0%, #6366f1 50%, #ec4899 100%)',
-                    height: 260,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontWeight: 600,
-                    fontSize: 14,
-                    textShadow: '0 1px 2px rgba(0,0,0,0.4)',
-                  }}
-                >
-                  Photo post demo
-                </div>
-              </div>
-            )}
-            {post.mediaType === 'video' && (
-              <div style={{ padding: '0 16px 12px' }}>
-                <div
-                  style={{
-                    borderRadius: 10,
-                    overflow: 'hidden',
-                    backgroundColor: '#111827',
-                    height: 260,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#e5e7eb',
-                    fontWeight: 500,
-                    fontSize: 14,
-                    position: 'relative',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 64,
-                      height: 64,
-                      borderRadius: '9999px',
-                      border: '3px solid rgba(255,255,255,0.7)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginBottom: 8,
-                    }}
-                  >
-                    <FiVideo size={28} />
-                  </div>
-                  <span>Video post demo (tap to play in future)</span>
-                </div>
-              </div>
-            )}
 
             {/* Post Stats */}
             <div

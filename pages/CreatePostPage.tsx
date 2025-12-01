@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
 import { FiX, FiImage, FiVideo, FiSmile } from 'react-icons/fi';
 
 const CreatePostPage: React.FC = () => {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
   const { createPost } = useAppContext();
   const navigate = useNavigate();
   const [postContent, setPostContent] = useState('');
@@ -23,12 +26,18 @@ const CreatePostPage: React.FC = () => {
   };
 
   return (
-    <div style={{ minHeight: '100vh', backgroundColor: '#f0f2f5' }}>
+    <div
+      style={{
+        minHeight: '100vh',
+        backgroundColor: isDark ? '#020617' : '#f0f2f5',
+        color: isDark ? '#e5e7eb' : '#111827',
+      }}
+    >
       {/* Header */}
       <div
         style={{
-          backgroundColor: 'white',
-          borderBottom: '1px solid #e5e7eb',
+          backgroundColor: isDark ? '#020617' : 'white',
+          borderBottom: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
           position: 'sticky',
           top: 0,
           zIndex: 10,
@@ -48,7 +57,7 @@ const CreatePostPage: React.FC = () => {
             style={{
               fontSize: '20px',
               fontWeight: 'bold',
-              color: '#1f2937',
+              color: isDark ? '#e5e7eb' : '#1f2937',
               margin: 0,
             }}
           >
@@ -70,7 +79,7 @@ const CreatePostPage: React.FC = () => {
       <div style={{ maxWidth: '680px', margin: '16px auto', padding: '0 16px' }}>
         <div
           style={{
-            backgroundColor: 'white',
+            backgroundColor: isDark ? '#020617' : 'white',
             borderRadius: '10px',
             padding: '16px',
             boxShadow: '0 1px 2px rgba(0,0,0,0.08)',

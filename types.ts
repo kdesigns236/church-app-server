@@ -48,8 +48,6 @@ export interface Post {
   avatar: string;
   time: string;
   content: string;
-  // Optional media demo fields for the community feed
-  mediaType?: 'image' | 'video';
   likes: number;
   comments: Comment[];
   shares: number;
