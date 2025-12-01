@@ -148,7 +148,7 @@ const CommunityFeedPage: React.FC = () => {
           >
             <button
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate('/')}
               style={{
                 border: 'none',
                 background: 'transparent',
@@ -582,6 +582,34 @@ const CommunityFeedPage: React.FC = () => {
                 {post.content}
               </p>
             </div>
+
+            {post.media && (
+              <div style={{ padding: '0 16px 12px' }}>
+                {post.media.type === 'image' ? (
+                  <img
+                    src={post.media.url}
+                    alt="Post media"
+                    style={{
+                      width: '100%',
+                      maxHeight: '360px',
+                      objectFit: 'cover',
+                      borderRadius: 10,
+                    }}
+                  />
+                ) : (
+                  <video
+                    controls
+                    src={post.media.url}
+                    style={{
+                      width: '100%',
+                      maxHeight: '360px',
+                      borderRadius: 10,
+                      backgroundColor: '#000',
+                    }}
+                  />
+                )}
+              </div>
+            )}
 
             {/* Post Stats */}
             <div

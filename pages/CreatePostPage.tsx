@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
@@ -12,15 +12,39 @@ const CreatePostPage: React.FC = () => {
   const { createPost } = useAppContext();
   const navigate = useNavigate();
   const [postContent, setPostContent] = useState('');
+  const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
 
   const currentUserName = user?.name || 'User';
   const currentUserAvatar =
     (user?.name && user.name.trim().charAt(0).toUpperCase()) || 'U';
 
+  const handleFileSelected = (file: File, type: 'image' | 'video') => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result;
+      if (typeof result === 'string') {
+        setSelectedMedia({ url: result, type });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleImageClick = () => {
+    imageInputRef.current?.click();
+  };
+
+  const handleVideoClick = () => {
+    videoInputRef.current?.click();
+  };
+
   const handlePost = () => {
     if (!user) return;
     if (postContent.trim()) {
-      createPost(postContent, user);
+      createPost(postContent, user, selectedMedia || undefined);
+      setPostContent('');
+      setSelectedMedia(null);
       navigate('/chat');
     }
   };
@@ -74,6 +98,32 @@ const CreatePostPage: React.FC = () => {
             <FiX size={24} />
           </button>
         </div>
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              handleFileSelected(file, 'image');
+              e.target.value = '';
+            }
+          }}
+        />
+        <input
+          ref={videoInputRef}
+          type="file"
+          accept="video/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              handleFileSelected(file, 'video');
+              e.target.value = '';
+            }
+          }}
+        />
       </div>
 
       <div style={{ maxWidth: '680px', margin: '16px auto', padding: '0 16px' }}>
@@ -142,6 +192,8 @@ const CreatePostPage: React.FC = () => {
               fontFamily: 'inherit',
               margin: '16px 0',
               padding: '0',
+              backgroundColor: isDark ? '#020617' : 'white',
+              color: isDark ? '#e5e7eb' : '#111827',
             }}
           />
 
@@ -154,6 +206,8 @@ const CreatePostPage: React.FC = () => {
             }}
           >
             <button
+              type="button"
+              onClick={handleVideoClick}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -172,6 +226,8 @@ const CreatePostPage: React.FC = () => {
               <span>Video</span>
             </button>
             <button
+              type="button"
+              onClick={handleImageClick}
               style={{
                 flex: 1,
                 display: 'flex',
@@ -187,7 +243,7 @@ const CreatePostPage: React.FC = () => {
               }}
             >
               <FiImage size={18} />
-              <span>Photo/Video</span>
+              <span>Photo</span>
             </button>
             <button
               style={{
@@ -208,6 +264,48 @@ const CreatePostPage: React.FC = () => {
               <span>Feeling/Activity</span>
             </button>
           </div>
+
+          {selectedMedia && (
+            <div style={{ marginTop: '12px' }}>
+              {selectedMedia.type === 'image' ? (
+                <img
+                  src={selectedMedia.url}
+                  alt="Selected"
+                  style={{
+                    maxWidth: '100%',
+                    borderRadius: '10px',
+                    maxHeight: '320px',
+                    objectFit: 'cover',
+                  }}
+                />
+              ) : (
+                <video
+                  controls
+                  src={selectedMedia.url}
+                  style={{
+                    width: '100%',
+                    borderRadius: '10px',
+                    maxHeight: '320px',
+                    backgroundColor: '#000',
+                  }}
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedMedia(null)}
+                style={{
+                  marginTop: '8px',
+                  fontSize: '12px',
+                  color: '#ef4444',
+                  border: 'none',
+                  background: 'transparent',
+                  cursor: 'pointer',
+                }}
+              >
+                Remove media
+              </button>
+            </div>
+          )}
 
           <button
             onClick={handlePost}

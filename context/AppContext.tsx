@@ -35,7 +35,7 @@ interface AppContextType {
     deleteBibleStudy: (id: string) => void;
     addChatMessage: (messageData: { content?: string; media?: { url: string; type: 'image' | 'video' | 'audio'; }; replyTo?: ChatMessage; }, user: User) => void;
     deleteChatMessage: (messageId: string) => void;
-    createPost: (content: string, user: User) => void;
+    createPost: (content: string, user: User, media?: { url: string; type: 'image' | 'video' }) => void;
     handlePostInteraction: (postId: number, type: 'like' | 'share') => void;
     addPostComment: (postId: number, commentText: string, user: User) => void;
 }
@@ -364,9 +364,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
           
           if (Array.isArray(postsData) && postsData.length > 0) {
-            // Only overwrite local posts when server actually has data
-            setPosts(postsData);
-            localStorage.setItem('communityPosts', JSON.stringify(postsData));
+            // Only apply server posts when there are no existing local posts
+            setPosts((prevPosts) => {
+              if (Array.isArray(prevPosts) && prevPosts.length > 0) {
+                return prevPosts;
+              }
+              return postsData;
+            });
           }
           
           if (Array.isArray(commentsData) && commentsData.length > 0) {
@@ -750,10 +754,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('communityComments', JSON.stringify(comments));
     }, [comments]);
 
-    const createPost = (content: string, user: User) => {
+    const createPost = (content: string, user: User, media?: { url: string; type: 'image' | 'video' }) => {
       if (!user) return;
 
-      const newPost: Post = {
+      const basePost: Post = {
         id: Date.now(),
         author: user.name,
         avatar: user.name.trim().charAt(0).toUpperCase(),
@@ -764,6 +768,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         shares: 0,
         liked: false,
       };
+
+      const newPost: Post = media ? { ...basePost, media } : basePost;
 
       setPosts(prev => [newPost, ...prev]);
     };

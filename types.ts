@@ -42,12 +42,18 @@ export interface Announcement {
     date: string;
 }
 
+export interface PostMedia {
+  url: string;
+  type: 'image' | 'video';
+}
+
 export interface Post {
   id: number;
   author: string;
   avatar: string;
   time: string;
   content: string;
+  media?: PostMedia;
   likes: number;
   comments: Comment[];
   shares: number;
