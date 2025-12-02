@@ -32,7 +32,7 @@ interface Story {
 const CommunityFeedPage: React.FC = () => {
   const { user, users } = useAuth();
   const navigate = useNavigate();
-  const { posts, handlePostInteraction, addPostComment } = useAppContext();
+  const { posts, handlePostInteraction, addPostComment, deletePost } = useAppContext();
 
   const [stories, setStories] = useState<Story[]>(() => {
     try {
@@ -48,10 +48,35 @@ const CommunityFeedPage: React.FC = () => {
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [currentStoryAuthor, setCurrentStoryAuthor] = useState<string | null>(null);
+  const [activePostMenuId, setActivePostMenuId] = useState<number | null>(null);
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
     return story.type === 'video' ? 30000 : 5000;
+  };
+
+  const canDeletePost = (post: Post): boolean => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    return post.author === user.name;
+  };
+
+  const handleDeletePost = (post: Post) => {
+    if (!canDeletePost(post)) {
+      alert('You can only delete your own posts.');
+      return;
+    }
+
+    const confirmed = window.confirm('Delete this post?');
+    if (!confirmed) return;
+
+    deletePost(post.id);
+    setActivePostMenuId(null);
+
+    if (activeComment === post.id) {
+      setActiveComment(null);
+      setCommentText('');
+    }
   };
 
   const activeCommentPost =
@@ -714,6 +739,7 @@ const CommunityFeedPage: React.FC = () => {
               borderRadius: '8px',
               marginBottom: '16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+              position: 'relative',
             }}
           >
             {/* Post Header */}
@@ -791,6 +817,9 @@ const CommunityFeedPage: React.FC = () => {
               </div>
               <button
                 type="button"
+                onClick={() =>
+                  setActivePostMenuId((prev) => (prev === post.id ? null : post.id))
+                }
                 style={{
                   border: 'none',
                   background: 'transparent',
@@ -801,6 +830,62 @@ const CommunityFeedPage: React.FC = () => {
                 <FiMoreHorizontal size={18} />
               </button>
             </div>
+
+            {/* Post Actions Menu (3-dot) */}
+            {activePostMenuId === post.id && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 44,
+                  right: 8,
+                  zIndex: 20,
+                  backgroundColor: isDark ? '#020617' : 'white',
+                  borderRadius: 8,
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  border: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
+                  minWidth: 160,
+                  overflow: 'hidden',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveComment(post.id);
+                    setActivePostMenuId(null);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    border: 'none',
+                    background: 'transparent',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: 14,
+                    color: isDark ? '#e5e7eb' : '#111827',
+                  }}
+                >
+                  View details
+                </button>
+                {canDeletePost(post) && (
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePost(post)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      color: '#ef4444',
+                    }}
+                  >
+                    Delete post
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Post Content */}
             <div style={{ padding: '0 16px 12px' }}>

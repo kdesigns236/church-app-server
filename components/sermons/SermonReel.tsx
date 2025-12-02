@@ -51,13 +51,29 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     let objectUrl: string | null = null;
         
     const loadVideo = async () => {
-      if (!sermon.videoUrl) {
-        setVideoSrc('');
-        return;
-      }
-
       try {
-        // Cloud-hosted videos (Priority)
+        // Prefer cached offline video from IndexedDB if available
+        if (sermon.id) {
+          try {
+            console.log('[SermonReel] Checking for cached video for sermon', sermon.id);
+            const cachedUrl = await videoStorageService.getVideoUrl(String(sermon.id));
+            if (cachedUrl && isMountedRef.current) {
+              objectUrl = cachedUrl;
+              setVideoSrc(cachedUrl);
+              console.log('[SermonReel] Playing cached offline video for sermon', sermon.id);
+              return;
+            }
+          } catch (e) {
+            console.error('[SermonReel] Error checking cached video:', e);
+          }
+        }
+
+        if (!sermon.videoUrl) {
+          setVideoSrc('');
+          return;
+        }
+
+        // Cloud-hosted videos (fallback when no cached copy)
         if (typeof sermon.videoUrl === 'string' && 
             (sermon.videoUrl.startsWith('http://') || sermon.videoUrl.startsWith('https://'))) {
           console.log('[SermonReel] Loading video from cloud:', sermon.videoUrl);
@@ -66,7 +82,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           return;
         }
 
-        // IndexedDB videos (Backwards compatibility)
+        // IndexedDB videos (Backwards compatibility for legacy indexed-db:// URLs)
         if (sermon.videoUrl && typeof sermon.videoUrl === 'string' && sermon.videoUrl.startsWith('indexed-db://')) {
           const sermonId = sermon.videoUrl.replace('indexed-db://', '');
           console.log('[SermonReel] ⚠️ Old video format (IndexedDB):', sermonId);

@@ -5,6 +5,7 @@ import { notificationService } from '../services/notificationService';
 import { localNotificationService } from '../services/localNotificationService';
 import { initialSiteContent } from '../constants/siteContent';
 import { useAuth } from '../hooks/useAuth';
+import { videoStorageService } from '../services/videoStorageService';
 
 interface AppContextType {
     sermons: Sermon[];
@@ -38,6 +39,7 @@ interface AppContextType {
     createPost: (content: string, user: User, media?: { url: string; type: 'image' | 'video' }) => void;
     handlePostInteraction: (postId: number, type: 'like' | 'share') => void;
     addPostComment: (postId: number, commentText: string, user: User) => void;
+    deletePost: (postId: number) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -215,6 +217,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('lastSyncTime', Date.now().toString());
     };
 
+    // Background prefetch: automatically download sermon videos into IndexedDB
+    const prefetchSermonVideos = async (sermonsToPrefetch: Sermon[]) => {
+      try {
+        if (typeof window === 'undefined' || !navigator.onLine) {
+          return;
+        }
+
+        for (const sermon of sermonsToPrefetch) {
+          if (!sermon || !sermon.videoUrl) continue;
+          if (typeof sermon.videoUrl !== 'string') continue;
+
+          // Only prefetch http(s) videos; legacy indexed-db:// videos are already local
+          if (!sermon.videoUrl.startsWith('http://') && !sermon.videoUrl.startsWith('https://')) {
+            continue;
+          }
+
+          const sermonId = String(sermon.id || '');
+          if (!sermonId) continue;
+
+          try {
+            const alreadyHas = await videoStorageService.hasVideo(sermonId);
+            if (alreadyHas) continue;
+
+            console.log('[AppContext] 🎥 Prefetching video for sermon', sermonId);
+            const response = await fetch(sermon.videoUrl);
+            if (!response.ok) {
+              console.warn('[AppContext] Failed to prefetch video for sermon', sermonId, response.status);
+              continue;
+            }
+
+            const blob = await response.blob();
+            const mimeType = blob.type || 'video/mp4';
+            const extension = mimeType.split('/')[1] || 'mp4';
+            const file = new File([blob], `sermon-${sermonId}.${extension}`, { type: mimeType });
+
+            await videoStorageService.saveVideo(sermonId, file);
+            console.log('[AppContext] ✅ Prefetched video for sermon', sermonId);
+          } catch (error) {
+            console.error('[AppContext] Error prefetching video for sermon', sermon.id, error);
+          }
+        }
+      } catch (err) {
+        console.error('[AppContext] Error in prefetchSermonVideos:', err);
+      }
+    };
+
     // Fetch initial data from server on app load
     useEffect(() => {
       const fetchInitialData = async () => {
@@ -313,6 +361,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (Array.isArray(sermonsData) && sermonsData.length > 0) {
             setSermons(sermonsData);
             localStorage.setItem('sermons', JSON.stringify(sermonsData));
+            prefetchSermonVideos(sermonsData);
           } else if (sermonsRes.ok && Array.isArray(sermonsData) && sermonsData.length === 0) {
             // Server explicitly returned empty array (data was deleted)
             setSermons([]);
@@ -502,12 +551,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   localStorage.setItem('sermons', JSON.stringify(updated));
                   return updated;
                 });
+                prefetchSermonVideos([syncData.data]);
               } else if (syncData.action === 'update') {
                 setSermons(prev => {
                   const updated = prev.map(s => s.id === syncData.data.id ? syncData.data : s);
                   localStorage.setItem('sermons', JSON.stringify(updated));
                   return updated;
                 });
+                prefetchSermonVideos([syncData.data]);
               } else if (syncData.action === 'delete') {
                 setSermons(prev => {
                   const updated = prev.filter(s => s.id !== syncData.data.id);
@@ -662,6 +713,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // Handle full data sync (for initial load or reconnection)
         if (syncData.sermons && Array.isArray(syncData.sermons)) {
           setSermons(syncData.sermons);
+          prefetchSermonVideos(syncData.sermons as Sermon[]);
         }
         if (syncData.announcements && Array.isArray(syncData.announcements)) {
           setAnnouncements(syncData.announcements);
@@ -684,23 +736,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (syncData.comments && Array.isArray(syncData.comments)) {
           setComments(syncData.comments);
         }
-      });
-
-      // Initial sync on app load
-      websocketService.pullFromServer().then((syncData) => {
-        if (syncData) {
-          console.log('[AppContext] Initial sync completed');
-          if (syncData.sermons) setSermons(syncData.sermons);
-          if (syncData.announcements) setAnnouncements(syncData.announcements);
-          if (syncData.events) setEvents(syncData.events);
-          if (syncData.siteContent) setSiteContent(syncData.siteContent);
-          if (syncData.chatMessages) {
-            // Ensure chatMessages is always an array
-            const messages = Array.isArray(syncData.chatMessages) 
-              ? syncData.chatMessages 
-              : (syncData.chatMessages ? [syncData.chatMessages] : []);
-            setChatMessages(messages);
-          }
           if (syncData.posts && Array.isArray(syncData.posts) && syncData.posts.length > 0) {
             // Only apply server posts when there are no existing local posts
             setPosts((prevPosts) => {
@@ -712,8 +747,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
           if (syncData.comments) setComments(syncData.comments);
         }
-      }).catch((error) => {
-        console.log('[AppContext] Initial sync failed (offline mode):', error.message);
       });
 
       return () => {
@@ -824,6 +857,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           data: updatedPost,
         });
       }
+    };
+
+    const deletePost = (postId: number) => {
+      setPosts(prev => {
+        const updated = prev.filter(post => post.id !== postId);
+        localStorage.setItem('communityPosts', JSON.stringify(updated));
+        return updated;
+      });
+
+      websocketService.pushUpdate({
+        type: 'posts',
+        action: 'delete',
+        data: { id: postId },
+      });
     };
 
     const addPostComment = (postId: number, commentText: string, user: User) => {
@@ -1206,6 +1253,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         createPost,
         handlePostInteraction,
         addPostComment,
+        deletePost,
     };
 
     return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
