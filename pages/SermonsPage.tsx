@@ -19,8 +19,57 @@ const SermonsPage: React.FC = () => {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isMuted, setIsMuted] = useState(false); // Start unmuted as requested
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [showChrome, setShowChrome] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const chromeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
+  // Track orientation to control page-level chrome visibility
+  useEffect(() => {
+    const updateOrientation = () => {
+      if (typeof window === 'undefined') return;
+
+      let landscape = false;
+
+      if (window.matchMedia) {
+        try {
+          const mq = window.matchMedia('(orientation: landscape)');
+          landscape = mq.matches;
+        } catch {
+          // Ignore matchMedia errors and fall back to dimensions
+        }
+      }
+
+      if (!landscape) {
+        landscape = window.innerWidth > window.innerHeight;
+      }
+
+      setIsLandscape(landscape);
+
+      if (!landscape) {
+        setShowChrome(true);
+        if (chromeTimeoutRef.current) {
+          clearTimeout(chromeTimeoutRef.current);
+          chromeTimeoutRef.current = null;
+        }
+      } else {
+        setShowChrome(false);
+      }
+    };
+
+    updateOrientation();
+    window.addEventListener('resize', updateOrientation);
+    window.addEventListener('orientationchange', updateOrientation);
+
+    return () => {
+      window.removeEventListener('resize', updateOrientation);
+      window.removeEventListener('orientationchange', updateOrientation);
+      if (chromeTimeoutRef.current) {
+        clearTimeout(chromeTimeoutRef.current);
+      }
+    };
+  }, []);
+
   // Sort sermons by date - newest first
   const sortedSermons = [...sermons].sort((a, b) => {
     const orderA = typeof (a as any).order === 'number' ? (a as any).order : Number.MAX_SAFE_INTEGER;
@@ -53,6 +102,18 @@ const SermonsPage: React.FC = () => {
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [sortedSermons.length]); // Global mute state for all videos
+
+  const handleUserInteraction = () => {
+    if (!isLandscape) return;
+
+    setShowChrome(true);
+    if (chromeTimeoutRef.current) {
+      clearTimeout(chromeTimeoutRef.current);
+    }
+    chromeTimeoutRef.current = setTimeout(() => {
+      setShowChrome(false);
+    }, 4000);
+  };
 
   const handleOpenComments = (sermon: Sermon) => {
     setActiveSermonId(sermon.id);
@@ -90,16 +151,18 @@ const SermonsPage: React.FC = () => {
   return (
     <>
       {/* Back Button */}
-      <button
-        onClick={() => navigate('/')}
-        className="fixed top-5 left-5 z-50 p-2.5 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-black/70 transition-all duration-300 shadow-xl active:scale-95"
-        aria-label="Go back"
-      >
-        <ArrowLeftIcon className="w-6 h-6" />
-      </button>
+      {(!isLandscape || showChrome) && (
+        <button
+          onClick={() => navigate('/')}
+          className="fixed top-5 left-5 z-50 p-2.5 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-black/70 transition-all duration-300 shadow-xl active:scale-95"
+          aria-label="Go back"
+        >
+          <ArrowLeftIcon className="w-6 h-6" />
+        </button>
+      )}
 
       {/* Sermon Counter */}
-      {sortedSermons.length > 0 && (
+      {sortedSermons.length > 0 && (!isLandscape || showChrome) && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-sm font-bold shadow-xl">
           {currentIndex + 1} / {sortedSermons.length}
         </div>
@@ -123,6 +186,8 @@ const SermonsPage: React.FC = () => {
               isMuted={isMuted}
               onToggleMute={() => setIsMuted(!isMuted)}
               isActive={index === currentIndex}
+              showChrome={showChrome}
+              onUserInteraction={handleUserInteraction}
             />
           ))
         ) : (

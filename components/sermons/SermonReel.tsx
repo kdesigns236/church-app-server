@@ -18,6 +18,8 @@ interface SermonReelProps {
   isMuted: boolean;
   onToggleMute: () => void;
   isActive?: boolean;
+  showChrome?: boolean;
+  onUserInteraction?: () => void;
 }
 
 export const SermonReel: React.FC<SermonReelProps> = ({ 
@@ -28,7 +30,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   onSave, 
   isMuted, 
   onToggleMute,
-  isActive = true 
+  isActive = true,
+  showChrome = true,
+  onUserInteraction,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -38,6 +42,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [rotation, setRotation] = useState(0);
   const [isLandscape, setIsLandscape] = useState(false);
+  const shouldShowUi = !isLandscape || showChrome;
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
 
@@ -192,7 +197,11 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     } else {
       videoRef.current?.play();
     }
-    
+
+    if (onUserInteraction) {
+      onUserInteraction();
+    }
+
     setShowControls(true);
     if (controlsTimeoutRef.current) {
       clearTimeout(controlsTimeoutRef.current);
@@ -277,8 +286,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         </div>
       )}
 
-      {/* Hide overlay UI in landscape to give more space for fullscreen video */}
-      {!isLandscape && (
+      {/* Overlay UI - hidden in landscape until user interacts */}
+      {shouldShowUi && (
         <SermonOverlay 
           sermon={sermon} 
           onLike={onLike} 
@@ -302,41 +311,43 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       )}
 
       {/* Top Right Controls */}
-      <div className="absolute top-5 right-4 z-30 flex flex-col gap-2.5">
-        <button 
-          onClick={onToggleMute}
-          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
-          aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-        >
-          {isMuted ? 
-            <SoundOffIcon className="w-5 h-5 text-white"/> : 
-            <SoundOnIcon className="w-5 h-5 text-red-400"/>
-          }
-        </button>
+      {shouldShowUi && (
+        <div className="absolute top-5 right-4 z-30 flex flex-col gap-2.5">
+          <button 
+            onClick={onToggleMute}
+            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
+            aria-label={isMuted ? 'Unmute video' : 'Mute video'}
+          >
+            {isMuted ? 
+              <SoundOffIcon className="w-5 h-5 text-white"/> : 
+              <SoundOnIcon className="w-5 h-5 text-red-400"/>
+            }
+          </button>
 
-        <button 
-          onClick={handleRotate}
-          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
-          aria-label="Rotate video"
-        >
-          <FaSyncAlt className="w-5 h-5 text-white" />
-        </button>
+          <button 
+            onClick={handleRotate}
+            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
+            aria-label="Rotate video"
+          >
+            <FaSyncAlt className="w-5 h-5 text-white" />
+          </button>
 
-        <button 
-          onClick={handleVideoPress}
-          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
-          aria-label={isPlaying ? 'Pause video' : 'Play video'}
-        >
-          {isPlaying ? (
-            <PauseIcon className="w-5 h-5 text-white" />
-          ) : (
-            <PlayIcon className="w-5 h-5 text-red-400" />
-          )}
-        </button>
-      </div>
+          <button 
+            onClick={handleVideoPress}
+            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
+            aria-label={isPlaying ? 'Pause video' : 'Play video'}
+          >
+            {isPlaying ? (
+              <PauseIcon className="w-5 h-5 text-white" />
+            ) : (
+              <PlayIcon className="w-5 h-5 text-red-400" />
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Progress Bar */}
-      {showControls && duration > 0 && videoSrc && (
+      {shouldShowUi && showControls && duration > 0 && videoSrc && (
         <div className="absolute bottom-2 left-0 right-0 z-20 px-4 transition-opacity duration-300">
           <div className="bg-gradient-to-t from-black/60 to-transparent pt-3 pb-2 px-2">
             <input

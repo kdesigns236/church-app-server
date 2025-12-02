@@ -102,12 +102,13 @@ export const Header: React.FC = () => {
                )}
               <Link
                 to="/pastor-ai"
-                className="rounded-full bg-transparent hover:bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 p-0.5 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-primary dark:focus:ring-offset-gray-800 focus:ring-purple-500"
+                className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-gray-300 hover:bg-navy-light hover:text-white transition-colors"
                 aria-label="Open AI Assistant"
               >
-                <div className="flex h-full w-full items-center justify-center rounded-full bg-primary dark:bg-gray-900 p-1.5">
-                    <FiZap className="w-6 h-6 text-secondary" />
-                </div>
+                <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-black/10 dark:bg-white/5 shadow-sm">
+                  <FiZap className="h-4 w-4" />
+                </span>
+                <span>Pastor AI</span>
               </Link>
               <ThemeToggle />
             </div>
@@ -125,7 +126,7 @@ export const Header: React.FC = () => {
       </nav>
 
       {isOpen && (
-        <div className="md:hidden bg-primary dark:bg-gray-900 border-t border-navy-light">
+        <div className="md:hidden bg-primary dark:bg-gray-900 border-t border-navy-light max-h-[calc(100vh-3.5rem)] overflow-y-auto">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((link) => (
               <Link
@@ -148,9 +149,11 @@ export const Header: React.FC = () => {
               <Link
                 to="/pastor-ai"
                 onClick={() => setIsOpen(false)}
-                className="flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-navy-light hover:text-white transition-colors"
+                className="group flex items-center gap-3 px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:bg-navy-light hover:text-white transition-colors"
               >
-                <FiZap className="h-5 w-5" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-white/20 via-white/10 to-black/40 border border-white/25 shadow-lg shadow-black/40 backdrop-blur-md transform transition-all duration-200 group-hover:shadow-2xl group-hover:scale-110 group-hover:-translate-y-0.5">
+                  <FiZap className="h-5 w-5" />
+                </div>
                 <span>Pastor AI</span>
               </Link>
               <div className="flex items-center justify-between w-full px-3 py-2 text-base font-medium text-gray-300">
