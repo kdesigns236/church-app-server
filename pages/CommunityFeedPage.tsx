@@ -30,7 +30,7 @@ interface Story {
 }
 
 const CommunityFeedPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const navigate = useNavigate();
   const { posts, handlePostInteraction, addPostComment } = useAppContext();
 
@@ -63,6 +63,22 @@ const CommunityFeedPage: React.FC = () => {
   const currentUserName = user?.name || 'You';
   const currentUserAvatar =
     (user?.name && user.name.trim().charAt(0).toUpperCase()) || 'ME';
+
+  const currentUserProfilePicture =
+    (user && (user as any).profilePictureUrl) ||
+    (user && (user as any).profilePicture) ||
+    undefined;
+
+  const getUserProfilePicture = (name: string): string | undefined => {
+    const list = users || [];
+    const match = list.find((u) => u.name === name);
+    if (!match) return undefined;
+    return (
+      (match as any).profilePictureUrl ||
+      (match as any).profilePicture ||
+      undefined
+    );
+  };
 
   const myStories = user ? stories.filter((s) => s.author === user.name) : [];
   const otherStories = user ? stories.filter((s) => s.author !== user.name) : stories;
@@ -103,6 +119,42 @@ const CommunityFeedPage: React.FC = () => {
     setViewingStory(null);
     setActiveStoryIndex(null);
     setCurrentStoryAuthor(null);
+  };
+
+  const goToNextStory = () => {
+    if (!currentStoryAuthor || activeStoryIndex === null) return;
+    const authorStories = stories.filter((s) => s.author === currentStoryAuthor);
+    if (authorStories.length === 0) return;
+
+    const nextIndex = activeStoryIndex + 1;
+    if (nextIndex >= authorStories.length) {
+      closeStory();
+    } else {
+      const nextStory = authorStories[nextIndex];
+      setActiveStoryIndex(nextIndex);
+      setViewingStory(nextStory);
+      setStories((prev) =>
+        prev.map((s) => (s.id === nextStory.id ? { ...s, viewed: true } : s)),
+      );
+    }
+  };
+
+  const goToPreviousStory = () => {
+    if (!currentStoryAuthor || activeStoryIndex === null) return;
+    const authorStories = stories.filter((s) => s.author === currentStoryAuthor);
+    if (authorStories.length === 0) return;
+
+    const prevIndex = activeStoryIndex - 1;
+    if (prevIndex < 0) {
+      closeStory();
+    } else {
+      const prevStory = authorStories[prevIndex];
+      setActiveStoryIndex(prevIndex);
+      setViewingStory(prevStory);
+      setStories((prev) =>
+        prev.map((s) => (s.id === prevStory.id ? { ...s, viewed: true } : s)),
+      );
+    }
   };
 
   // Auto-advance stories within the current author's story list only
@@ -321,9 +373,31 @@ const CommunityFeedPage: React.FC = () => {
                   color: '#3b82f6',
                   fontWeight: 'bold',
                   fontSize: 14,
+                  overflow: 'hidden',
                 }}
               >
-                {currentUserAvatar}
+                {currentUserProfilePicture ? (
+                  <img
+                    src={currentUserProfilePicture}
+                    alt={currentUserName}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  <span
+                    style={{
+                      color: '#3b82f6',
+                      fontWeight: 'bold',
+                      fontSize: 14,
+                    }}
+                  >
+                    {currentUserAvatar}
+                  </span>
+                )}
               </div>
               <div
                 style={{
@@ -429,9 +503,31 @@ const CommunityFeedPage: React.FC = () => {
                           fontWeight: 'bold',
                           fontSize: 13,
                           flexShrink: 0,
+                          overflow: 'hidden',
                         }}
                       >
-                        {story.avatar}
+                        {getUserProfilePicture(story.author) ? (
+                          <img
+                            src={getUserProfilePicture(story.author) as string}
+                            alt={story.author}
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              borderRadius: '50%',
+                              objectFit: 'cover',
+                            }}
+                          />
+                        ) : (
+                          <span
+                            style={{
+                              color: 'white',
+                              fontWeight: 'bold',
+                              fontSize: 13,
+                            }}
+                          >
+                            {story.avatar}
+                          </span>
+                        )}
                       </div>
                       <span
                         style={{
@@ -496,9 +592,31 @@ const CommunityFeedPage: React.FC = () => {
                 fontWeight: 'bold',
                 fontSize: '14px',
                 flexShrink: 0,
+                overflow: 'hidden',
               }}
             >
-              {currentUserAvatar}
+              {currentUserProfilePicture ? (
+                <img
+                  src={currentUserProfilePicture}
+                  alt={currentUserName}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                  }}
+                />
+              ) : (
+                <span
+                  style={{
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                  }}
+                >
+                  {currentUserAvatar}
+                </span>
+              )}
             </div>
             <button
               onClick={() => navigate('/create-post')}
@@ -619,9 +737,31 @@ const CommunityFeedPage: React.FC = () => {
                   color: 'white',
                   fontWeight: 'bold',
                   fontSize: '14px',
+                  overflow: 'hidden',
                 }}
               >
-                {post.avatar}
+                {getUserProfilePicture(post.author) ? (
+                  <img
+                    src={getUserProfilePicture(post.author) as string}
+                    alt={post.author}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                ) : (
+                  <span
+                    style={{
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '14px',
+                    }}
+                  >
+                    {post.avatar}
+                  </span>
+                )}
               </div>
               <div style={{ flex: 1 }}>
                 <h3
@@ -865,9 +1005,31 @@ const CommunityFeedPage: React.FC = () => {
                     fontWeight: 'bold',
                     fontSize: '14px',
                     flexShrink: 0,
+                    overflow: 'hidden',
                   }}
                 >
-                  {activeCommentPost.avatar}
+                  {getUserProfilePicture(activeCommentPost.author) ? (
+                    <img
+                      src={getUserProfilePicture(activeCommentPost.author) as string}
+                      alt={activeCommentPost.author}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        color: 'white',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {activeCommentPost.avatar}
+                    </span>
+                  )}
                 </div>
                 <div>
                   <p
@@ -965,9 +1127,31 @@ const CommunityFeedPage: React.FC = () => {
                       fontSize: '12px',
                       fontWeight: 'bold',
                       flexShrink: 0,
+                      overflow: 'hidden',
                     }}
                   >
-                    {comment.author.charAt(0)}
+                    {getUserProfilePicture(comment.author) ? (
+                      <img
+                        src={getUserProfilePicture(comment.author) as string}
+                        alt={comment.author}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          color: 'white',
+                          fontSize: '12px',
+                          fontWeight: 'bold',
+                        }}
+                      >
+                        {comment.author.charAt(0)}
+                      </span>
+                    )}
                   </div>
                   <div
                     style={{
@@ -1153,9 +1337,31 @@ const CommunityFeedPage: React.FC = () => {
                     justifyContent: 'center',
                     fontWeight: 'bold',
                     fontSize: '14px',
+                    overflow: 'hidden',
                   }}
                 >
-                  {viewingStory.avatar}
+                  {getUserProfilePicture(viewingStory.author) ? (
+                    <img
+                      src={getUserProfilePicture(viewingStory.author) as string}
+                      alt={viewingStory.author}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        color: '#111827',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {viewingStory.avatar}
+                    </span>
+                  )}
                 </div>
                 <span
                   style={{ color: 'white', fontWeight: 600 }}
@@ -1177,6 +1383,7 @@ const CommunityFeedPage: React.FC = () => {
             </div>
             <div
               style={{
+                position: 'relative',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -1219,6 +1426,29 @@ const CommunityFeedPage: React.FC = () => {
                   {viewingStory.content}
                 </p>
               )}
+
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    cursor: 'pointer',
+                  }}
+                  onClick={goToPreviousStory}
+                />
+                <div
+                  style={{
+                    flex: 1,
+                    cursor: 'pointer',
+                  }}
+                  onClick={goToNextStory}
+                />
+              </div>
             </div>
           </div>
         </div>
