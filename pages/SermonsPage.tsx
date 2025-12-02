@@ -154,16 +154,16 @@ const SermonsPage: React.FC = () => {
       {(!isLandscape || showChrome) && (
         <button
           onClick={() => navigate('/')}
-          className="fixed top-5 left-5 z-50 p-2.5 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-black/70 transition-all duration-300 shadow-xl active:scale-95"
+          className="fixed top-4 left-3 z-50 p-2 bg-black/50 backdrop-blur-md rounded-full text-white hover:bg-black/70 transition-all duration-300 shadow-lg active:scale-95"
           aria-label="Go back"
         >
-          <ArrowLeftIcon className="w-6 h-6" />
+          <ArrowLeftIcon className="w-5 h-5" />
         </button>
       )}
 
       {/* Sermon Counter */}
       {sortedSermons.length > 0 && (!isLandscape || showChrome) && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-black/50 backdrop-blur-md rounded-full text-white text-sm font-bold shadow-xl">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full text-white text-xs sm:text-sm font-bold shadow-lg">
           {currentIndex + 1} / {sortedSermons.length}
         </div>
       )}

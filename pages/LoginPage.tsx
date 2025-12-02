@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AuthLayout } from '../components/auth/AuthLayout';
@@ -10,19 +9,27 @@ const LoginPage: React.FC = () => {
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isSlow, setIsSlow] = useState(false);
     const { login } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsSlow(false);
         setIsLoading(true);
+
+        const slowTimer = window.setTimeout(() => {
+            setIsSlow(true);
+        }, 4000);
+
         try {
             await login(email, password);
             navigate('/');
         } catch (err: any) {
             setError(err.message || 'Failed to log in. Please check your credentials.');
         } finally {
+            window.clearTimeout(slowTimer);
             setIsLoading(false);
         }
     };
@@ -85,6 +92,11 @@ const LoginPage: React.FC = () => {
                 </div>
 
                 {error && <p className="text-sm text-center text-error dark:text-red-400 font-semibold">{error}</p>}
+                {!error && isSlow && (
+                    <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                        Still signing in... If this is your first time today, the server may be waking up. Please keep the app open.
+                    </p>
+                )}
 
                 <div>
                     <button

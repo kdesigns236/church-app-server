@@ -13,6 +13,7 @@ const RegisterPage: React.FC = () => {
     const [profilePicture, setProfilePicture] = useState<{ file: File | null; previewUrl: string | null }>({ file: null, previewUrl: null });
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isSlow, setIsSlow] = useState(false);
     const { register } = useAuth();
     const navigate = useNavigate();
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -33,7 +34,12 @@ const RegisterPage: React.FC = () => {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
+        setIsSlow(false);
         setIsLoading(true);
+
+        const slowTimer = window.setTimeout(() => {
+            setIsSlow(true);
+        }, 5000);
         
         if (!profilePicture.file) {
             setError('Profile picture is required.');
@@ -54,6 +60,7 @@ const RegisterPage: React.FC = () => {
         } catch (err: any) {
             setError(err.message || 'Failed to register. Please try again.');
         } finally {
+            window.clearTimeout(slowTimer);
             setIsLoading(false);
         }
     };
@@ -154,6 +161,11 @@ const RegisterPage: React.FC = () => {
                 </div>
 
                 {error && <p className="text-sm text-center text-error dark:text-red-400 font-semibold">{error}</p>}
+                {!error && isSlow && (
+                    <p className="text-xs text-center text-gray-500 dark:text-gray-400">
+                        Still creating your account... The server may be waking up. Please keep the app open until this finishes.
+                    </p>
+                )}
 
                 <div>
                     <button

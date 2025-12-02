@@ -37,7 +37,17 @@ const CommunityFeedPage: React.FC = () => {
   const [stories, setStories] = useState<Story[]>(() => {
     try {
       const stored = localStorage.getItem('communityStories');
-      return stored ? JSON.parse(stored) : [];
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          console.log('[CommunityFeed] Loaded communityStories from localStorage:', parsed.length);
+          return parsed;
+        }
+        console.warn('[CommunityFeed] communityStories in localStorage was not an array, resetting.');
+        return [];
+      }
+      console.log('[CommunityFeed] No communityStories found in localStorage on init');
+      return [];
     } catch (error) {
       console.error('Error parsing communityStories from localStorage', error);
       return [];
@@ -49,6 +59,7 @@ const CommunityFeedPage: React.FC = () => {
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [currentStoryAuthor, setCurrentStoryAuthor] = useState<string | null>(null);
   const [activePostMenuId, setActivePostMenuId] = useState<number | null>(null);
+  const [showSyncHint, setShowSyncHint] = useState(false);
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
@@ -239,11 +250,22 @@ const CommunityFeedPage: React.FC = () => {
   // Persist stories when they change (e.g. when new stories are added or marked viewed)
   useEffect(() => {
     try {
+      console.log('[CommunityFeed] Saving communityStories to localStorage:', stories.length);
       localStorage.setItem('communityStories', JSON.stringify(stories));
     } catch (error) {
       console.error('Error saving communityStories to localStorage', error);
     }
   }, [stories]);
+
+  // Lightweight sync hint: if both posts and stories are empty, show a small message while
+  // initial data is being pulled from the server. This never blocks rendering cached content.
+  useEffect(() => {
+    if (posts.length === 0 && stories.length === 0) {
+      const id = window.setTimeout(() => setShowSyncHint(true), 1500);
+      return () => window.clearTimeout(id);
+    }
+    setShowSyncHint(false);
+  }, [posts.length, stories.length]);
 
   return (
     <div
@@ -331,6 +353,19 @@ const CommunityFeedPage: React.FC = () => {
           </Link>
         </div>
       </div>
+
+      {showSyncHint && (
+        <p
+          style={{
+            padding: '8px 16px 0',
+            fontSize: 12,
+            color: isDark ? '#9ca3af' : '#6b7280',
+            textAlign: 'center',
+          }}
+        >
+          Syncing community from server... This may take a moment on a slow connection.
+        </p>
+      )}
 
       <div
         style={{ maxWidth: '680px', margin: '0 auto', padding: '16px 16px 32px' }}
