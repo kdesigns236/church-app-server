@@ -733,19 +733,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
         // For now, keep community posts local/demo-only and do not
         // overwrite them with full WebSocket sync payloads.
+        if (syncData.posts && Array.isArray(syncData.posts) && syncData.posts.length > 0) {
+          // Only apply server posts when there are no existing local posts
+          setPosts(prevPosts => {
+            if (Array.isArray(prevPosts) && prevPosts.length > 0) {
+              return prevPosts;
+            }
+            return syncData.posts as Post[];
+          });
+        }
         if (syncData.comments && Array.isArray(syncData.comments)) {
           setComments(syncData.comments);
-        }
-          if (syncData.posts && Array.isArray(syncData.posts) && syncData.posts.length > 0) {
-            // Only apply server posts when there are no existing local posts
-            setPosts((prevPosts) => {
-              if (Array.isArray(prevPosts) && prevPosts.length > 0) {
-                return prevPosts;
-              }
-              return syncData.posts as Post[];
-            });
-          }
-          if (syncData.comments) setComments(syncData.comments);
         }
       });
 
