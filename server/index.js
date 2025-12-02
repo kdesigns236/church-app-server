@@ -637,6 +637,9 @@ app.post('/api/auth/register', async (req, res) => {
 
     const { password: _password, ...safeUser } = newUser;
 
+    // Broadcast new user to all clients so user list stays in sync
+    broadcastUpdate({ type: 'users', action: 'add', data: safeUser });
+
     res.json({ token, user: safeUser });
   } catch (error) {
     console.error('[Auth] Register error:', error);

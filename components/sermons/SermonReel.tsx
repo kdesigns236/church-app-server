@@ -117,7 +117,23 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   useEffect(() => {
     const updateOrientation = () => {
       if (typeof window === 'undefined') return;
-      setIsLandscape(window.innerWidth > window.innerHeight);
+
+      let landscape = false;
+
+      if (window.matchMedia) {
+        try {
+          const mq = window.matchMedia('(orientation: landscape)');
+          landscape = mq.matches;
+        } catch {
+          // Ignore matchMedia errors and fall back to dimensions
+        }
+      }
+
+      if (!landscape) {
+        landscape = window.innerWidth > window.innerHeight;
+      }
+
+      setIsLandscape(landscape);
     };
 
     updateOrientation();
@@ -204,6 +220,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     setRotation((prev) => (prev + 90) % 360);
   };
 
+  const isFullScreenMode = isLandscape || rotation % 180 !== 0;
+
   return (
     <div className="relative w-screen h-screen snap-start snap-always bg-black flex items-center justify-center overflow-hidden">
       {videoSrc ? (
@@ -212,7 +230,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             key={videoSrc}
             ref={videoRef}
             onClick={handleVideoPress}
-            className={`transition-all duration-500 cursor-pointer ${isLandscape ? 'w-full h-full object-cover' : 'max-w-full max-h-full w-auto h-auto'}`}
+            className={`transition-all duration-500 cursor-pointer ${isFullScreenMode ? 'w-full h-full object-cover' : 'max-w-full max-h-full w-auto h-auto'}`}
             style={{ transform: `rotate(${rotation}deg)` }}
             loop
             playsInline

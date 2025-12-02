@@ -29,12 +29,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     const initializeAuth = () => {
       try {
-        // Initialize the full user list
+        // One-time cleanup: remove any legacy users from churchUserList, keeping only admin
         const storedUserList = localStorage.getItem('churchUserList');
-        if (storedUserList) {
-          setUsers(JSON.parse(storedUserList));
+        const cleanupFlag = localStorage.getItem('churchUserListCleaned_v1');
+
+        if (!cleanupFlag) {
+          let initialList: User[] = [defaultAdminUser];
+
+          if (storedUserList) {
+            try {
+              const parsed = JSON.parse(storedUserList);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                const filtered = parsed.filter((u: any) =>
+                  u && (u.id === 'admin-user-001' || u.email === 'admin@church.com' || u.role === 'admin'),
+                );
+                initialList = filtered.length > 0 ? filtered : [defaultAdminUser];
+              }
+            } catch {
+              initialList = [defaultAdminUser];
+            }
+          }
+
+          localStorage.setItem('churchUserList', JSON.stringify(initialList));
+          localStorage.setItem('churchUserListCleaned_v1', 'true');
+          setUsers(initialList);
         } else {
-          localStorage.setItem('churchUserList', JSON.stringify([defaultAdminUser]));
+          // Normal initialization path after cleanup has already run once
+          if (storedUserList) {
+            setUsers(JSON.parse(storedUserList));
+          } else {
+            localStorage.setItem('churchUserList', JSON.stringify([defaultAdminUser]));
+          }
         }
 
         // Check for a currently logged-in user

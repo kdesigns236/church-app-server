@@ -17,7 +17,7 @@ const SermonsPage: React.FC = () => {
   const [activeSermonId, setActiveSermonId] = useState<string | null>(null);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isMuted, setIsMuted] = useState(false); // Start unmuted by default
+  const [isMuted, setIsMuted] = useState(false); // Start unmuted as requested
   const [currentIndex, setCurrentIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   
