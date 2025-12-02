@@ -235,6 +235,43 @@ async function initializeData() {
   }
 }
 
+// One-time cleanup: remove legacy non-admin users so only admin remains
+async function cleanupLegacyUsers() {
+  try {
+    const siteContent = dataStore.siteContent || {};
+
+    // Guard so this cleanup only runs once across restarts/deploys
+    if (siteContent.legacyUsersCleaned_v1) {
+      return;
+    }
+
+    const users = dataStore.users || [];
+
+    const filtered = users.filter((u) =>
+      u && (
+        u.role === 'admin' ||
+        u.email === 'admin@church.com' ||
+        u.id === 'user-admin-default' ||
+        u.id === 'admin-user-001'
+      ),
+    );
+
+    const removedCount = users.length - filtered.length;
+
+    if (removedCount > 0) {
+      console.log(`[Server] Removing ${removedCount} legacy users, keeping only admin`);
+      dataStore.users = filtered;
+    } else {
+      console.log('[Server] No legacy users to remove');
+    }
+
+    dataStore.siteContent = { ...siteContent, legacyUsersCleaned_v1: true };
+    await saveData();
+  } catch (err) {
+    console.error('[Server] Error during legacy user cleanup:', err);
+  }
+}
+
 // Create or repair admin user in background
 async function ensureAdminUser() {
   const bcrypt = require('bcrypt');
@@ -820,8 +857,9 @@ app.get('/api/app-version', (req, res) => {
       console.log(`[Server] Server running on port ${PORT}`);
       console.log(`[Server] Socket.io endpoint: http://localhost:${PORT}`);
       
-      // Initialize data and create admin user in background
+      // Initialize data, clean legacy users, and create admin user in background
       initializeData()
+        .then(() => cleanupLegacyUsers())
         .then(() => ensureAdminUser())
         .catch(err => {
           console.error('[Server] Background initialization error:', err);
