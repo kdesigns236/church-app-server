@@ -29,7 +29,8 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use('/api/facebook/live', facebookLiveRoutes);
 app.use('/api/youtube/live', youtubeLiveRoutes);
-app.use(express.json());
+// Increase JSON body size limit to handle sync payloads that may include media metadata
+app.use(express.json({ limit: '5mb' }));
 
 const serverPublicDir = path.join(__dirname, 'public');
 const rootPublicDir = path.join(__dirname, '..', 'public');
