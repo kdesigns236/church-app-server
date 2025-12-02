@@ -66,6 +66,8 @@ const CommunityFeedPage: React.FC = () => {
 
   const myStories = user ? stories.filter((s) => s.author === user.name) : [];
   const otherStories = user ? stories.filter((s) => s.author !== user.name) : stories;
+  const hasMyStories = myStories.length > 0;
+  const latestMyStory = hasMyStories ? myStories[0] : null;
 
   const handleLike = (postId: number) => {
     handlePostInteraction(postId, 'like');
@@ -287,13 +289,21 @@ const CommunityFeedPage: React.FC = () => {
                 position: 'relative',
                 flexShrink: 0,
               }}
-              onClick={() => navigate('/create-post?mode=story')}
+              onClick={() =>
+                hasMyStories && latestMyStory
+                  ? viewStory(latestMyStory)
+                  : navigate('/create-post?mode=story')
+              }
             >
               <div
                 style={{
                   height: '70%',
                   background:
-                    'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)',
+                    latestMyStory &&
+                    latestMyStory.media &&
+                    latestMyStory.media.type === 'image'
+                      ? `url(${latestMyStory.media.url}) center/cover no-repeat`
+                      : 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)',
                 }}
               />
               <div
@@ -347,7 +357,7 @@ const CommunityFeedPage: React.FC = () => {
                 >
                   +
                 </span>
-                <span>Create story</span>
+                <span>{hasMyStories ? 'View story' : 'Create story'}</span>
               </div>
               <div
                 style={{
@@ -384,10 +394,10 @@ const CommunityFeedPage: React.FC = () => {
                     alignItems: 'flex-end',
                     padding: '8px',
                     background:
-                      story.media && story.media.type === 'video'
+                      story.media && story.media.type === 'image'
+                        ? `url(${story.media.url}) center/cover no-repeat`
+                        : story.media && story.media.type === 'video'
                         ? 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)'
-                        : story.media && story.media.type === 'image'
-                        ? 'linear-gradient(135deg, #10b981 0%, #22c55e 100%)'
                         : 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)',
                   }}
                 >
