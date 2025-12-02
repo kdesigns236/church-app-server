@@ -235,12 +235,18 @@ async function initializeData() {
   }
 }
 
-// Create admin user in background
+// Create or repair admin user in background
 async function ensureAdminUser() {
-  if (!dataStore.users || dataStore.users.length === 0) {
+  const bcrypt = require('bcrypt');
+
+  const users = dataStore.users || [];
+  const adminIndex = users.findIndex(
+    (u) => u.id === 'user-admin-default' || u.role === 'admin',
+  );
+
+  if (adminIndex === -1) {
+    // No admin user at all: create the default admin
     console.log('[Server] Creating default admin user...');
-    const bcrypt = require('bcrypt');
-    // Reduced rounds for development
     const hashedPassword = await bcrypt.hash('admin123', 4);
     const adminUser = {
       id: 'user-admin-default',
@@ -248,12 +254,23 @@ async function ensureAdminUser() {
       email: 'admin@church.com',
       password: hashedPassword,
       role: 'admin',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
     };
-    dataStore.users = [adminUser];
+    dataStore.users = users.concat(adminUser);
     await saveData();
 
     console.log('[Server] Default admin user created');
+  } else {
+    // Admin exists but may be missing a password (e.g. overwritten by a sync update)
+    const adminUser = users[adminIndex];
+    if (!adminUser.password) {
+      console.log(
+        '[Server] Admin user found without password, re-seeding default admin password',
+      );
+      const hashedPassword = await bcrypt.hash('admin123', 4);
+      dataStore.users[adminIndex] = { ...adminUser, password: hashedPassword };
+      await saveData();
+    }
   }
 }
 
