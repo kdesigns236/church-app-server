@@ -47,6 +47,7 @@ const CommunityFeedPage: React.FC = () => {
   const [commentText, setCommentText] = useState('');
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
+  const [currentStoryAuthor, setCurrentStoryAuthor] = useState<string | null>(null);
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
@@ -62,6 +63,9 @@ const CommunityFeedPage: React.FC = () => {
   const currentUserName = user?.name || 'You';
   const currentUserAvatar =
     (user?.name && user.name.trim().charAt(0).toUpperCase()) || 'ME';
+
+  const myStories = user ? stories.filter((s) => s.author === user.name) : [];
+  const otherStories = user ? stories.filter((s) => s.author !== user.name) : stories;
 
   const handleLike = (postId: number) => {
     handlePostInteraction(postId, 'like');
@@ -81,9 +85,12 @@ const CommunityFeedPage: React.FC = () => {
   };
 
   const viewStory = (story: Story) => {
-    const index = stories.findIndex((s) => s.id === story.id);
-    if (index === -1) return;
-    setActiveStoryIndex(index);
+    const authorStories = stories.filter((s) => s.author === story.author);
+    const indexInAuthor = authorStories.findIndex((s) => s.id === story.id);
+    if (indexInAuthor === -1) return;
+
+    setCurrentStoryAuthor(story.author);
+    setActiveStoryIndex(indexInAuthor);
     setViewingStory(story);
     setStories((prev) =>
       prev.map((s) => (s.id === story.id ? { ...s, viewed: true } : s)),
@@ -93,19 +100,23 @@ const CommunityFeedPage: React.FC = () => {
   const closeStory = () => {
     setViewingStory(null);
     setActiveStoryIndex(null);
+    setCurrentStoryAuthor(null);
   };
 
-  // Auto-advance stories with a simple timer, similar to Facebook/Instagram
+  // Auto-advance stories within the current author's story list only
   useEffect(() => {
-    if (activeStoryIndex === null || !viewingStory) return;
+    if (activeStoryIndex === null || !viewingStory || !currentStoryAuthor) return;
+
+    const authorStories = stories.filter((s) => s.author === currentStoryAuthor);
+    if (authorStories.length === 0) return;
 
     const duration = getStoryDurationMs(viewingStory);
     const timer = window.setTimeout(() => {
       const nextIndex = activeStoryIndex + 1;
-      if (nextIndex >= stories.length) {
+      if (nextIndex >= authorStories.length) {
         closeStory();
       } else {
-        const nextStory = stories[nextIndex];
+        const nextStory = authorStories[nextIndex];
         setActiveStoryIndex(nextIndex);
         setViewingStory(nextStory);
         setStories((prev) =>
@@ -117,7 +128,7 @@ const CommunityFeedPage: React.FC = () => {
     }, duration);
 
     return () => window.clearTimeout(timer);
-  }, [activeStoryIndex, stories.length, viewingStory]);
+  }, [activeStoryIndex, viewingStory, currentStoryAuthor, stories]);
 
   useEffect(() => {
     const handleSyncUpdate = (syncData: any) => {
@@ -349,7 +360,7 @@ const CommunityFeedPage: React.FC = () => {
               </div>
             </div>
 
-            {stories.map((story) => (
+            {otherStories.map((story) => (
               <div
                 key={story.id}
                 onClick={() => viewStory(story)}
@@ -1076,7 +1087,10 @@ const CommunityFeedPage: React.FC = () => {
                 gap: 4,
               }}
             >
-              {stories.map((story, index) => (
+              {(currentStoryAuthor
+                ? stories.filter((s) => s.author === currentStoryAuthor)
+                : stories
+              ).map((story, index) => (
                 <div
                   key={story.id}
                   style={{
