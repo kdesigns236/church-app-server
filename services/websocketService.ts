@@ -104,9 +104,28 @@ class WebSocketService {
 
   // Apply update to localStorage
   private applyLocalUpdate(syncData: SyncData): void {
-    // For users, keep compatibility with existing auth storage key
-    const storageKey = syncData.type === 'users' ? 'churchUserList' : syncData.type;
-    
+    // Map sync types to the exact localStorage keys used by the app
+    // - users           -> churchUserList (auth/user list)
+    // - posts           -> communityPosts (community feed posts)
+    // - comments        -> communityComments (community post comments)
+    // - communityStories-> communityStories (already matches)
+    let storageKey: string;
+
+    switch (syncData.type) {
+      case 'users':
+        storageKey = 'churchUserList';
+        break;
+      case 'posts':
+        storageKey = 'communityPosts';
+        break;
+      case 'comments':
+        storageKey = 'communityComments';
+        break;
+      default:
+        storageKey = syncData.type;
+        break;
+    }
+
     try {
       if (syncData.action === 'clear') {
         localStorage.removeItem(storageKey);
