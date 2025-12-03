@@ -26,6 +26,42 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [users, setUsers] = useState<User[]>([defaultAdminUser]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const dedupeUsers = (list: User[]): User[] => {
+    try {
+      if (!Array.isArray(list)) return [];
+      const byEmail = new Map<string, User>();
+      const byId = new Map<string, User>();
+      for (const u of list) {
+        if (!u) continue;
+        const emailKey = (u.email || '').toLowerCase();
+        const isPlaceholder = u.id === 'admin-user-001';
+        if (emailKey) {
+          if (!byEmail.has(emailKey)) {
+            byEmail.set(emailKey, u);
+          } else {
+            const existing = byEmail.get(emailKey)!;
+            const existingIsPlaceholder = existing.id === 'admin-user-001';
+            const winner = existingIsPlaceholder && !isPlaceholder ? u : existing;
+            byEmail.set(emailKey, { ...winner, profilePictureUrl: winner.profilePictureUrl || existing.profilePictureUrl });
+          }
+        } else {
+          // Fallback to id when email missing
+          if (!byId.has(u.id)) byId.set(u.id, u);
+        }
+      }
+      // Combine email-keyed and id-keyed unique users
+      const result: User[] = [...byEmail.values()];
+      for (const [id, u] of byId.entries()) {
+        if (!u.email || !byEmail.has((u.email || '').toLowerCase())) {
+          result.push(u);
+        }
+      }
+      return result;
+    } catch {
+      return list;
+    }
+  };
+
   useEffect(() => {
     const initializeAuth = () => {
       try {
@@ -50,13 +86,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
           }
 
-          localStorage.setItem('churchUserList', JSON.stringify(initialList));
+          const cleaned = dedupeUsers(initialList);
+          localStorage.setItem('churchUserList', JSON.stringify(cleaned));
           localStorage.setItem('churchUserListCleaned_v1', 'true');
-          setUsers(initialList);
+          setUsers(cleaned);
         } else {
           // Normal initialization path after cleanup has already run once
           if (storedUserList) {
-            setUsers(JSON.parse(storedUserList));
+            try {
+              const parsed = JSON.parse(storedUserList);
+              const cleaned = dedupeUsers(Array.isArray(parsed) ? parsed : []);
+              setUsers(cleaned);
+              localStorage.setItem('churchUserList', JSON.stringify(cleaned));
+            } catch {
+              setUsers([defaultAdminUser]);
+            }
           } else {
             localStorage.setItem('churchUserList', JSON.stringify([defaultAdminUser]));
           }
@@ -101,8 +145,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               map.set(u.id, { ...existing, ...u });
             });
             const next = Array.from(map.values());
-            try { localStorage.setItem('churchUserList', JSON.stringify(next)); } catch {}
-            return next;
+            const deduped = dedupeUsers(next);
+            try { localStorage.setItem('churchUserList', JSON.stringify(deduped)); } catch {}
+            return deduped;
           });
         }
       } catch (err) {
@@ -146,6 +191,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             next = current;
           }
         }
+        next = dedupeUsers(next);
         try {
           localStorage.setItem('churchUserList', JSON.stringify(next));
         } catch {}

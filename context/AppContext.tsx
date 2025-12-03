@@ -227,44 +227,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     }, []);
 
-    // One-time migration: convert legacy 'Just now' times to ISO based on IDs
-    const hasMigratedPostsRef = React.useRef(false);
+    // Normalize any legacy/non-ISO post/comment times to ISO whenever posts change
     useEffect(() => {
-      if (hasMigratedPostsRef.current) return;
       try {
         const isIso = (s: any) => typeof s === 'string' && s.includes('T') && !isNaN(Date.parse(s));
         let changed = false;
-        const migrated = (posts || []).map(p => {
+        const normalized = (Array.isArray(posts) ? posts : []).map(p => {
           let updated = p;
-          if (!isIso(p.time) || p.time === 'Just now') {
+          const pt: any = (p as any).time;
+          if (!isIso(pt)) {
             const fallback = typeof p.id === 'number' ? new Date(p.id).toISOString() : new Date().toISOString();
             updated = { ...updated, time: fallback };
             changed = true;
           }
           if (Array.isArray(p.comments)) {
             const updatedComments = p.comments.map(c => {
-              if (!isIso(c.time) || c.time === 'Just now') {
+              if (!isIso((c as any).time)) {
                 const cfallback = typeof c.id === 'number' ? new Date(c.id).toISOString() : new Date().toISOString();
                 changed = true;
                 return { ...c, time: cfallback };
               }
               return c;
             });
-            if (updatedComments !== p.comments) {
+            // Replace only if any changed
+            if (updatedComments.some((c, idx) => c.time !== p.comments[idx].time)) {
               updated = { ...updated, comments: updatedComments };
             }
           }
           return updated;
         });
         if (changed) {
-          setPosts(migrated as Post[]);
-          localStorage.setItem('communityPosts', JSON.stringify(migrated));
+          setPosts(normalized as Post[]);
+          localStorage.setItem('communityPosts', JSON.stringify(normalized));
         }
-      } catch (e) {
-        // no-op
-      } finally {
-        hasMigratedPostsRef.current = true;
-      }
+      } catch {}
     }, [posts]);
 
     // Helper function to save data and update sync timestamp
@@ -495,8 +491,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
           
           if (Array.isArray(postsData) && postsData.length > 0) {
+            const isIso = (s: any) => typeof s === 'string' && s.includes('T') && !isNaN(Date.parse(s));
+            const normalizePosts = (arr: any[]) => (arr || []).map((p: any) => {
+              const np: any = { ...p };
+              if (!isIso(np.time)) {
+                const fallback = typeof np.id === 'number' ? new Date(np.id).toISOString() : new Date().toISOString();
+                np.time = fallback;
+              }
+              if (Array.isArray(np.comments)) {
+                np.comments = np.comments.map((c: any) => {
+                  if (!isIso(c.time)) {
+                    const cfallback = typeof c.id === 'number' ? new Date(c.id).toISOString() : new Date().toISOString();
+                    return { ...c, time: cfallback };
+                  }
+                  return c;
+                });
+              }
+              return np;
+            });
+            const postsNormalized = normalizePosts(postsData as any[]);
             setPosts((prev: Post[]) => {
-              const merged = mergeAddOnly<Post>(prev, postsData as Post[]);
+              const merged = mergeAddOnly<Post>(prev, postsNormalized as Post[]);
               localStorage.setItem('communityPosts', JSON.stringify(merged));
               return merged;
             });
@@ -1060,7 +1075,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 profilePictureUrl: user.profilePictureUrl,
             },
             content: commentContent,
-            timestamp: 'Just now',
+            timestamp: new Date().toISOString(),
         };
 
         let updatedSermon: Sermon | null = null;
