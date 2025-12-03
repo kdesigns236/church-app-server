@@ -233,6 +233,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('lastSyncTime', Date.now().toString());
     };
 
+    // Merge-add: keep existing local items; add any new items from server by id
+    const mergeAddOnly = <T extends { id: any }>(prev: T[], incoming: T[]) => {
+      try {
+        const existing = new Set((prev || []).map((i: any) => i && i.id));
+        const toAdd = (incoming || []).filter((i: any) => i && !existing.has(i.id));
+        return Array.isArray(prev) ? [...prev, ...toAdd] : toAdd;
+      } catch (_) {
+        return Array.isArray(prev) ? prev : [];
+      }
+    };
+
     // Background prefetch: automatically download sermon videos into IndexedDB
     const prefetchSermonVideos = async (sermonsToPrefetch: Sermon[]) => {
       try {
@@ -375,39 +386,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           // Only update if we got valid data (not empty from failed fetch)
           // This prevents clearing localStorage when offline
           if (Array.isArray(sermonsData) && sermonsData.length > 0) {
-            setSermons(sermonsData);
-            localStorage.setItem('sermons', JSON.stringify(sermonsData));
+            setSermons((prev: Sermon[]) => {
+              const merged = mergeAddOnly<Sermon>(prev, sermonsData as Sermon[]);
+              localStorage.setItem('sermons', JSON.stringify(merged));
+              return merged;
+            });
             prefetchSermonVideos(sermonsData);
           }
           
           if (Array.isArray(announcementsData) && announcementsData.length > 0) {
-            setAnnouncements(announcementsData);
-            localStorage.setItem('announcements', JSON.stringify(announcementsData));
+            setAnnouncements((prev: Announcement[]) => {
+              const merged = mergeAddOnly<Announcement>(prev, announcementsData as Announcement[]);
+              localStorage.setItem('announcements', JSON.stringify(merged));
+              return merged;
+            });
           }
           
           if (Array.isArray(eventsData) && eventsData.length > 0) {
-            setEvents(eventsData);
-            localStorage.setItem('events', JSON.stringify(eventsData));
+            setEvents((prev: Event[]) => {
+              const merged = mergeAddOnly<Event>(prev, eventsData as Event[]);
+              localStorage.setItem('events', JSON.stringify(merged));
+              return merged;
+            });
           }
           
           if (siteContentData && Object.keys(siteContentData).length > 0) {
-            setSiteContent(siteContentData);
-            localStorage.setItem('siteContent', JSON.stringify(siteContentData));
+            setSiteContent(prev => {
+              const merged = { ...(prev || {}), ...Object.fromEntries(Object.entries(siteContentData).filter(([k]) => !(prev as any)?.hasOwnProperty(k))) } as any;
+              localStorage.setItem('siteContent', JSON.stringify(merged));
+              return merged;
+            });
           }
           
           if (Array.isArray(prayerRequestsData) && prayerRequestsData.length > 0) {
-            setPrayerRequests(prayerRequestsData);
-            localStorage.setItem('prayerRequests', JSON.stringify(prayerRequestsData));
+            setPrayerRequests((prev: PrayerRequest[]) => {
+              const merged = mergeAddOnly<PrayerRequest>(prev, prayerRequestsData as PrayerRequest[]);
+              localStorage.setItem('prayerRequests', JSON.stringify(merged));
+              return merged;
+            });
           }
           
           if (Array.isArray(bibleStudiesData) && bibleStudiesData.length > 0) {
-            setBibleStudies(bibleStudiesData);
-            localStorage.setItem('bibleStudies', JSON.stringify(bibleStudiesData));
+            setBibleStudies((prev: BibleStudy[]) => {
+              const merged = mergeAddOnly<BibleStudy>(prev, bibleStudiesData as BibleStudy[]);
+              localStorage.setItem('bibleStudies', JSON.stringify(merged));
+              return merged;
+            });
           }
           
           if (Array.isArray(chatMessagesData) && chatMessagesData.length > 0) {
-            setChatMessages(chatMessagesData);
-            localStorage.setItem('chatMessages', JSON.stringify(chatMessagesData));
+            setChatMessages((prev: ChatMessage[]) => {
+              const merged = mergeAddOnly<ChatMessage>(prev, chatMessagesData as ChatMessage[]);
+              localStorage.setItem('chatMessages', JSON.stringify(merged));
+              return merged;
+            });
           } else if (chatMessagesRes.ok && Array.isArray(chatMessagesData) && chatMessagesData.length === 0) {
             const existingChat = localStorage.getItem('chatMessages');
             if (!existingChat || existingChat === '[]') {
@@ -417,18 +449,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
           
           if (Array.isArray(postsData) && postsData.length > 0) {
-            // Only apply server posts when there are no existing local posts
-            setPosts((prevPosts) => {
-              if (Array.isArray(prevPosts) && prevPosts.length > 0) {
-                return prevPosts;
-              }
-              return postsData;
+            setPosts((prev: Post[]) => {
+              const merged = mergeAddOnly<Post>(prev, postsData as Post[]);
+              localStorage.setItem('communityPosts', JSON.stringify(merged));
+              return merged;
             });
           }
           
           if (Array.isArray(commentsData) && commentsData.length > 0) {
-            setComments(commentsData);
-            localStorage.setItem('communityComments', JSON.stringify(commentsData));
+            setComments((prev: Comment[]) => {
+              const merged = mergeAddOnly<Comment>(prev, commentsData as Comment[]);
+              localStorage.setItem('communityComments', JSON.stringify(merged));
+              return merged;
+            });
           }
           
           // Update last sync timestamp only if we successfully fetched
