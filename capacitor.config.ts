@@ -3,7 +3,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.churchofgodeveninglight.app',
   appName: 'Church of God Evening Light',
-  webDir: 'dist',
+  webDir: 'server/public',
   server: {
     androidScheme: 'https',
     cleartext: true,
