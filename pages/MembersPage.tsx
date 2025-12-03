@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 
 const OnlineDot: React.FC<{ online?: boolean }> = ({ online }) => (
@@ -21,30 +21,142 @@ const Avatar: React.FC<{ name: string; photo?: string; online?: boolean }>= ({ n
 
 const MembersPage: React.FC = () => {
   const { users } = useAuth();
-  const list = Array.isArray(users) ? [...users] : [];
-  // Online first, then by name
-  list.sort((a, b) => Number(!!b.isOnline) - Number(!!a.isOnline) || a.name.localeCompare(b.name));
+  const [query, setQuery] = useState('');
+  const [onlineOnly, setOnlineOnly] = useState(false);
+
+  const list = useMemo(() => {
+    const base = Array.isArray(users) ? [...users] : [];
+    const q = query.trim().toLowerCase();
+    const filtered = base.filter(u => {
+      if (onlineOnly && !u.isOnline) return false;
+      if (!q) return true;
+      return u.name.toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q);
+    });
+    filtered.sort((a, b) => Number(!!b.isOnline) - Number(!!a.isOnline) || a.name.localeCompare(b.name));
+    return filtered;
+  }, [users, query, onlineOnly]);
+
+  const ALPHA = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  const getGroupKey = (name: string) => {
+    if (!name) return '#';
+    const c = name.trim().charAt(0).toUpperCase();
+    return ALPHA.includes(c) ? c : '#';
+  };
+
+  const grouped = useMemo(() => {
+    const map = new Map<string, typeof list>();
+    list.forEach(u => {
+      const key = getGroupKey(u.name);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(u);
+    });
+    // Ensure each group's items are sorted by name
+    map.forEach(arr => arr.sort((a, b) => a.name.localeCompare(b.name)));
+    return map;
+  }, [list]);
+
+  const availableKeys = useMemo(() => {
+    const keys = Array.from(grouped.keys()).sort((a, b) => {
+      if (a === '#') return 1;
+      if (b === '#') return -1;
+      return a.localeCompare(b);
+    });
+    return keys;
+  }, [grouped]);
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="container mx-auto px-4 py-6">
         <h1 className="text-2xl font-serif font-bold text-primary dark:text-white mb-4">Members</h1>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {list.map(u => (
-            <div key={u.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center gap-3">
-              <Avatar name={u.name} photo={(u as any).profilePictureUrl || (u as any).profilePicture} online={u.isOnline} />
-              <div className="flex-1">
-                <p className="font-semibold text-text-main dark:text-gray-100">{u.name}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{u.email}</p>
+        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name or email..."
+            className="flex-1 px-3 py-2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-text-main dark:text-gray-200 outline-none focus:ring-2 focus:ring-secondary"
+          />
+          <label className="inline-flex items-center gap-2 text-sm text-text-main dark:text-gray-200">
+            <input type="checkbox" checked={onlineOnly} onChange={(e) => setOnlineOnly(e.target.checked)} />
+            Online only
+          </label>
+        </div>
+        {/* Grouped sections with anchors */}
+        <div className="relative">
+          <div className="space-y-6">
+            {availableKeys.map(key => (
+              <div key={key} id={`letter-${key}`}>
+                <div className="sticky top-0 z-10 backdrop-blur-sm">
+                  <h2 className="text-sm font-bold text-gray-500 dark:text-gray-400 px-1 py-1">{key}</h2>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+                  {(grouped.get(key) || []).map(u => (
+                    <div key={u.id} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 flex items-center gap-3">
+                      <Avatar name={u.name} photo={(u as any).profilePictureUrl || (u as any).profilePicture} online={u.isOnline} />
+                      <div className="flex-1">
+                        <p className="font-semibold text-text-main dark:text-gray-100">{u.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">{u.email}</p>
+                      </div>
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.isOnline ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+                        {u.isOnline ? 'Online' : 'Offline'}
+                      </span>
+                    </div>
+                  ))}
+                  {(grouped.get(key) || []).length === 0 && (
+                    <div className="text-gray-400 text-sm">No entries</div>
+                  )}
+                </div>
               </div>
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.isOnline ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
-                {u.isOnline ? 'Online' : 'Offline'}
-              </span>
+            ))}
+            {availableKeys.length === 0 && (
+              <div className="text-gray-500 dark:text-gray-400">No members yet.</div>
+            )}
+          </div>
+
+          {/* Alphabet index on the right */}
+          <div className="hidden sm:flex flex-col gap-1 items-center text-xs text-gray-500 dark:text-gray-400 select-none"
+               style={{ position: 'fixed', right: '10px', top: '30%', transform: 'translateY(-50%)' }}>
+            {['#', ...ALPHA].map(letter => {
+              const enabled = letter === '#' ? availableKeys.includes('#') : availableKeys.includes(letter);
+              return (
+                <button
+                  key={letter}
+                  onClick={() => {
+                    const el = document.getElementById(`letter-${letter}`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }}
+                  disabled={!enabled}
+                  className={`w-6 h-6 rounded-md flex items-center justify-center ${enabled ? 'bg-white/70 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-700 cursor-pointer' : 'opacity-40 cursor-default'} shadow-sm border border-gray-200/60 dark:border-gray-700/60`}
+                  aria-label={`Jump to ${letter}`}
+                >
+                  {letter}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Mobile alphabet index (bottom) */}
+          <div className="sm:hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-30">
+            <div className="flex gap-1 overflow-x-auto max-w-[95vw] px-2 py-1 rounded-xl bg-white/80 dark:bg-gray-800/70 backdrop-blur shadow border border-gray-200/60 dark:border-gray-700/60">
+              {['#', ...ALPHA].map(letter => {
+                const enabled = letter === '#' ? availableKeys.includes('#') : availableKeys.includes(letter);
+                return (
+                  <button
+                    key={letter}
+                    onClick={() => {
+                      const el = document.getElementById(`letter-${letter}`);
+                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }}
+                    disabled={!enabled}
+                    className={`min-w-[1.5rem] h-6 px-1 rounded-md text-xs flex items-center justify-center ${enabled ? 'bg-white/70 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-700 cursor-pointer' : 'opacity-40 cursor-default'} shadow-sm border border-gray-200/60 dark:border-gray-700/60`}
+                    aria-label={`Jump to ${letter}`}
+                  >
+                    {letter}
+                  </button>
+                );
+              })}
             </div>
-          ))}
-          {list.length === 0 && (
-            <div className="text-gray-500 dark:text-gray-400">No members yet.</div>
-          )}
+          </div>
         </div>
       </div>
     </div>

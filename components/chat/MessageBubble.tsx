@@ -23,10 +23,17 @@ const QuotedMessage: React.FC<{ message: ChatMessage }> = ({ message }) => (
 
 
 export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, onDelete }) => {
-    const { user } = useAuth();
+    const { user, users } = useAuth();
     const [isHovered, setIsHovered] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const isCurrentUser = user ? message.userId === user.id : false;
+
+    const isSenderOnline = (() => {
+        const list = Array.isArray(users) ? users : [];
+        let found = list.find(u => u.id === message.userId);
+        if (!found) found = list.find(u => u.name === message.senderName);
+        return !!found?.isOnline;
+    })();
 
     return (
         <div 
@@ -51,7 +58,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, 
                 }`}
             >
                 {!isCurrentUser && (
-                    <p className="text-sm font-bold text-primary dark:text-secondary px-3 pt-3">{message.senderName}</p>
+                    <p className="text-sm font-bold text-primary dark:text-secondary px-3 pt-3 flex items-center gap-1">
+                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${isSenderOnline ? 'bg-green-500' : 'bg-gray-400'}`} aria-label={isSenderOnline ? 'Online' : 'Offline'} />
+                        {message.senderName}
+                    </p>
                 )}
 
                 {message.replyTo && (

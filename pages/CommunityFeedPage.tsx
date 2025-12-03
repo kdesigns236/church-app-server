@@ -661,44 +661,59 @@ const CommunityFeedPage: React.FC = () => {
                         gap: 6,
                       }}
                     >
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: '50%',
-                          backgroundColor: 'rgba(15,23,42,0.9)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontWeight: 'bold',
-                          fontSize: 13,
-                          flexShrink: 0,
-                          overflow: 'hidden',
-                        }}
-                      >
-                        {getUserProfilePicture(story.author) ? (
-                          <img
-                            src={getUserProfilePicture(story.author) as string}
-                            alt={story.author}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              borderRadius: '50%',
-                              objectFit: 'cover',
-                            }}
-                          />
-                        ) : (
-                          <span
-                            style={{
-                              color: 'white',
-                              fontWeight: 'bold',
-                              fontSize: 13,
-                            }}
-                          >
-                            {story.avatar}
-                          </span>
-                        )}
+                      <div style={{ position: 'relative', width: 32, height: 32 }}>
+                        <div
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(15,23,42,0.9)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: 13,
+                            flexShrink: 0,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          {getUserProfilePicture(story.author) ? (
+                            <img
+                              src={getUserProfilePicture(story.author) as string}
+                              alt={story.author}
+                              style={{
+                                width: '100%',
+                                height: '100%',
+                                borderRadius: '50%',
+                                objectFit: 'cover',
+                              }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                color: 'white',
+                                fontWeight: 'bold',
+                                fontSize: 13,
+                              }}
+                            >
+                              {story.avatar}
+                            </span>
+                          )}
+                        </div>
+                        <span
+                          aria-label={isUserOnline(story.author) ? 'Online' : 'Offline'}
+                          style={{
+                            position: 'absolute',
+                            right: -2,
+                            bottom: -2,
+                            width: 9,
+                            height: 9,
+                            borderRadius: 9999,
+                            backgroundColor: isUserOnline(story.author) ? '#10b981' : '#9ca3af',
+                            border: '2px solid rgba(255,255,255,0.9)',
+                          }}
+                        />
                       </div>
                       <span
                         style={{
@@ -1639,6 +1654,19 @@ const CommunityFeedPage: React.FC = () => {
                     </span>
                   )}
                 </div>
+                <span
+                  aria-label={isUserOnline(viewingStory.author) ? 'Online' : 'Offline'}
+                  style={{
+                    position: 'absolute',
+                    right: -2,
+                    bottom: -2,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 9999,
+                    backgroundColor: isUserOnline(viewingStory.author) ? '#10b981' : '#9ca3af',
+                    border: '2px solid white',
+                  }}
+                />
                 <span
                   style={{ color: 'white', fontWeight: 600 }}
                 >
