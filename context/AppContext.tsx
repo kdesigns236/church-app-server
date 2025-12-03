@@ -61,6 +61,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const authToken = localStorage.getItem('authToken');
         const communityPosts = localStorage.getItem('communityPosts');
         const communityStories = localStorage.getItem('communityStories');
+        const sermonsLS = localStorage.getItem('sermons');
+        const announcementsLS = localStorage.getItem('announcements');
+        const eventsLS = localStorage.getItem('events');
+        const siteContentLS = localStorage.getItem('siteContent');
+        const prayerRequestsLS = localStorage.getItem('prayerRequests');
+        const bibleStudiesLS = localStorage.getItem('bibleStudies');
+        const chatMessagesLS = localStorage.getItem('chatMessages');
+        const communityCommentsLS = localStorage.getItem('communityComments');
 
         // Clear everything
         localStorage.clear();
@@ -70,6 +78,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (authToken) localStorage.setItem('authToken', authToken);
         if (communityPosts) localStorage.setItem('communityPosts', communityPosts);
         if (communityStories) localStorage.setItem('communityStories', communityStories);
+        if (sermonsLS) localStorage.setItem('sermons', sermonsLS);
+        if (announcementsLS) localStorage.setItem('announcements', announcementsLS);
+        if (eventsLS) localStorage.setItem('events', eventsLS);
+        if (siteContentLS) localStorage.setItem('siteContent', siteContentLS);
+        if (prayerRequestsLS) localStorage.setItem('prayerRequests', prayerRequestsLS);
+        if (bibleStudiesLS) localStorage.setItem('bibleStudies', bibleStudiesLS);
+        if (chatMessagesLS) localStorage.setItem('chatMessages', chatMessagesLS);
+        if (communityCommentsLS) localStorage.setItem('communityComments', communityCommentsLS);
 
         localStorage.setItem('appVersion', APP_VERSION);
         console.log('[AppContext] ✅ Old data cleared, auth and community data preserved!');
@@ -362,26 +378,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setSermons(sermonsData);
             localStorage.setItem('sermons', JSON.stringify(sermonsData));
             prefetchSermonVideos(sermonsData);
-          } else if (sermonsRes.ok && Array.isArray(sermonsData) && sermonsData.length === 0) {
-            // Server explicitly returned empty array (data was deleted)
-            setSermons([]);
-            localStorage.setItem('sermons', JSON.stringify([]));
           }
           
           if (Array.isArray(announcementsData) && announcementsData.length > 0) {
             setAnnouncements(announcementsData);
             localStorage.setItem('announcements', JSON.stringify(announcementsData));
-          } else if (announcementsRes.ok && Array.isArray(announcementsData) && announcementsData.length === 0) {
-            setAnnouncements([]);
-            localStorage.setItem('announcements', JSON.stringify([]));
           }
           
           if (Array.isArray(eventsData) && eventsData.length > 0) {
             setEvents(eventsData);
             localStorage.setItem('events', JSON.stringify(eventsData));
-          } else if (eventsRes.ok && Array.isArray(eventsData) && eventsData.length === 0) {
-            setEvents([]);
-            localStorage.setItem('events', JSON.stringify([]));
           }
           
           if (siteContentData && Object.keys(siteContentData).length > 0) {
@@ -392,17 +398,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (Array.isArray(prayerRequestsData) && prayerRequestsData.length > 0) {
             setPrayerRequests(prayerRequestsData);
             localStorage.setItem('prayerRequests', JSON.stringify(prayerRequestsData));
-          } else if (prayerRequestsRes.ok && Array.isArray(prayerRequestsData) && prayerRequestsData.length === 0) {
-            setPrayerRequests([]);
-            localStorage.setItem('prayerRequests', JSON.stringify([]));
           }
           
           if (Array.isArray(bibleStudiesData) && bibleStudiesData.length > 0) {
             setBibleStudies(bibleStudiesData);
             localStorage.setItem('bibleStudies', JSON.stringify(bibleStudiesData));
-          } else if (bibleStudiesRes.ok && Array.isArray(bibleStudiesData) && bibleStudiesData.length === 0) {
-            setBibleStudies([]);
-            localStorage.setItem('bibleStudies', JSON.stringify([]));
           }
           
           if (Array.isArray(chatMessagesData) && chatMessagesData.length > 0) {
@@ -429,9 +429,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (Array.isArray(commentsData) && commentsData.length > 0) {
             setComments(commentsData);
             localStorage.setItem('communityComments', JSON.stringify(commentsData));
-          } else if (commentsRes.ok && Array.isArray(commentsData) && commentsData.length === 0) {
-            setComments([]);
-            localStorage.setItem('communityComments', JSON.stringify([]));
           }
           
           // Update last sync timestamp only if we successfully fetched
