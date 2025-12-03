@@ -227,6 +227,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     }, []);
 
+    // One-time migration: convert legacy 'Just now' times to ISO based on IDs
+    const hasMigratedPostsRef = React.useRef(false);
+    useEffect(() => {
+      if (hasMigratedPostsRef.current) return;
+      try {
+        const isIso = (s: any) => typeof s === 'string' && s.includes('T') && !isNaN(Date.parse(s));
+        let changed = false;
+        const migrated = (posts || []).map(p => {
+          let updated = p;
+          if (!isIso(p.time) || p.time === 'Just now') {
+            const fallback = typeof p.id === 'number' ? new Date(p.id).toISOString() : new Date().toISOString();
+            updated = { ...updated, time: fallback };
+            changed = true;
+          }
+          if (Array.isArray(p.comments)) {
+            const updatedComments = p.comments.map(c => {
+              if (!isIso(c.time) || c.time === 'Just now') {
+                const cfallback = typeof c.id === 'number' ? new Date(c.id).toISOString() : new Date().toISOString();
+                changed = true;
+                return { ...c, time: cfallback };
+              }
+              return c;
+            });
+            if (updatedComments !== p.comments) {
+              updated = { ...updated, comments: updatedComments };
+            }
+          }
+          return updated;
+        });
+        if (changed) {
+          setPosts(migrated as Post[]);
+          localStorage.setItem('communityPosts', JSON.stringify(migrated));
+        }
+      } catch (e) {
+        // no-op
+      } finally {
+        hasMigratedPostsRef.current = true;
+      }
+    }, [posts]);
+
     // Helper function to save data and update sync timestamp
     const saveToLocalStorage = (key: string, data: any) => {
       localStorage.setItem(key, JSON.stringify(data));
@@ -840,7 +880,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: Date.now(),
         author: user.name,
         avatar: user.name.trim().charAt(0).toUpperCase(),
-        time: 'Just now',
+        time: new Date().toISOString(),
         content,
         likes: 0,
         comments: [],
@@ -912,7 +952,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         id: Date.now(),
         author: user.name,
         text: commentText,
-        time: 'Just now',
+        time: new Date().toISOString(),
       };
 
       let updatedPost: Post | null = null;

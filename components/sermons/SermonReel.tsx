@@ -42,9 +42,17 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [rotation, setRotation] = useState(0);
   const [isLandscape, setIsLandscape] = useState(false);
+  const [videoWidth, setVideoWidth] = useState<number | null>(null);
+  const [videoHeight, setVideoHeight] = useState<number | null>(null);
+  const [objectFit, setObjectFit] = useState<'cover' | 'contain'>('cover');
+  const [userFitOverride, setUserFitOverride] = useState<'cover' | 'contain' | null>(null);
+  const [showAspectBadge, setShowAspectBadge] = useState(false);
+  const [aspectLabel, setAspectLabel] = useState('');
   const shouldShowUi = !isLandscape || showChrome;
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
+  const lastTapRef = useRef<number>(0);
+  const aspectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load video from cloud or IndexedDB
   useEffect(() => {
@@ -167,6 +175,37 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     };
   }, []);
 
+  // Compute best-fit strategy based on intrinsic video dimensions and screen orientation
+  useEffect(() => {
+    const vw = videoWidth || 0;
+    const vh = videoHeight || 0;
+    if (userFitOverride) {
+      setObjectFit(userFitOverride);
+      return;
+    }
+    if (!vw || !vh) {
+      setObjectFit(isLandscape ? 'contain' : 'cover');
+      return;
+    }
+    const isVideoLandscape = vw / vh >= 1.0;
+    if (isLandscape || rotation % 180 !== 0) {
+      setObjectFit('contain');
+      return;
+    }
+    setObjectFit(isVideoLandscape ? 'contain' : 'cover');
+  }, [videoWidth, videoHeight, isLandscape, rotation, userFitOverride]);
+
+  const gcd = (a: number, b: number): number => {
+    return b ? gcd(b, a % b) : Math.abs(a);
+  };
+  const getAspectLabel = (w: number, h: number): string => {
+    if (!w || !h) return '';
+    const g = gcd(Math.round(w), Math.round(h)) || 1;
+    const rw = Math.round(w / g);
+    const rh = Math.round(h / g);
+    return `${rw}:${rh}`;
+  };
+
   // Control video playback
   useEffect(() => {
     const video = videoRef.current;
@@ -191,7 +230,16 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
-    const handleLoadedMetadata = () => setDuration(video.duration);
+    const handleLoadedMetadata = () => {
+      setDuration(video.duration);
+      setVideoWidth(video.videoWidth || null);
+      setVideoHeight(video.videoHeight || null);
+      setUserFitOverride(null);
+      setAspectLabel(getAspectLabel(video.videoWidth, video.videoHeight));
+      setShowAspectBadge(true);
+      if (aspectTimeoutRef.current) clearTimeout(aspectTimeoutRef.current);
+      aspectTimeoutRef.current = setTimeout(() => setShowAspectBadge(false), 1800);
+    };
     
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
@@ -208,21 +256,32 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   }, [videoSrc, isActive]);
 
   const handleVideoPress = () => {
+    const now = Date.now();
+    const delta = now - (lastTapRef.current || 0);
+    lastTapRef.current = now;
+    if (delta < 300) {
+      setUserFitOverride(prev => (prev ? (prev === 'cover' ? 'contain' : 'cover') : (objectFit === 'cover' ? 'contain' : 'cover')));
+      if (onUserInteraction) onUserInteraction();
+      setShowControls(true);
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
+      return;
+    }
+    if (isLandscape && !showChrome) {
+      if (onUserInteraction) onUserInteraction();
+      setShowControls(true);
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
+      return;
+    }
     if (isPlaying) {
       videoRef.current?.pause();
     } else {
       videoRef.current?.play();
     }
-
-    if (onUserInteraction) {
-      onUserInteraction();
-    }
-
+    if (onUserInteraction) onUserInteraction();
     setShowControls(true);
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    // Keep controls visible a bit longer so users can clearly see duration and progress
+    if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
     controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
   };
 
@@ -248,14 +307,27 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const isFullScreenMode = isLandscape || rotation % 180 !== 0;
 
   return (
-    <div className="relative w-screen h-screen snap-start snap-always bg-black flex items-center justify-center overflow-hidden">
+    <div className="relative w-screen h-screen snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: '100dvw', height: '100dvh' }}>
       {videoSrc ? (
         <div className="relative w-full h-full flex items-center justify-center">
+          {objectFit === 'contain' && (
+            <video
+              key={`bg-${videoSrc}`}
+              className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-50 pointer-events-none"
+              style={{ filter: 'blur(24px) brightness(0.6)' }}
+              src={videoSrc}
+              muted
+              loop
+              autoPlay
+              playsInline
+              aria-hidden
+            />
+          )}
           <video
             key={videoSrc}
             ref={videoRef}
             onClick={handleVideoPress}
-            className={`transition-all duration-500 cursor-pointer ${isFullScreenMode ? 'w-full h-full object-cover' : 'max-w-full max-h-full w-auto h-auto'}`}
+            className={`transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
             style={{ transform: `rotate(${rotation}deg)` }}
             loop
             playsInline
@@ -314,7 +386,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       )}
       
       {/* Center Play Button */}
-      {!isPlaying && videoSrc && (
+      {shouldShowUi && !isPlaying && videoSrc && (
         <button 
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-transparent border-none cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-300"
           onClick={handleVideoPress}
@@ -328,7 +400,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
       {/* Top Right Controls */}
       {shouldShowUi && (
-        <div className="absolute top-5 right-4 z-30 flex flex-col gap-2.5">
+        <div className="absolute top-5 right-4 z-30 flex flex-col gap-2.5" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
           <button 
             onClick={onToggleMute}
             className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
@@ -364,7 +436,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
       {/* Progress Bar */}
       {shouldShowUi && showControls && duration > 0 && videoSrc && (
-        <div className="absolute bottom-2 left-0 right-0 z-20 px-4 transition-opacity duration-300">
+        <div className="absolute bottom-2 left-0 right-0 z-20 px-4 transition-opacity duration-300" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)' }}>
           <div className="bg-gradient-to-t from-black/60 to-transparent pt-3 pb-2 px-2">
             <input
               type="range"
@@ -381,6 +453,14 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               <span>{formatTime(currentTime)}</span>
               <span>{formatTime(duration)}</span>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAspectBadge && (
+        <div className="absolute z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)', left: '0.75rem' }}>
+          <div className="px-2 py-1 rounded-full text-xs font-bold text-white bg-black/60 backdrop-blur-md border border-white/10">
+            {aspectLabel}
           </div>
         </div>
       )}

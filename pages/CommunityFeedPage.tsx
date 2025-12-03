@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   FiMessageCircle,
   FiShare2,
@@ -32,6 +32,7 @@ interface Story {
 const CommunityFeedPage: React.FC = () => {
   const { user, users } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { posts, handlePostInteraction, addPostComment, deletePost } = useAppContext();
 
   const [stories, setStories] = useState<Story[]>(() => {
@@ -60,10 +61,28 @@ const CommunityFeedPage: React.FC = () => {
   const [currentStoryAuthor, setCurrentStoryAuthor] = useState<string | null>(null);
   const [activePostMenuId, setActivePostMenuId] = useState<number | null>(null);
   const [showSyncHint, setShowSyncHint] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
     return story.type === 'video' ? 30000 : 5000;
+  };
+
+  const formatRelativeTime = (input: string | null | undefined): string => {
+    if (!input) return '';
+    if (input === 'Just now') return input;
+    const d = new Date(input);
+    if (isNaN(d.getTime())) return String(input);
+    const diff = Date.now() - d.getTime();
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return 'Just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const dys = Math.floor(h / 24);
+    if (dys < 7) return `${dys}d`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   };
 
   const canDeletePost = (post: Post): boolean => {
@@ -116,6 +135,18 @@ const CommunityFeedPage: React.FC = () => {
     );
   };
 
+  useEffect(() => {
+    const search = location && location.search ? location.search : '';
+    if (!search) return;
+    const params = new URLSearchParams(search);
+    const pid = params.get('post');
+    if (!pid) return;
+    const idNum = Number(pid);
+    if (!Number.isNaN(idNum)) {
+      setActiveComment(idNum);
+    }
+  }, [location.search, posts.length]);
+
   const myStories = user ? stories.filter((s) => s.author === user.name) : [];
   const otherStories = user ? stories.filter((s) => s.author !== user.name) : stories;
   const hasMyStories = myStories.length > 0;
@@ -133,9 +164,54 @@ const CommunityFeedPage: React.FC = () => {
     }
   };
 
-  const handleShare = (postId: number) => {
-    handlePostInteraction(postId, 'share');
-    alert('Post shared!');
+  const showToast = (message: string) => {
+    setToast({ message });
+    window.setTimeout(() => setToast(null), 2200);
+  };
+
+  const buildShareUrl = (postId: number) => `${window.location.origin}/#/chat?post=${postId}`;
+
+  const handleShare = async (postId: number) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    const url = buildShareUrl(postId);
+    const title = `${post.author} on Church App`;
+    const text = post.content || '';
+
+    try {
+      const navAny = navigator as any;
+      if (navAny && typeof navAny.share === 'function') {
+        await navAny.share({ title, text, url });
+        handlePostInteraction(postId, 'share');
+        showToast('Shared');
+        return;
+      }
+    } catch (err: any) {
+      if (err && err.name === 'AbortError') {
+        return;
+      }
+    }
+
+    try {
+      const textToCopy = `${text ? text + '\n' : ''}${url}`;
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = textToCopy;
+        ta.style.position = 'fixed';
+        ta.style.left = '-1000px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      handlePostInteraction(postId, 'share');
+      showToast('Link copied');
+    } catch {
+      showToast('Unable to share');
+    }
   };
 
   const viewStory = (story: Story) => {
@@ -873,7 +949,7 @@ const CommunityFeedPage: React.FC = () => {
                     color: '#6b7280',
                   }}
                 >
-                  <span>{post.time}</span>
+                  <span>{formatRelativeTime(post.time)}</span>
                   <span>&bull;</span>
                   <FiGlobe size={12} />
                   <span>Public</span>
@@ -1198,7 +1274,7 @@ const CommunityFeedPage: React.FC = () => {
                       color: isDark ? '#9ca3af' : '#6b7280',
                     }}
                   >
-                    {activeCommentPost.time}
+                    {formatRelativeTime(activeCommentPost.time)}
                   </p>
                 </div>
               </div>
@@ -1336,7 +1412,7 @@ const CommunityFeedPage: React.FC = () => {
                         color: isDark ? '#9ca3af' : '#6b7280',
                       }}
                     >
-                      {comment.time}
+                      {formatRelativeTime(comment.time)}
                     </p>
                   </div>
                 </div>
