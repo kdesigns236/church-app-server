@@ -829,6 +829,11 @@ app.get('/api/community-comments', (req, res) => {
   res.json(dataStore.comments || []);
 });
 
+app.get('/api/community-stories', (req, res) => {
+  console.log('[Server] Fetching all community stories');
+  res.json(dataStore.communityStories || []);
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 

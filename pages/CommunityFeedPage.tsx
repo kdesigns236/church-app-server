@@ -247,6 +247,35 @@ const CommunityFeedPage: React.FC = () => {
     };
   }, []);
 
+  // On first load, if we have no stories cached, pull them from server
+  useEffect(() => {
+    if (stories.length > 0) return;
+    let cancelled = false;
+    const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+    const fetchInitialStories = async () => {
+      try {
+        const controller = new AbortController();
+        const id = window.setTimeout(() => controller.abort(), 10000);
+        const res = await fetch(`${apiUrl}/community-stories`, { signal: controller.signal });
+        window.clearTimeout(id);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        if (Array.isArray(data) && data.length > 0) {
+          const existing = Array.isArray(stories) ? stories : [];
+          const ids = new Set(existing.map(s => s.id));
+          const merged = [...existing, ...data.filter((d: any) => d && !ids.has(d.id))];
+          setStories(merged);
+          try { localStorage.setItem('communityStories', JSON.stringify(merged)); } catch {}
+        }
+      } catch (e) {
+        console.error('[CommunityFeed] Failed to fetch community stories from server', e);
+      }
+    };
+    fetchInitialStories();
+    return () => { cancelled = true; };
+  }, []);
+
   // Persist stories when they change (e.g. when new stories are added or marked viewed)
   useEffect(() => {
     try {
