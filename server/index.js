@@ -222,7 +222,7 @@ async function initializeData() {
 
     if (useDatabase) {
       dataStore = await database.getAllData();
-      console.log('[Server] Using PostgreSQL for data storage');
+      console.log(`[Server] Using ${database.getStorageName()} for data storage`);
     } else {
       await loadDataFromFile();
       console.log('[Server] Using data.json for data storage');
