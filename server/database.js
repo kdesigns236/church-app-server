@@ -24,17 +24,33 @@ async function initDatabase() {
       }
       const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
       admin = require('firebase-admin');
-      admin.initializeApp({
+      const { getFirestore } = require('firebase-admin/firestore');
+      const firebaseApp = admin.initializeApp({
         credential: admin.credential.cert({
           projectId,
           clientEmail,
           privateKey,
         }),
       });
-      firestore = admin.firestore();
+      try {
+        // Explicitly target the default Firestore database
+        firestore = getFirestore(firebaseApp, { databaseId: '(default)' });
+      } catch (e) {
+        // Fallback for older SDKs
+        firestore = admin.firestore();
+      }
       firebaseInitialized = true;
       console.log('[Database] ✅ Firebase Firestore initialized');
-      // Ensure collection/doc existence lazily on writes; just return true here
+      // Warm-up: perform a lightweight write to ensure database exists
+      try {
+        await firestore
+          .collection('app_data')
+          .doc('_warmup')
+          .set({ t: new Date().toISOString() }, { merge: true });
+      } catch (e) {
+        console.warn('[Database] Firestore warm-up write failed:', e.message || e);
+      }
+      // Ready
       return true;
     } catch (err) {
       console.error('[Database] ❌ Failed to initialize Firebase:', err.message || err);
