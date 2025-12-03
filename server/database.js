@@ -37,7 +37,7 @@ async function initDatabase() {
       // Initialize Firestore client directly to control transport and endpoint
       const { Firestore } = require('@google-cloud/firestore');
       const location = process.env.FIRESTORE_LOCATION; // e.g. 'africa-south1'
-      const apiEndpoint = location ? `${location}-firestore.googleapis.com` : undefined;
+      const apiEndpoint = undefined;
 
       // Optionally initialize admin (not strictly required for Firestore client)
       try {
