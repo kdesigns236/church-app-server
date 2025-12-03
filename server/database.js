@@ -34,22 +34,33 @@ async function initDatabase() {
         return false;
       }
       const privateKey = privateKeyRaw.replace(/\\n/g, '\n');
-      admin = require('firebase-admin');
-      const { getFirestore } = require('firebase-admin/firestore');
-      const firebaseApp = admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
-      });
+      // Initialize Firestore client directly to control transport and endpoint
+      const { Firestore } = require('@google-cloud/firestore');
+      const location = process.env.FIRESTORE_LOCATION; // e.g. 'africa-south1'
+      const apiEndpoint = location ? `${location}-firestore.googleapis.com` : undefined;
+
+      // Optionally initialize admin (not strictly required for Firestore client)
       try {
-        // Explicitly target the default Firestore database and prefer REST transport
-        firestore = getFirestore(firebaseApp, { databaseId: '(default)', preferRest: true });
-      } catch (e) {
-        // Fallback for older SDKs
-        firestore = admin.firestore();
+        admin = require('firebase-admin');
+        admin.initializeApp({
+          credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+          projectId,
+        });
+      } catch (_) {
+        // admin is optional; ignore failures here
       }
+
+      firestore = new Firestore({
+        projectId,
+        credentials: { client_email: clientEmail, private_key: privateKey },
+        databaseId: '(default)',
+        // Prefer REST to avoid gRPC transport issues on some hosts/regions
+        preferRest: true,
+        useRest: true,
+        // Use regional endpoint if FIRESTORE_LOCATION is provided
+        ...(apiEndpoint ? { apiEndpoint } : {}),
+      });
+      console.log('[Database] Firestore client configured', { apiEndpoint: apiEndpoint || 'global', transport: 'REST-preferred' });
       firebaseInitialized = true;
       console.log('[Database] ✅ Firebase Firestore initialized');
       // Warm-up: perform a lightweight write to ensure database exists
