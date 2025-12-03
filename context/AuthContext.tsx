@@ -85,6 +85,33 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initializeAuth();
   }, []);
 
+  // Bootstrap full users list from server once (ensures we see everyone even before they come online)
+  useEffect(() => {
+    const bootstrapUsers = async () => {
+      try {
+        const data = await websocketService.pullFromServer();
+        if (data && Array.isArray(data.users) && data.users.length > 0) {
+          setUsers(prev => {
+            const current = Array.isArray(prev) ? prev : [];
+            const map = new Map<string, User>();
+            current.forEach(u => map.set(u.id, u));
+            (data.users as User[]).forEach(u => {
+              // Merge existing fields with server fields
+              const existing = map.get(u.id) || ({} as User);
+              map.set(u.id, { ...existing, ...u });
+            });
+            const next = Array.from(map.values());
+            try { localStorage.setItem('churchUserList', JSON.stringify(next)); } catch {}
+            return next;
+          });
+        }
+      } catch (err) {
+        // ignore bootstrap failure; app will rely on local cache and realtime updates
+      }
+    };
+    bootstrapUsers();
+  }, []);
+
   // Keep users list in sync with real-time updates (including online status)
   useEffect(() => {
     const handleSyncUpdate = (syncData: any) => {
@@ -92,23 +119,37 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       setUsers(prevUsers => {
         const current = Array.isArray(prevUsers) ? prevUsers : [];
+        let next = current;
         switch (syncData.action) {
           case 'add': {
-            if (current.find(u => u.id === syncData.data.id)) return current;
-            return [...current, syncData.data];
+            if (!current.find(u => u.id === syncData.data.id)) {
+              next = [...current, syncData.data];
+            }
+            break;
           }
           case 'update': {
-            return current.map(u => (u.id === syncData.data.id ? { ...u, ...syncData.data } : u));
+            const exists = current.some(u => u.id === syncData.data.id);
+            next = exists
+              ? current.map(u => (u.id === syncData.data.id ? { ...u, ...syncData.data } : u))
+              : [...current, syncData.data];
+            break;
           }
           case 'delete': {
-            return current.filter(u => u.id !== syncData.data.id);
+            next = current.filter(u => u.id !== syncData.data.id);
+            break;
           }
           case 'clear': {
-            return [];
+            next = [];
+            break;
           }
-          default:
-            return current;
+          default: {
+            next = current;
+          }
         }
+        try {
+          localStorage.setItem('churchUserList', JSON.stringify(next));
+        } catch {}
+        return next;
       });
     };
 

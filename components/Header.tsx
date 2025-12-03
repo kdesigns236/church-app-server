@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ThemeToggle } from './ThemeToggle';
-import { CrossIcon, HomeIcon, SermonsIcon, AnnouncementsIcon, EventsIcon, BibleIcon, BookIcon, GivingIcon, BroadcastIcon, ChatBubbleIcon, MailIcon } from '../constants/icons';
+import { CrossIcon, HomeIcon, SermonsIcon, AnnouncementsIcon, EventsIcon, BibleIcon, BookIcon, GivingIcon, BroadcastIcon, ChatBubbleIcon, MailIcon, UsersIcon } from '../constants/icons';
 import { useAuth } from '../hooks/useAuth';
 import {
   FiMenu,
@@ -20,6 +20,7 @@ const navLinks = [
   { name: 'Giving', path: '/giving', icon: GivingIcon },
   // Go Live route remains available internally but is hidden from the main navigation for now
   { name: 'Church Community', path: '/chat', icon: ChatBubbleIcon },
+  { name: 'Members', path: '/members', icon: UsersIcon },
   { name: 'Contact', path: '/contact', icon: MailIcon },
 ];
 

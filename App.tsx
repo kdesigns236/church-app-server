@@ -11,6 +11,7 @@ import AnnouncementsPage from './pages/AnnouncementsPage';
 import EventsPage from './pages/EventsPage';
 import GivingPage from './pages/GivingPage';
 import ContactPage from './pages/ContactPage';
+import MembersPage from './pages/MembersPage';
 import AdminPage from './pages/AdminPage';
 import ChatPage from './pages/ChatPage';
 import LoginPage from './pages/LoginPage';
@@ -81,6 +82,7 @@ const ProtectedRoutes: React.FC = () => {
                         <Route path="/bible" element={<BiblePage />} />
                         <Route path="/bible-study" element={<BibleStudyPage />} />
                         <Route path="/giving" element={<GivingPage />} />
+                        <Route path="/members" element={<MembersPage />} />
                         <Route path="/golive" element={<GoLivePage />} />
                         <Route path="/prostream" element={<ProStreamApp />} />
                         <Route path="/chat" element={<CommunityFeedPage />} />

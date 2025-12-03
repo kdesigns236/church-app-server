@@ -135,6 +135,12 @@ const CommunityFeedPage: React.FC = () => {
     );
   };
 
+  const isUserOnline = (name: string): boolean => {
+    const list = users || [];
+    const match = list.find((u) => u.name === name);
+    return !!(match && match.isOnline);
+  };
+
   useEffect(() => {
     const search = location && location.search ? location.search : '';
     if (!search) return;
@@ -891,43 +897,58 @@ const CommunityFeedPage: React.FC = () => {
                 gap: '12px',
               }}
             >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  backgroundColor: '#3b82f6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'white',
-                  fontWeight: 'bold',
-                  fontSize: '14px',
-                  overflow: 'hidden',
-                }}
-              >
-                {getUserProfilePicture(post.author) ? (
-                  <img
-                    src={getUserProfilePicture(post.author) as string}
-                    alt={post.author}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: '50%',
-                      objectFit: 'cover',
-                    }}
-                  />
-                ) : (
-                  <span
-                    style={{
-                      color: 'white',
-                      fontWeight: 'bold',
-                      fontSize: '14px',
-                    }}
-                  >
-                    {post.avatar}
-                  </span>
-                )}
+              <div style={{ position: 'relative', width: 40, height: 40 }}>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    backgroundColor: '#3b82f6',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    fontSize: '14px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {getUserProfilePicture(post.author) ? (
+                    <img
+                      src={getUserProfilePicture(post.author) as string}
+                      alt={post.author}
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: '50%',
+                        objectFit: 'cover',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        color: 'white',
+                        fontWeight: 'bold',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {post.avatar}
+                    </span>
+                  )}
+                </div>
+                <span
+                  aria-label={isUserOnline(post.author) ? 'Online' : 'Offline'}
+                  style={{
+                    position: 'absolute',
+                    right: -2,
+                    bottom: -2,
+                    width: 10,
+                    height: 10,
+                    borderRadius: 9999,
+                    backgroundColor: isUserOnline(post.author) ? '#10b981' : '#9ca3af',
+                    border: '2px solid white',
+                  }}
+                />
               </div>
               <div style={{ flex: 1 }}>
                 <h3
@@ -1217,44 +1238,59 @@ const CommunityFeedPage: React.FC = () => {
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    backgroundColor: isDark ? '#1d4ed8' : '#3b82f6',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontWeight: 'bold',
-                    fontSize: '14px',
-                    flexShrink: 0,
-                    overflow: 'hidden',
-                  }}
-                >
-                  {getUserProfilePicture(activeCommentPost.author) ? (
-                    <img
-                      src={getUserProfilePicture(activeCommentPost.author) as string}
-                      alt={activeCommentPost.author}
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        borderRadius: '50%',
-                        objectFit: 'cover',
-                      }}
-                    />
-                  ) : (
-                    <span
-                      style={{
-                        color: 'white',
-                        fontWeight: 'bold',
-                        fontSize: '14px',
-                      }}
-                    >
-                      {activeCommentPost.avatar}
-                    </span>
-                  )}
+                <div style={{ position: 'relative', width: 36, height: 36 }}>
+                  <div
+                    style={{
+                      width: '36px',
+                      height: '36px',
+                      borderRadius: '50%',
+                      backgroundColor: isDark ? '#1d4ed8' : '#3b82f6',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '14px',
+                      flexShrink: 0,
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {getUserProfilePicture(activeCommentPost.author) ? (
+                      <img
+                        src={getUserProfilePicture(activeCommentPost.author) as string}
+                        alt={activeCommentPost.author}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          borderRadius: '50%',
+                          objectFit: 'cover',
+                        }}
+                      />
+                    ) : (
+                      <span
+                        style={{
+                          color: 'white',
+                          fontWeight: 'bold',
+                          fontSize: '14px',
+                        }}
+                      >
+                        {activeCommentPost.avatar}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    aria-label={isUserOnline(activeCommentPost.author) ? 'Online' : 'Offline'}
+                    style={{
+                      position: 'absolute',
+                      right: -2,
+                      bottom: -2,
+                      width: 10,
+                      height: 10,
+                      borderRadius: 9999,
+                      backgroundColor: isUserOnline(activeCommentPost.author) ? '#10b981' : '#9ca3af',
+                      border: '2px solid white',
+                    }}
+                  />
                 </div>
                 <div>
                   <p
@@ -1339,44 +1375,59 @@ const CommunityFeedPage: React.FC = () => {
                     gap: '8px',
                   }}
                 >
-                  <div
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: '50%',
-                      backgroundColor: isDark ? '#4b5563' : '#9ca3af',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontSize: '12px',
-                      fontWeight: 'bold',
-                      flexShrink: 0,
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {getUserProfilePicture(comment.author) ? (
-                      <img
-                        src={getUserProfilePicture(comment.author) as string}
-                        alt={comment.author}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          borderRadius: '50%',
-                          objectFit: 'cover',
-                        }}
-                      />
-                    ) : (
-                      <span
-                        style={{
-                          color: 'white',
-                          fontSize: '12px',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {comment.author.charAt(0)}
-                      </span>
-                    )}
+                  <div style={{ position: 'relative', width: 32, height: 32 }}>
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        backgroundColor: isDark ? '#4b5563' : '#9ca3af',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: '12px',
+                        fontWeight: 'bold',
+                        flexShrink: 0,
+                        overflow: 'hidden',
+                      }}
+                    >
+                      {getUserProfilePicture(comment.author) ? (
+                        <img
+                          src={getUserProfilePicture(comment.author) as string}
+                          alt={comment.author}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            borderRadius: '50%',
+                            objectFit: 'cover',
+                          }}
+                        />
+                      ) : (
+                        <span
+                          style={{
+                            color: 'white',
+                            fontSize: '12px',
+                            fontWeight: 'bold',
+                          }}
+                        >
+                          {comment.author.charAt(0)}
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      aria-label={isUserOnline(comment.author) ? 'Online' : 'Offline'}
+                      style={{
+                        position: 'absolute',
+                        right: -2,
+                        bottom: -2,
+                        width: 9,
+                        height: 9,
+                        borderRadius: 9999,
+                        backgroundColor: isUserOnline(comment.author) ? '#10b981' : '#9ca3af',
+                        border: '2px solid white',
+                      }}
+                    />
                   </div>
                   <div
                     style={{
