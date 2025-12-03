@@ -5,6 +5,17 @@ let admin;
 let firestore;
 let firebaseInitialized = false;
 
+function logError(prefix, error) {
+  const code = error && (error.code || error.status || error.errorInfo?.code);
+  const msg = error && (error.message || error.errorInfo?.message);
+  const stack = error && error.stack;
+  try {
+    console.error(prefix, { code, message: msg }, stack || error);
+  } catch (_) {
+    console.error(prefix, msg || error);
+  }
+}
+
 // Create PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -33,8 +44,8 @@ async function initDatabase() {
         }),
       });
       try {
-        // Explicitly target the default Firestore database
-        firestore = getFirestore(firebaseApp, { databaseId: '(default)' });
+        // Explicitly target the default Firestore database and prefer REST transport
+        firestore = getFirestore(firebaseApp, { databaseId: '(default)', preferRest: true });
       } catch (e) {
         // Fallback for older SDKs
         firestore = admin.firestore();
@@ -48,7 +59,7 @@ async function initDatabase() {
           .doc('_warmup')
           .set({ t: new Date().toISOString() }, { merge: true });
       } catch (e) {
-        console.warn('[Database] Firestore warm-up write failed:', e.message || e);
+        logError('[Database] Firestore warm-up write failed:', e);
       }
       // Ready
       return true;
@@ -107,7 +118,7 @@ async function initDatabase() {
     console.log('[Database] ✅ PostgreSQL connected and initialized');
     return true;
   } catch (error) {
-    console.error('[Database] ❌ Connection failed:', error.message);
+    logError('[Database] ❌ Connection failed:', error);
     console.log('[Database] Falling back to data.json');
     return false;
   }
@@ -129,7 +140,7 @@ async function getData(key) {
     }
     return [];
   } catch (error) {
-    console.error(`[Database] Error getting ${key}:`, error.message);
+    logError(`[Database] Error getting ${key}:`, error);
     return [];
   }
 }
@@ -154,7 +165,7 @@ async function setData(key, value) {
     );
     return true;
   } catch (error) {
-    console.error(`[Database] Error setting ${key}:`, error.message);
+    logError(`[Database] Error setting ${key}:`, error);
     return false;
   }
 }
@@ -198,7 +209,7 @@ async function getAllData() {
     });
     return data;
   } catch (error) {
-    console.error('[Database] Error getting all data:', error.message);
+    logError('[Database] Error getting all data:', error);
     return {
       sermons: [],
       announcements: [],
