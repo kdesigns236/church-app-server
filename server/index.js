@@ -834,6 +834,68 @@ app.get('/api/community-stories', (req, res) => {
   res.json(dataStore.communityStories || []);
 });
 
+// Admin: create a new community story
+app.post('/api/community-stories', verifyAdmin, async (req, res) => {
+  try {
+    const { author, content, media, type } = req.body || {};
+    const id = Date.now();
+    const avatar = (author || 'A').toString().trim().charAt(0).toUpperCase();
+    const story = {
+      id,
+      author: author || 'Admin',
+      avatar,
+      content: content || '',
+      media, // { url, type: 'image' | 'video' }
+      viewed: false,
+      type: media ? (media.type === 'video' ? 'video' : 'photo') : (type || 'text'),
+    };
+    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
+    dataStore.communityStories = [story, ...list];
+    await saveData();
+    broadcastUpdate({ type: 'communityStories', action: 'add', data: story });
+    res.json({ success: true, story });
+  } catch (error) {
+    console.error('[Server] Error creating community story:', error);
+    res.status(500).json({ error: 'Failed to create story' });
+  }
+});
+
+// Admin: update a community story
+app.put('/api/community-stories/:id', verifyAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
+    const index = list.findIndex((s) => Number(s.id) === id);
+    if (index === -1) return res.status(404).json({ error: 'Story not found' });
+    const updated = { ...list[index], ...req.body, id: list[index].id };
+    dataStore.communityStories[index] = updated;
+    await saveData();
+    broadcastUpdate({ type: 'communityStories', action: 'update', data: updated });
+    res.json({ success: true, story: updated });
+  } catch (error) {
+    console.error('[Server] Error updating community story:', error);
+    res.status(500).json({ error: 'Failed to update story' });
+  }
+});
+
+// Admin: delete a community story
+app.delete('/api/community-stories/:id', verifyAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id);
+    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
+    const index = list.findIndex((s) => Number(s.id) === id);
+    if (index === -1) return res.status(404).json({ error: 'Story not found' });
+    const [removed] = list.splice(index, 1);
+    dataStore.communityStories = list;
+    await saveData();
+    broadcastUpdate({ type: 'communityStories', action: 'delete', data: { id: removed.id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Server] Error deleting community story:', error);
+    res.status(500).json({ error: 'Failed to delete story' });
+  }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ 

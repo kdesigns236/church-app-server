@@ -322,7 +322,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             ]);
           };
           
-          const [sermonsRes, announcementsRes, eventsRes, siteContentRes, prayerRequestsRes, bibleStudiesRes, chatMessagesRes, postsRes, commentsRes] = await Promise.all([
+          const [sermonsRes, announcementsRes, eventsRes, siteContentRes, prayerRequestsRes, bibleStudiesRes, chatMessagesRes, postsRes, commentsRes, storiesRes] = await Promise.all([
             fetchWithTimeout(`${apiUrl}/sermons`).catch(err => {
               console.error('[AppContext] Error fetching sermons:', err);
               return { ok: false, json: () => Promise.resolve([]) };
@@ -359,9 +359,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               console.error('[AppContext] Error fetching community comments:', err);
               return { ok: false, json: () => Promise.resolve([]) };
             }),
+            fetchWithTimeout(`${apiUrl}/community-stories`).catch(err => {
+              console.error('[AppContext] Error fetching community stories:', err);
+              return { ok: false, json: () => Promise.resolve([]) };
+            }),
           ]);
 
-          const [sermonsData, announcementsData, eventsData, siteContentData, prayerRequestsData, bibleStudiesData, chatMessagesData, postsData, commentsData] = await Promise.all([
+          const [sermonsData, announcementsData, eventsData, siteContentData, prayerRequestsData, bibleStudiesData, chatMessagesData, postsData, commentsData, storiesData] = await Promise.all([
             sermonsRes.json(),
             announcementsRes.json(),
             eventsRes.json(),
@@ -371,6 +375,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             chatMessagesRes.json(),
             postsRes.json(),
             commentsRes.json(),
+            storiesRes.json(),
           ]);
 
           console.log('[AppContext] ✅ Fetched initial data:', {
@@ -381,6 +386,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             chatMessages: chatMessagesData.length,
             posts: postsData.length,
             comments: commentsData.length,
+            stories: Array.isArray(storiesData) ? storiesData.length : 0,
           });
 
           // Only update if we got valid data (not empty from failed fetch)
