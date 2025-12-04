@@ -49,6 +49,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [userFitOverride, setUserFitOverride] = useState<'cover' | 'contain' | null>(null);
   const [showAspectBadge, setShowAspectBadge] = useState(false);
   const [aspectLabel, setAspectLabel] = useState('');
+  const [isReady, setIsReady] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const shouldShowUi = !isLandscape || showChrome;
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isMountedRef = useRef(true);
@@ -231,6 +233,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     const wakeLockActive = { current: false } as { current: boolean };
     const handlePlay = async () => {
       setIsPlaying(true);
+      setIsBuffering(false);
       if (!wakeLockActive.current) {
         try { await keepAwakeService.request('sermon'); } catch {}
         wakeLockActive.current = true;
@@ -261,12 +264,26 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (aspectTimeoutRef.current) clearTimeout(aspectTimeoutRef.current);
       aspectTimeoutRef.current = setTimeout(() => setShowAspectBadge(false), 1800);
     };
+    const handleCanPlay = () => {
+      setIsReady(true);
+      setIsBuffering(false);
+    };
+    const handleWaiting = () => {
+      setIsBuffering(true);
+    };
+    const handlePlaying = () => {
+      setIsReady(true);
+      setIsBuffering(false);
+    };
     
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
     video.addEventListener('ended', handleEnded);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('waiting', handleWaiting);
+    video.addEventListener('playing', handlePlaying);
 
     return () => {
       observer.disconnect();
@@ -275,6 +292,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('waiting', handleWaiting);
+      video.removeEventListener('playing', handlePlaying);
       // Best effort release
       keepAwakeService.release('sermon').catch(() => {});
     };
@@ -335,7 +355,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     <div className="relative w-screen h-screen snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: '100dvw', height: '100dvh' }}>
       {videoSrc ? (
         <div className="relative w-full h-full flex items-center justify-center">
-          {objectFit === 'contain' && (
+          {isReady && objectFit === 'contain' && (
             <video
               key={`bg-${videoSrc}`}
               className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-50 pointer-events-none"
@@ -360,7 +380,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             playsInline
             muted={isMuted}
             src={videoSrc}
-            preload="auto"
+            preload={isActive ? 'auto' : 'metadata'}
             aria-label={`Sermon titled ${sermon.title}`}
             onError={async (e) => {
               console.error('Video load error:', e);
@@ -412,16 +432,21 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         />
       )}
       
-      {/* Center Play Button */}
-      {shouldShowUi && !isPlaying && videoSrc && (
+      {/* Lightweight loader while preparing */}
+      {videoSrc && !isReady && (
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 text-white">
+          <div className="w-10 h-10 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+        </div>
+      )}
+
+      {/* Subtle Play Button (only after ready) */}
+      {shouldShowUi && isReady && !isPlaying && videoSrc && (
         <button 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-transparent border-none cursor-pointer hover:scale-110 active:scale-95 transition-transform duration-300"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-black/40 border border-white/20 rounded-full p-3 cursor-pointer backdrop-blur-md hover:scale-110 active:scale-95 transition-transform duration-300"
           onClick={handleVideoPress}
           aria-label="Play video"
         >
-          <div className="rounded-full p-6 bg-gradient-to-tr from-red-600 via-red-400 to-amber-300 shadow-[0_0_55px_rgba(248,113,113,0.95)] ring-2 ring-red-300/80">
-            <PlayIcon className="w-16 h-16 text-white drop-shadow-[0_0_30px_rgba(248,250,252,0.95)]" />
-          </div>
+          <PlayIcon className="w-8 h-8 text-white" />
         </button>
       )}
 
