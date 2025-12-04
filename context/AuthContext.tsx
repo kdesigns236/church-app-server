@@ -26,6 +26,15 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [users, setUsers] = useState<User[]>([defaultAdminUser]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const getApiUrl = () => ((import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api') as string;
+  const warmServer = async () => {
+    try {
+      const base = getApiUrl().replace(/\/api$/, '');
+      await apiClient.fetch(`${base}/api/health`, { method: 'GET', timeoutMs: 10000 });
+    } catch {}
+  };
+  const isTimeoutError = (err: any) => !!err && typeof err.message === 'string' && /timeout/i.test(err.message);
+
   const dedupeUsers = (list: User[]): User[] => {
     try {
       if (!Array.isArray(list)) return [];
@@ -260,46 +269,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const login = async (email: string, pass: string): Promise<void> => {
-    try {
-      console.log('[AuthContext] Starting login process...');
-      // Use environment variable or fallback to production URL
-      const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
-      console.log('[AuthContext] Login API URL:', apiUrl);
+    console.log('[AuthContext] Starting login process...');
+    const apiUrl = getApiUrl();
+    await warmServer();
+    const attempt = async () => {
       const response = await apiClient.fetch(`${apiUrl}/auth/login`, {
         method: 'POST',
-        body: JSON.stringify({ email, password: pass })
+        body: JSON.stringify({ email, password: pass }),
+        timeoutMs: 60000,
       });
-
       const data = await response.json();
-
       if (!response.ok) {
         console.error('[AuthContext] Login failed:', data);
         throw new Error(data.error || 'Login failed');
       }
-
       if (!data.token || !data.user) {
         console.error('[AuthContext] Invalid login response:', data);
         throw new Error('Invalid server response');
       }
-
-      console.log('[AuthContext] Login response:', data);
-      console.log('[AuthContext] User role:', data.user?.role);
-
-      // Map backend field names to frontend (profilePicture -> profilePictureUrl)
       const mappedUser = {
         ...data.user,
         profilePictureUrl: data.user.profilePicture || data.user.profilePictureUrl
       };
-
-      // Save token and user data
       localStorage.setItem('authToken', data.token);
       localStorage.setItem('authUser', JSON.stringify(mappedUser));
       setUser(mappedUser);
-      
-      console.log('[AuthContext] User set in state:', mappedUser);
-
-    } catch (error) {
-      throw error;
+    };
+    try {
+      await attempt();
+    } catch (err: any) {
+      if (isTimeoutError(err)) {
+        await warmServer();
+        await attempt();
+        return;
+      }
+      throw err;
     }
   };
   
@@ -315,19 +319,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       try {
-        // Upload profile picture to Cloudinary first
+        // Upload profile picture to Cloudinary first (with timeout)
         const formData = new FormData();
         formData.append('file', profilePictureFile);
         formData.append('upload_preset', 'church_profiles'); // You'll need to create this in Cloudinary
         formData.append('folder', 'church-profiles');
 
+        const cloudController = new AbortController();
+        const cloudTimeout = setTimeout(() => cloudController.abort(), 90000);
         const cloudinaryResponse = await fetch(
           `https://api.cloudinary.com/v1_1/${(import.meta as any).env.VITE_CLOUDINARY_CLOUD_NAME || 'de0zuglgd'}/image/upload`,
           {
             method: 'POST',
-            body: formData
+            body: formData,
+            signal: cloudController.signal,
           }
         );
+        clearTimeout(cloudTimeout);
 
         if (!cloudinaryResponse.ok) {
           throw new Error('Failed to upload profile picture');
@@ -337,29 +345,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const profilePictureUrl = cloudinaryData.secure_url;
 
         // Register user with backend
-        const apiUrl = (import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
-        const response = await apiClient.fetch(`${apiUrl}/auth/register`, {
-          method: 'POST',
-          body: JSON.stringify({
-            name,
-            email,
-            password: pass,
-            profilePicture: profilePictureUrl
-          })
-        });
+        const apiUrl = getApiUrl();
+        await warmServer();
+        const attempt = async () => {
+          const response = await apiClient.fetch(`${apiUrl}/auth/register`, {
+            method: 'POST',
+            body: JSON.stringify({
+              name,
+              email,
+              password: pass,
+              profilePicture: profilePictureUrl
+            }),
+            timeoutMs: 90000,
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data.error || 'Registration failed');
+          }
+          // Auto-login with returned token
+          localStorage.setItem('authToken', data.token);
+          localStorage.setItem('authUser', JSON.stringify(data.user));
+          setUser(data.user);
+          return data;
+        };
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Registration failed');
+        try {
+          return await attempt();
+        } catch (err: any) {
+          if (isTimeoutError(err)) {
+            await warmServer();
+            return await attempt();
+          }
+          throw err;
         }
-
-        // Auto-login with returned token
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('authUser', JSON.stringify(data.user));
-        setUser(data.user);
-
-        return data;
 
       } catch (error: any) {
         throw new Error(error.message || 'Registration failed');

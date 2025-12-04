@@ -646,6 +646,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 // Auth: register new member user
 app.post('/api/auth/register', async (req, res) => {
+
   try {
     const { name, email, password, profilePicture } = req.body;
 
@@ -659,7 +660,8 @@ app.post('/api/auth/register', async (req, res) => {
     }
 
     const bcrypt = require('bcrypt');
-    const hashedPassword = await bcrypt.hash(password, 8);
+    // Use moderate cost to keep UX fast on small servers
+    const hashedPassword = await bcrypt.hash(password, 6);
 
     const newUser = {
       id: `user-${Date.now()}`,
@@ -672,7 +674,6 @@ app.post('/api/auth/register', async (req, res) => {
     };
 
     dataStore.users = users.concat(newUser);
-    await saveData();
 
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email, role: newUser.role },
@@ -685,7 +686,10 @@ app.post('/api/auth/register', async (req, res) => {
     // Broadcast new user to all clients so user list stays in sync
     broadcastUpdate({ type: 'users', action: 'add', data: safeUser });
 
+    // Respond immediately; persist in background to reduce latency
     res.json({ token, user: safeUser });
+    saveData().catch((err) => console.error('[Auth] Async save after register failed:', err));
+
   } catch (error) {
     console.error('[Auth] Register error:', error);
     res.status(500).json({ error: 'Registration failed' });
