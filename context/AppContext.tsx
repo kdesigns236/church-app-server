@@ -373,25 +373,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           console.log('[AppContext] 🔄 Fetching fresh data from server...');
           const apiUrl = ((import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api') as string;
           
-          // Check last sync time to avoid excessive fetching
-          const lastSync = localStorage.getItem('lastSyncTime');
-          const now = Date.now();
-          const thirtySeconds = 30 * 1000; // Reduced from 5 minutes to 30 seconds
-          
-          // Always fetch if last sync was more than 30 seconds ago or doesn't exist
-          const shouldFetch = !lastSync || (now - parseInt(lastSync)) > thirtySeconds;
-          
-          if (!shouldFetch) {
-            console.log('[AppContext] ✅ Using recent cached data (synced less than 30 seconds ago)');
-            return;
-          }
-          
-          console.log('[AppContext] 📡 Fetching from server (last sync was more than 30 seconds ago)...');
+          // Always fetch fresh data on app start; rely on localStorage as initial render only
+          console.log('[AppContext] 📡 Fetching fresh data from server (no-cache)...');
           
           // Add 10-second timeout to prevent app from hanging
           const fetchWithTimeout = (url: string, timeout = 10000) => {
             return Promise.race([
-              fetch(url),
+              fetch(url, { cache: 'no-store' as RequestCache }),
               new Promise<Response>((_, reject) => 
                 setTimeout(() => reject(new Error('Request timeout')), timeout)
               )
@@ -532,7 +520,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             localStorage.setItem('communityComments', JSON.stringify(commentsData));
           }
           
-          // Update last sync timestamp only if we successfully fetched
+          // Pull full snapshot as a consistency check
+          try {
+            const full = await websocketService.pullFromServer();
+            if (full && typeof full === 'object') {
+              if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); }
+              if (Array.isArray(full.announcements)) { setAnnouncements(full.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(full.announcements)); }
+              if (Array.isArray(full.events)) { setEvents(full.events as Event[]); localStorage.setItem('events', JSON.stringify(full.events)); }
+              if (full.siteContent && typeof full.siteContent === 'object') { setSiteContent(full.siteContent as any); localStorage.setItem('siteContent', JSON.stringify(full.siteContent)); }
+              if (Array.isArray(full.prayerRequests)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
+              if (Array.isArray(full.bibleStudies)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
+              if (Array.isArray(full.chatMessages)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
+              if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); localStorage.setItem('communityPosts', JSON.stringify(full.posts)); }
+              if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); localStorage.setItem('communityComments', JSON.stringify(full.comments)); }
+              if (Array.isArray(full.communityStories)) {
+                try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {}
+              }
+            }
+          } catch {}
+
+          // Update last sync timestamp
           if (sermonsRes.ok || announcementsRes.ok || eventsRes.ok) {
             localStorage.setItem('lastSyncTime', Date.now().toString());
             console.log('[AppContext] ✅ Data synced successfully from server');
