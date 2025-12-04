@@ -422,6 +422,7 @@ const CommunityFeedPage: React.FC = () => {
           position: 'sticky',
           top: 0,
           zIndex: 10,
+          paddingTop: 'calc(env(safe-area-inset-top) + 8px)'
         }}
       >
         <div
@@ -598,7 +599,8 @@ const CommunityFeedPage: React.FC = () => {
                   </span>
                 )}
               </div>
-              <div
+              <button
+                onClick={(e) => { e.stopPropagation(); navigate('/create-post?mode=story'); }}
                 style={{
                   position: 'absolute',
                   bottom: 40,
@@ -612,6 +614,8 @@ const CommunityFeedPage: React.FC = () => {
                   gap: 4,
                   fontSize: 12,
                   fontWeight: 500,
+                  border: 'none',
+                  cursor: 'pointer'
                 }}
               >
                 <span
@@ -630,8 +634,8 @@ const CommunityFeedPage: React.FC = () => {
                 >
                   +
                 </span>
-                <span>{hasMyStories ? 'View story' : 'Create story'}</span>
-              </div>
+                <span>Create story</span>
+              </button>
               <div
                 style={{
                   padding: '8px',
@@ -1593,7 +1597,7 @@ const CommunityFeedPage: React.FC = () => {
             <div
               style={{
                 position: 'absolute',
-                top: 8,
+                top: 'calc(env(safe-area-inset-top) + 8px)',
                 left: 8,
                 right: 8,
                 display: 'flex',
@@ -1639,6 +1643,7 @@ const CommunityFeedPage: React.FC = () => {
             <div
               style={{
                 padding: '16px',
+                paddingTop: 'calc(env(safe-area-inset-top) + 16px)',
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',

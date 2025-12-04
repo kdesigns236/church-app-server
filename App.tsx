@@ -29,6 +29,8 @@ import { useAuth } from './hooks/useAuth';
 import { LoadingScreen } from './components/LoadingScreen';
 import { localNotificationService } from './services/localNotificationService';
 import { websocketService } from './services/websocketService';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { keepAwakeService } from './services/keepAwakeService';
 
 // Lazy load the Bible page because of its large data dependency
 const BiblePage = lazy(() => import('./pages/BiblePage'));
@@ -66,12 +68,48 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const ProtectedRoutes: React.FC = () => {
     const location = useLocation();
 
-    const showHeader = !['/sermons', '/chat', '/chat-room', '/create-post', '/pastor-ai', '/video-call', '/golive', '/prostream'].includes(location.pathname);
+    const hideHeaderOn: string[] = ['/sermons', '/video-call', '/golive', '/prostream'];
+    const showHeader = !hideHeaderOn.includes(location.pathname);
+
+    // Ensure screen sleep unless on allowed pages
+    useEffect(() => {
+        const keepAwakePaths = ['/sermons', '/video-call'];
+        const onAllowedPage = keepAwakePaths.includes(location.pathname);
+        if (!onAllowedPage) {
+            keepAwakeService.releaseAll().catch(() => {});
+        }
+        const visHandler = () => {
+            if (document.visibilityState !== 'visible') {
+                keepAwakeService.releaseAll().catch(() => {});
+            }
+        };
+        document.addEventListener('visibilitychange', visHandler);
+        return () => document.removeEventListener('visibilitychange', visHandler);
+    }, [location.pathname]);
+
+    // Failsafe: every 15s drop wake lock if no active video is playing or on disallowed page
+    useEffect(() => {
+        const keepAwakePaths = ['/sermons', '/video-call'];
+        const interval = setInterval(() => {
+            const onAllowedPage = keepAwakePaths.includes(location.pathname);
+            if (!onAllowedPage) {
+                keepAwakeService.releaseAll().catch(() => {});
+                return;
+            }
+            const anyPlaying = Array.from(document.querySelectorAll('video'))
+                .some((v) => !(v as HTMLVideoElement).paused && !(v as HTMLVideoElement).ended);
+            if (!anyPlaying) {
+                keepAwakeService.releaseAll().catch(() => {});
+            }
+        }, 15000);
+        return () => clearInterval(interval);
+    }, [location.pathname]);
 
     return (
         <>
             <OfflineIndicator />
             {showHeader && <Header />}
+            <div style={{ paddingTop: showHeader ? 'calc(env(safe-area-inset-top) + 3.5rem)' : 0 }}>
             <PageLayout>
                 <Suspense fallback={<LoadingFallback />}>
                     <Routes>
@@ -107,6 +145,7 @@ const ProtectedRoutes: React.FC = () => {
                     </Routes>
                 </Suspense>
             </PageLayout>
+            </div>
         </>
     );
 };
@@ -128,6 +167,19 @@ const AuthRoutes: React.FC = () => (
 const App: React.FC = () => {
     const { isLoading, isAuthenticated, user } = useAuth();
     const [meetingNotification, setMeetingNotification] = useState<{ userName: string; roomId: string; message: string } | null>(null);
+    
+    // Ensure the webview is not under the Android status bar
+    useEffect(() => {
+        (async () => {
+            try {
+                await StatusBar.setOverlaysWebView({ overlay: false });
+                await StatusBar.setBackgroundColor({ color: '#1B365D' });
+                await StatusBar.setStyle({ style: Style.Dark });
+            } catch {}
+        })();
+    }, []);
+
+    // (moved wake-lock page/visibility watchers into ProtectedRoutes below)
     
     // Always ask for local notification permission when the app starts
     useEffect(() => {
@@ -210,7 +262,8 @@ const App: React.FC = () => {
           <a
             href="/#/video-call"
             onClick={() => setMeetingNotification(null)}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 animate-slide-down cursor-pointer"
+            className="fixed left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 animate-slide-down cursor-pointer"
+            style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}
           >
             <div className="bg-secondary text-primary rounded-lg shadow-2xl p-4 flex items-center gap-3 hover:bg-gold-light transition-colors">
               <SermonsIcon className="w-10 h-10 text-primary animate-pulse flex-shrink-0" />

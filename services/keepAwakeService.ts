@@ -13,11 +13,15 @@ class KeepAwakeService {
 
   async request(_label?: string): Promise<void> {
     try {
+      const api = (navigator as any).wakeLock;
+      if (typeof api === 'undefined') {
+        return; // Do not change refCount if unsupported
+      }
       this.refCount++;
-      if (this.lock || typeof (navigator as any).wakeLock === 'undefined') {
+      if (this.lock) {
         return;
       }
-      this.lock = await (navigator as any).wakeLock.request('screen');
+      this.lock = await api.request('screen');
       document.addEventListener('visibilitychange', this.onVisibilityChange);
     } catch (err) {
       // Ignore if not supported or permission denied
@@ -32,6 +36,17 @@ class KeepAwakeService {
         this.lock = null;
         document.removeEventListener('visibilitychange', this.onVisibilityChange);
       }
+    } catch {}
+  }
+
+  async releaseAll(): Promise<void> {
+    try {
+      this.refCount = 0;
+      if (this.lock) {
+        await this.lock.release().catch(() => {});
+        this.lock = null;
+      }
+      document.removeEventListener('visibilitychange', this.onVisibilityChange);
     } catch {}
   }
 }

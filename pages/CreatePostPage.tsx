@@ -102,6 +102,7 @@ const CreatePostPage: React.FC = () => {
           position: 'sticky',
           top: 0,
           zIndex: 10,
+          paddingTop: 'calc(env(safe-area-inset-top) + 8px)'
         }}
       >
         <div
