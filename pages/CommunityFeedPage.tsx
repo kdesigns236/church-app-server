@@ -20,6 +20,7 @@ import { Post, Comment } from '../types';
 
 interface Story {
   id: number;
+  authorId?: string;
   author: string;
   avatar: string;
   content: string;
@@ -60,6 +61,29 @@ const CommunityFeedPage: React.FC = () => {
       return [];
     }
   });
+
+  // Migrate stories to include authorId when possible using users list
+  useEffect(() => {
+    try {
+      const list = Array.isArray(stories) ? stories : [];
+      const userList = Array.isArray(users) ? users : [];
+      let changed = false;
+      const withIds = list.map(s => {
+        if (!s.authorId) {
+          const match = userList.find(u => u.name === s.author);
+          if (match) {
+            changed = true;
+            return { ...s, authorId: match.id } as Story;
+          }
+        }
+        return s;
+      });
+      if (changed) {
+        setStories(withIds);
+        try { localStorage.setItem('communityStories', JSON.stringify(withIds)); } catch {}
+      }
+    } catch {}
+  }, [users, stories]);
   const [activeComment, setActiveComment] = useState<number | null>(null);
   const [commentText, setCommentText] = useState('');
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
@@ -130,20 +154,18 @@ const CommunityFeedPage: React.FC = () => {
     (user && (user as any).profilePicture) ||
     undefined;
 
-  const getUserProfilePicture = (name: string): string | undefined => {
+  const getUserProfilePicture = (authorId?: string, name?: string): string | undefined => {
     const list = users || [];
-    const match = list.find((u) => u.name === name);
+    let match = authorId ? list.find(u => u.id === authorId) : undefined;
+    if (!match && name) match = list.find(u => u.name === name);
     if (!match) return undefined;
-    return (
-      (match as any).profilePictureUrl ||
-      (match as any).profilePicture ||
-      undefined
-    );
+    return ((match as any).profilePictureUrl || (match as any).profilePicture || undefined);
   };
 
-  const isUserOnline = (name: string): boolean => {
+  const isUserOnline = (authorId?: string, name?: string): boolean => {
     const list = users || [];
-    const match = list.find((u) => u.name === name);
+    let match = authorId ? list.find(u => u.id === authorId) : undefined;
+    if (!match && name) match = list.find(u => u.name === name);
     return !!(match && match.isOnline);
   };
 
@@ -159,8 +181,8 @@ const CommunityFeedPage: React.FC = () => {
     }
   }, [location.search, posts.length]);
 
-  const myStories = user ? stories.filter((s) => s.author === user.name) : [];
-  const otherStories = user ? stories.filter((s) => s.author !== user.name) : stories;
+  const myStories = user ? stories.filter((s) => (s.authorId ? s.authorId === user.id : s.author === user.name)) : [];
+  const otherStories = user ? stories.filter((s) => (s.authorId ? s.authorId !== user.id : s.author !== user.name)) : stories;
   const hasMyStories = myStories.length > 0;
   const latestMyStory = hasMyStories ? myStories[0] : null;
 
@@ -684,9 +706,9 @@ const CommunityFeedPage: React.FC = () => {
                             overflow: 'hidden',
                           }}
                         >
-                          {getUserProfilePicture(story.author) ? (
+                          {getUserProfilePicture(story.authorId, story.author) ? (
                             <img
-                              src={getUserProfilePicture(story.author) as string}
+                              src={getUserProfilePicture(story.authorId, story.author) as string}
                               alt={story.author}
                               style={{
                                 width: '100%',
@@ -708,7 +730,7 @@ const CommunityFeedPage: React.FC = () => {
                           )}
                         </div>
                         <span
-                          aria-label={isUserOnline(story.author) ? 'Online' : 'Offline'}
+                          aria-label={isUserOnline(story.authorId, story.author) ? 'Online' : 'Offline'}
                           style={{
                             position: 'absolute',
                             right: -2,
@@ -716,7 +738,7 @@ const CommunityFeedPage: React.FC = () => {
                             width: 9,
                             height: 9,
                             borderRadius: 9999,
-                            backgroundColor: isUserOnline(story.author) ? '#10b981' : '#9ca3af',
+                            backgroundColor: isUserOnline(story.authorId, story.author) ? '#10b981' : '#9ca3af',
                             border: '2px solid rgba(255,255,255,0.9)',
                           }}
                         />
@@ -958,7 +980,7 @@ const CommunityFeedPage: React.FC = () => {
                   )}
                 </div>
                 <span
-                  aria-label={isUserOnline(post.author) ? 'Online' : 'Offline'}
+                  aria-label={isUserOnline((post as any).authorId, post.author) ? 'Online' : 'Offline'}
                   style={{
                     position: 'absolute',
                     right: -2,
@@ -966,7 +988,7 @@ const CommunityFeedPage: React.FC = () => {
                     width: 10,
                     height: 10,
                     borderRadius: 9999,
-                    backgroundColor: isUserOnline(post.author) ? '#10b981' : '#9ca3af',
+                    backgroundColor: isUserOnline((post as any).authorId, post.author) ? '#10b981' : '#9ca3af',
                     border: '2px solid white',
                   }}
                 />
@@ -1300,7 +1322,7 @@ const CommunityFeedPage: React.FC = () => {
                     )}
                   </div>
                   <span
-                    aria-label={isUserOnline(activeCommentPost.author) ? 'Online' : 'Offline'}
+                    aria-label={isUserOnline((activeCommentPost as any)?.authorId, activeCommentPost.author) ? 'Online' : 'Offline'}
                     style={{
                       position: 'absolute',
                       right: -2,
@@ -1308,7 +1330,7 @@ const CommunityFeedPage: React.FC = () => {
                       width: 10,
                       height: 10,
                       borderRadius: 9999,
-                      backgroundColor: isUserOnline(activeCommentPost.author) ? '#10b981' : '#9ca3af',
+                      backgroundColor: isUserOnline((activeCommentPost as any)?.authorId, activeCommentPost.author) ? '#10b981' : '#9ca3af',
                       border: '2px solid white',
                     }}
                   />
@@ -1437,7 +1459,7 @@ const CommunityFeedPage: React.FC = () => {
                       )}
                     </div>
                     <span
-                      aria-label={isUserOnline(comment.author) ? 'Online' : 'Offline'}
+                      aria-label={isUserOnline((comment as any).authorId, comment.author) ? 'Online' : 'Offline'}
                       style={{
                         position: 'absolute',
                         right: -2,
@@ -1445,7 +1467,7 @@ const CommunityFeedPage: React.FC = () => {
                         width: 9,
                         height: 9,
                         borderRadius: 9999,
-                        backgroundColor: isUserOnline(comment.author) ? '#10b981' : '#9ca3af',
+                        backgroundColor: isUserOnline((comment as any).authorId, comment.author) ? '#10b981' : '#9ca3af',
                         border: '2px solid white',
                       }}
                     />
@@ -1661,7 +1683,7 @@ const CommunityFeedPage: React.FC = () => {
                   )}
                 </div>
                 <span
-                  aria-label={isUserOnline(viewingStory.author) ? 'Online' : 'Offline'}
+                  aria-label={isUserOnline(viewingStory?.authorId, viewingStory?.author) ? 'Online' : 'Offline'}
                   style={{
                     position: 'absolute',
                     right: -2,
@@ -1669,7 +1691,7 @@ const CommunityFeedPage: React.FC = () => {
                     width: 10,
                     height: 10,
                     borderRadius: 9999,
-                    backgroundColor: isUserOnline(viewingStory.author) ? '#10b981' : '#9ca3af',
+                    backgroundColor: isUserOnline(viewingStory?.authorId, viewingStory?.author) ? '#10b981' : '#9ca3af',
                     border: '2px solid white',
                   }}
                 />

@@ -50,6 +50,7 @@ export interface PostMedia {
 
 export interface Post {
   id: number;
+  authorId?: string;
   author: string;
   avatar: string;
   time: string;
@@ -63,6 +64,7 @@ export interface Post {
 
 export interface Comment {
   id: number;
+  authorId?: string;
   author: string;
   text: string;
   time: string;

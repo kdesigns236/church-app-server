@@ -52,6 +52,7 @@ const CreatePostPage: React.FC = () => {
       try {
         const newStory = {
           id: Date.now(),
+          authorId: user.id,
           author: user.name,
           avatar: user.name.trim().charAt(0).toUpperCase(),
           content: trimmed,

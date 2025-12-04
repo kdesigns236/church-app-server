@@ -48,7 +48,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const APP_VERSION = '2.0.0'; // Increment this to clear all localStorage
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, users } = useAuth();
 
     // Clear old localStorage data if app version changed (but preserve user auth and community data)
     React.useEffect(() => {
@@ -262,6 +262,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       } catch {}
     }, [posts]);
+
+    // Migrate posts/comments to include authorId by matching user name -> id
+    useEffect(() => {
+      try {
+        const list = Array.isArray(posts) ? posts : [];
+        const userList = Array.isArray(users) ? users : [];
+        let changed = false;
+        const withIds = list.map((p) => {
+          let np = p as any;
+          if (!np.authorId) {
+            const match = userList.find(u => u.name === np.author);
+            if (match) {
+              np = { ...np, authorId: match.id };
+              changed = true;
+            }
+          }
+          if (Array.isArray(np.comments)) {
+            const newComments = np.comments.map((c: any) => {
+              if (!c.authorId) {
+                const cm = userList.find(u => u.name === c.author);
+                if (cm) {
+                  return { ...c, authorId: cm.id };
+                }
+              }
+              return c;
+            });
+            // Replace only if any comment changed (cheap compare by pointer inequality)
+            if (newComments.some((c: any, i: number) => c !== np.comments[i])) {
+              np = { ...np, comments: newComments };
+              changed = true;
+            }
+          }
+          return np;
+        });
+        if (changed) {
+          setPosts(withIds as Post[]);
+          localStorage.setItem('communityPosts', JSON.stringify(withIds));
+        }
+      } catch {}
+    }, [users, posts]);
 
     // Helper function to save data and update sync timestamp
     const saveToLocalStorage = (key: string, data: any) => {
@@ -860,6 +900,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const basePost: Post = {
         id: Date.now(),
+        authorId: user.id,
         author: user.name,
         avatar: user.name.trim().charAt(0).toUpperCase(),
         time: new Date().toISOString(),
@@ -932,6 +973,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const addPostComment = (postId: number, commentText: string, user: User) => {
       const newComment: Comment = {
         id: Date.now(),
+        authorId: user.id,
         author: user.name,
         text: commentText,
         time: new Date().toISOString(),

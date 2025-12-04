@@ -6,6 +6,7 @@ import { FaSyncAlt, FaVideoSlash } from 'react-icons/fa';
 import { SermonOverlay } from './SermonOverlay';
 import { videoStorageService } from '../../services/videoStorageService';
 import { auth, storage } from '../../config/firebase';
+import { keepAwakeService } from '../../services/keepAwakeService';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { signInAnonymously } from 'firebase/auth';
 
@@ -227,8 +228,28 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     observer.observe(video);
 
     // Sync isPlaying state with video events
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
+    const wakeLockActive = { current: false } as { current: boolean };
+    const handlePlay = async () => {
+      setIsPlaying(true);
+      if (!wakeLockActive.current) {
+        try { await keepAwakeService.request('sermon'); } catch {}
+        wakeLockActive.current = true;
+      }
+    };
+    const handlePause = async () => {
+      setIsPlaying(false);
+      if (wakeLockActive.current) {
+        try { await keepAwakeService.release('sermon'); } catch {}
+        wakeLockActive.current = false;
+      }
+    };
+    const handleEnded = async () => {
+      setIsPlaying(false);
+      if (wakeLockActive.current) {
+        try { await keepAwakeService.release('sermon'); } catch {}
+        wakeLockActive.current = false;
+      }
+    };
     const handleTimeUpdate = () => setCurrentTime(video.currentTime);
     const handleLoadedMetadata = () => {
       setDuration(video.duration);
@@ -243,6 +264,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
+    video.addEventListener('ended', handleEnded);
     video.addEventListener('timeupdate', handleTimeUpdate);
     video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
@@ -250,8 +272,11 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       observer.disconnect();
       video.removeEventListener('play', handlePlay);
       video.removeEventListener('pause', handlePause);
+      video.removeEventListener('ended', handleEnded);
       video.removeEventListener('timeupdate', handleTimeUpdate);
       video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      // Best effort release
+      keepAwakeService.release('sermon').catch(() => {});
     };
   }, [videoSrc, isActive]);
 
@@ -327,9 +352,11 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             key={videoSrc}
             ref={videoRef}
             onClick={handleVideoPress}
+            onTouchEnd={handleVideoPress}
             className={`transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
             style={{ transform: `rotate(${rotation}deg)` }}
             loop
+            autoPlay
             playsInline
             muted={isMuted}
             src={videoSrc}

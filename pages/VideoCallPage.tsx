@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon } from '../constants/icons';
 import { websocketService } from '../services/websocketService';
+import { keepAwakeService } from '../services/keepAwakeService';
 import { useAuth } from '../hooks/useAuth';
 import {
   FaSyncAlt,
@@ -145,6 +146,8 @@ const VideoCallPage: React.FC = () => {
     // Cleanup function to release camera when component unmounts
     return () => {
       console.log('[VideoCall] Component unmounting, cleaning up...');
+      // Release wake lock if any
+      keepAwakeService.release('meeting').catch(() => {});
       
       // Stop all tracks
       if (localStreamRef.current) {
@@ -271,6 +274,7 @@ const VideoCallPage: React.FC = () => {
       }
 
       setIsCallActive(true);
+      try { await keepAwakeService.request('meeting'); } catch {}
       
       // Add yourself as first participant
       setParticipants([{ id: 'local', name: user?.name || 'You', stream }]);
@@ -437,6 +441,7 @@ const VideoCallPage: React.FC = () => {
       localStreamRef.current.getTracks().forEach(track => track.stop());
     }
     setIsCallActive(false);
+    keepAwakeService.release('meeting').catch(() => {});
     navigate('/');
   };
 
