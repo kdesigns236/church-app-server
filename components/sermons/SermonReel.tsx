@@ -355,7 +355,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     <div className="relative w-screen h-screen snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: '100dvw', height: '100dvh' }}>
       {videoSrc ? (
         <div className="relative w-full h-full flex items-center justify-center">
-          {isReady && objectFit === 'contain' && (
+          {isActive && isReady && objectFit === 'contain' && (
             <video
               key={`bg-${videoSrc}`}
               className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-50 pointer-events-none"

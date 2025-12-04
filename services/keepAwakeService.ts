@@ -4,6 +4,16 @@
 class KeepAwakeService {
   private lock: any | null = null;
   private refCount = 0;
+  private get enabled(): boolean {
+    try {
+      const v = (import.meta as any).env?.VITE_ENABLE_WAKE_LOCK;
+      if (typeof v === 'undefined') return true;
+      const s = String(v).toLowerCase();
+      return !(s === 'false' || s === '0' || s === 'off' || s === 'no');
+    } catch {
+      return true;
+    }
+  }
   private onVisibilityChange = () => {
     // Re-acquire the lock if page becomes visible and we still need it
     if (document.visibilityState === 'visible' && this.refCount > 0) {
@@ -13,6 +23,7 @@ class KeepAwakeService {
 
   async request(_label?: string): Promise<void> {
     try {
+      if (!this.enabled) return;
       const api = (navigator as any).wakeLock;
       if (typeof api === 'undefined') {
         return; // Do not change refCount if unsupported

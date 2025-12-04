@@ -28,6 +28,7 @@ interface Story {
   viewed: boolean;
   // Optional type so we can give video stories longer duration
   type?: 'video' | 'photo' | 'text';
+  createdAt?: number;
 }
 
 const CommunityFeedPage: React.FC = () => {
@@ -48,8 +49,16 @@ const CommunityFeedPage: React.FC = () => {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          console.log('[CommunityFeed] Loaded communityStories from localStorage:', parsed.length);
-          return parsed;
+          const now = Date.now();
+          const dayMs = 24 * 60 * 60 * 1000;
+          const filtered = parsed.filter((s: any) => {
+            const ts = typeof s?.createdAt === 'number' ? s.createdAt : (typeof s?.id === 'number' ? s.id : undefined);
+            if (!ts) return false;
+            return now - ts <= dayMs;
+          });
+          try { localStorage.setItem('communityStories', JSON.stringify(filtered)); } catch {}
+          console.log('[CommunityFeed] Loaded communityStories from localStorage (active only):', filtered.length);
+          return filtered as Story[];
         }
         console.warn('[CommunityFeed] communityStories in localStorage was not an array, resetting.');
         return [];
@@ -336,14 +345,22 @@ const CommunityFeedPage: React.FC = () => {
 
       if (syncData.action === 'add') {
         setStories(prev => {
-          if (prev.find((s) => s.id === syncData.data.id)) {
-            return prev;
-          }
-          return [syncData.data, ...prev];
+          const now = Date.now();
+          const dayMs = 24 * 60 * 60 * 1000;
+          const incoming = syncData.data;
+          const ts = typeof incoming?.createdAt === 'number' ? incoming.createdAt : (typeof incoming?.id === 'number' ? incoming.id : now);
+          if (now - ts > dayMs) return prev;
+          if (prev.find((s) => s.id === incoming.id)) return prev;
+          return [{ ...incoming, createdAt: ts }, ...prev];
         });
       } else if (syncData.action === 'update') {
         setStories(prev =>
-          prev.map((s) => (s.id === syncData.data.id ? syncData.data : s)),
+          prev.map((s) => {
+            if (s.id !== syncData.data.id) return s;
+            const incoming = syncData.data;
+            const ts = typeof incoming?.createdAt === 'number' ? incoming.createdAt : (typeof incoming?.id === 'number' ? incoming.id : Date.now());
+            return { ...incoming, createdAt: ts } as Story;
+          }),
         );
       } else if (syncData.action === 'delete') {
         setStories(prev => prev.filter((s) => s.id !== syncData.data.id));
@@ -372,9 +389,17 @@ const CommunityFeedPage: React.FC = () => {
         const data = await res.json();
         if (cancelled) return;
         if (Array.isArray(data) && data.length > 0) {
+          const now = Date.now();
+          const dayMs = 24 * 60 * 60 * 1000;
+          const sanitized = data
+            .map((d: any) => {
+              const ts = typeof d?.createdAt === 'number' ? d.createdAt : (typeof d?.id === 'number' ? d.id : now);
+              return { ...d, createdAt: ts } as Story;
+            })
+            .filter((s: Story) => now - (s.createdAt || now) <= dayMs);
           const existing = Array.isArray(stories) ? stories : [];
           const ids = new Set(existing.map(s => s.id));
-          const merged = [...existing, ...data.filter((d: any) => d && !ids.has(d.id))];
+          const merged = [...existing, ...sanitized.filter((d: any) => d && !ids.has(d.id))];
           setStories(merged);
           try { localStorage.setItem('communityStories', JSON.stringify(merged)); } catch {}
         }
@@ -395,6 +420,24 @@ const CommunityFeedPage: React.FC = () => {
       console.error('Error saving communityStories to localStorage', error);
     }
   }, [stories]);
+
+  useEffect(() => {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const tick = () => {
+      const now = Date.now();
+      setStories(prev => {
+        const filtered = (prev || []).filter(s => {
+          const ts = typeof s?.createdAt === 'number' ? s.createdAt : (typeof (s as any)?.id === 'number' ? (s as any).id : undefined);
+          if (!ts) return false;
+          return now - ts <= dayMs;
+        });
+        return filtered.length === prev.length ? prev : filtered;
+      });
+    };
+    tick();
+    const interval = window.setInterval(tick, 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   // Lightweight sync hint: if both posts and stories are empty, show a small message while
   // initial data is being pulled from the server. This never blocks rendering cached content.

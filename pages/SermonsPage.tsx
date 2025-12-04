@@ -173,7 +173,7 @@ const SermonsPage: React.FC = () => {
       <div 
         ref={containerRef}
         className="reel-container h-screen w-screen bg-black overflow-y-scroll snap-y snap-mandatory scrollbar-hide" 
-        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch' }}
+        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', height: '100dvh', width: '100dvw' }}
       >
         {sortedSermons.length > 0 ? (
           sortedSermons.map((sermon, index) => (
