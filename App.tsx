@@ -68,8 +68,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 const ProtectedRoutes: React.FC = () => {
     const location = useLocation();
 
-    const hideHeaderOn: string[] = ['/sermons', '/video-call', '/golive', '/prostream'];
-    const showHeader = !hideHeaderOn.includes(location.pathname);
+    const showHeader = true;
 
     // Ensure screen sleep unless on allowed pages
     useEffect(() => {
