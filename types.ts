@@ -29,6 +29,7 @@ export interface User {
   role: 'admin' | 'member';
   profilePictureUrl?: string;
   isOnline?: boolean;
+  lastSeen?: number;
 }
 
 export type Priority = 'High' | 'Medium' | 'Low';

@@ -129,6 +129,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     initializeAuth();
   }, []);
 
+  // Reflect socket connection as self presence immediately and re-announce on reconnect
+  useEffect(() => {
+    const setSelfOnline = (online: boolean) => {
+      if (!user) return;
+      setUsers(prev => {
+        const arr = Array.isArray(prev) ? prev : [];
+        const next = arr.map(u => u.id === user.id ? { ...u, isOnline: online } : u);
+        try { localStorage.setItem('churchUserList', JSON.stringify(next)); } catch {}
+        return next;
+      });
+    };
+
+    const handleConnected = () => {
+      setSelfOnline(true);
+      try {
+        const token = localStorage.getItem('authToken');
+        if (token) websocketService.getSocket().emit('user-online', { token });
+      } catch {}
+    };
+    const handleDisconnected = () => setSelfOnline(false);
+
+    websocketService.addListener('connected', handleConnected);
+    websocketService.addListener('disconnected', handleDisconnected);
+    return () => {
+      websocketService.removeListener('connected', handleConnected);
+      websocketService.removeListener('disconnected', handleDisconnected);
+    };
+  }, [user]);
+
+  // Presence TTL: auto-mark users offline if lastSeen is stale
+  useEffect(() => {
+    const PRESENCE_TTL_MS = 60_000; // 1 minute
+    const interval = setInterval(() => {
+      setUsers(prev => {
+        const arr = Array.isArray(prev) ? prev : [];
+        let changed = false;
+        const now = Date.now();
+        const next = arr.map(u => {
+          if (u.isOnline && typeof (u as any).lastSeen === 'number' && now - (u as any).lastSeen > PRESENCE_TTL_MS) {
+            changed = true;
+            return { ...u, isOnline: false };
+          }
+          return u;
+        });
+        if (changed) {
+          try { localStorage.setItem('churchUserList', JSON.stringify(next)); } catch {}
+        }
+        return next;
+      });
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Bootstrap full users list from server once (ensures we see everyone even before they come online)
   useEffect(() => {
     const bootstrapUsers = async () => {

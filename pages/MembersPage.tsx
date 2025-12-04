@@ -66,7 +66,7 @@ const MembersPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="container mx-auto px-4 py-6">
+      <div className="container mx-auto px-4 pr-10 sm:pr-14 py-6">
         <h1 className="text-2xl font-serif font-bold text-primary dark:text-white mb-4">Members</h1>
         <div className="mb-4 flex flex-col sm:flex-row gap-3">
           <input
@@ -113,8 +113,8 @@ const MembersPage: React.FC = () => {
             )}
           </div>
 
-          {/* Alphabet index on the right */}
-          <div className="hidden sm:flex flex-col gap-1 items-center text-xs text-gray-500 dark:text-gray-400 select-none"
+          {/* Alphabet index on the right (always visible) */}
+          <div className="flex flex-col gap-0.5 sm:gap-1 items-center text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 select-none z-30"
                style={{ position: 'fixed', right: '10px', top: '30%', transform: 'translateY(-50%)' }}>
             {['#', ...ALPHA].map(letter => {
               const enabled = letter === '#' ? availableKeys.includes('#') : availableKeys.includes(letter);
@@ -126,36 +126,13 @@ const MembersPage: React.FC = () => {
                     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                   }}
                   disabled={!enabled}
-                  className={`w-6 h-6 rounded-md flex items-center justify-center ${enabled ? 'bg-white/70 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-700 cursor-pointer' : 'opacity-40 cursor-default'} shadow-sm border border-gray-200/60 dark:border-gray-700/60`}
+                  className={`w-5 h-5 sm:w-6 sm:h-6 rounded-md flex items-center justify-center ${enabled ? 'bg-white/70 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-700 cursor-pointer' : 'opacity-40 cursor-default'} shadow-sm border border-gray-200/60 dark:border-gray-700/60`}
                   aria-label={`Jump to ${letter}`}
                 >
                   {letter}
                 </button>
               );
             })}
-          </div>
-
-          {/* Mobile alphabet index (bottom) */}
-          <div className="sm:hidden fixed bottom-3 left-1/2 -translate-x-1/2 z-30">
-            <div className="flex gap-1 overflow-x-auto max-w-[95vw] px-2 py-1 rounded-xl bg-white/80 dark:bg-gray-800/70 backdrop-blur shadow border border-gray-200/60 dark:border-gray-700/60">
-              {['#', ...ALPHA].map(letter => {
-                const enabled = letter === '#' ? availableKeys.includes('#') : availableKeys.includes(letter);
-                return (
-                  <button
-                    key={letter}
-                    onClick={() => {
-                      const el = document.getElementById(`letter-${letter}`);
-                      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    }}
-                    disabled={!enabled}
-                    className={`min-w-[1.5rem] h-6 px-1 rounded-md text-xs flex items-center justify-center ${enabled ? 'bg-white/70 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-700 cursor-pointer' : 'opacity-40 cursor-default'} shadow-sm border border-gray-200/60 dark:border-gray-700/60`}
-                    aria-label={`Jump to ${letter}`}
-                  >
-                    {letter}
-                  </button>
-                );
-              })}
-            </div>
           </div>
         </div>
       </div>

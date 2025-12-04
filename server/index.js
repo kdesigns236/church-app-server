@@ -348,10 +348,12 @@ io.on('connection', (socket) => {
         return;
       }
 
-      if (!users[index].isOnline) {
-        users[index].isOnline = true;
-        saveData().catch(err => console.error('[Presence] Error saving data on user-online:', err));
+      const wasOnline = !!users[index].isOnline;
+      users[index].isOnline = true;
+      users[index].lastSeen = Date.now();
+      saveData().catch(err => console.error('[Presence] Error saving data on user-online:', err));
 
+      if (!wasOnline) {
         const { password, ...safeUser } = users[index];
         broadcastUpdate({ type: 'users', action: 'update', data: safeUser });
         console.log(`[Presence] Marked user ${userId} online`);
@@ -379,8 +381,11 @@ io.on('connection', (socket) => {
         return;
       }
 
-      if (users[index].isOnline) {
+      // Only mark offline if no other sockets for this user remain connected
+      const stillConnected = Array.from(presenceUserMap.values()).some(uid => uid === userId);
+      if (!stillConnected && users[index].isOnline) {
         users[index].isOnline = false;
+        users[index].lastSeen = Date.now();
         saveData().catch(err => console.error('[Presence] Error saving data on user-offline:', err));
 
         const { password, ...safeUser } = users[index];
@@ -546,8 +551,11 @@ io.on('connection', (socket) => {
     if (userId) {
       const users = dataStore.users || [];
       const index = users.findIndex(u => u.id === userId);
-      if (index !== -1 && users[index].isOnline) {
+      // Check if any other sockets are still mapped to this user
+      const stillConnected = Array.from(presenceUserMap.entries()).some(([sid, uid]) => sid !== socket.id && uid === userId);
+      if (index !== -1 && !stillConnected && users[index].isOnline) {
         users[index].isOnline = false;
+        users[index].lastSeen = Date.now();
         saveData().catch(err => console.error('[Presence] Error saving data on disconnect:', err));
 
         const { password, ...safeUser } = users[index];

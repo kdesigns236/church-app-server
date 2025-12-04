@@ -32,3 +32,6 @@ pro-stream-client/.env.production
 
 # Built frontend (served by server/index.js)
 server/public
+
+
+

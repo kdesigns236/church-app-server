@@ -34,6 +34,12 @@ const CommunityFeedPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { posts, handlePostInteraction, addPostComment, deletePost } = useAppContext();
+  // force periodic refresh for relative time labels
+  const [nowTick, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const [stories, setStories] = useState<Story[]>(() => {
     try {
