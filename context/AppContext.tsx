@@ -331,7 +331,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const fetchInitialData = async () => {
         try {
           console.log('[AppContext] 🔄 Fetching fresh data from server...');
-          const apiUrl = 'https://church-app-server.onrender.com/api';
+          const apiUrl = ((import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api') as string;
           
           // Check last sync time to avoid excessive fetching
           const lastSync = localStorage.getItem('lastSyncTime');
@@ -427,70 +427,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           // Only update if we got valid data (not empty from failed fetch)
           // This prevents clearing localStorage when offline
-          if (Array.isArray(sermonsData) && sermonsData.length > 0) {
-            setSermons((prev: Sermon[]) => {
-              const merged = mergeAddOnly<Sermon>(prev, sermonsData as Sermon[]);
-              localStorage.setItem('sermons', JSON.stringify(merged));
-              return merged;
-            });
+          if ((sermonsRes as any)?.ok && Array.isArray(sermonsData)) {
+            setSermons(sermonsData as Sermon[]);
+            localStorage.setItem('sermons', JSON.stringify(sermonsData));
             prefetchSermonVideos(sermonsData);
           }
           
-          if (Array.isArray(announcementsData) && announcementsData.length > 0) {
-            setAnnouncements((prev: Announcement[]) => {
-              const merged = mergeAddOnly<Announcement>(prev, announcementsData as Announcement[]);
-              localStorage.setItem('announcements', JSON.stringify(merged));
-              return merged;
-            });
+          if ((announcementsRes as any)?.ok && Array.isArray(announcementsData)) {
+            setAnnouncements(announcementsData as Announcement[]);
+            localStorage.setItem('announcements', JSON.stringify(announcementsData));
           }
           
-          if (Array.isArray(eventsData) && eventsData.length > 0) {
-            setEvents((prev: Event[]) => {
-              const merged = mergeAddOnly<Event>(prev, eventsData as Event[]);
-              localStorage.setItem('events', JSON.stringify(merged));
-              return merged;
-            });
+          if ((eventsRes as any)?.ok && Array.isArray(eventsData)) {
+            setEvents(eventsData as Event[]);
+            localStorage.setItem('events', JSON.stringify(eventsData));
           }
           
-          if (siteContentData && Object.keys(siteContentData).length > 0) {
-            setSiteContent(prev => {
-              const merged = { ...(prev || {}), ...Object.fromEntries(Object.entries(siteContentData).filter(([k]) => !(prev as any)?.hasOwnProperty(k))) } as any;
-              localStorage.setItem('siteContent', JSON.stringify(merged));
-              return merged;
-            });
+          if ((siteContentRes as any)?.ok && siteContentData && typeof siteContentData === 'object') {
+            setSiteContent(siteContentData as any);
+            localStorage.setItem('siteContent', JSON.stringify(siteContentData));
           }
           
-          if (Array.isArray(prayerRequestsData) && prayerRequestsData.length > 0) {
-            setPrayerRequests((prev: PrayerRequest[]) => {
-              const merged = mergeAddOnly<PrayerRequest>(prev, prayerRequestsData as PrayerRequest[]);
-              localStorage.setItem('prayerRequests', JSON.stringify(merged));
-              return merged;
-            });
+          if ((prayerRequestsRes as any)?.ok && Array.isArray(prayerRequestsData)) {
+            setPrayerRequests(prayerRequestsData as PrayerRequest[]);
+            localStorage.setItem('prayerRequests', JSON.stringify(prayerRequestsData));
           }
           
-          if (Array.isArray(bibleStudiesData) && bibleStudiesData.length > 0) {
-            setBibleStudies((prev: BibleStudy[]) => {
-              const merged = mergeAddOnly<BibleStudy>(prev, bibleStudiesData as BibleStudy[]);
-              localStorage.setItem('bibleStudies', JSON.stringify(merged));
-              return merged;
-            });
+          if ((bibleStudiesRes as any)?.ok && Array.isArray(bibleStudiesData)) {
+            setBibleStudies(bibleStudiesData as BibleStudy[]);
+            localStorage.setItem('bibleStudies', JSON.stringify(bibleStudiesData));
           }
           
-          if (Array.isArray(chatMessagesData) && chatMessagesData.length > 0) {
-            setChatMessages((prev: ChatMessage[]) => {
-              const merged = mergeAddOnly<ChatMessage>(prev, chatMessagesData as ChatMessage[]);
-              localStorage.setItem('chatMessages', JSON.stringify(merged));
-              return merged;
-            });
-          } else if (chatMessagesRes.ok && Array.isArray(chatMessagesData) && chatMessagesData.length === 0) {
-            const existingChat = localStorage.getItem('chatMessages');
-            if (!existingChat || existingChat === '[]') {
-              setChatMessages([]);
-              localStorage.setItem('chatMessages', JSON.stringify([]));
-            }
+          if ((chatMessagesRes as any)?.ok && Array.isArray(chatMessagesData)) {
+            setChatMessages(chatMessagesData as ChatMessage[]);
+            localStorage.setItem('chatMessages', JSON.stringify(chatMessagesData));
           }
           
-          if (Array.isArray(postsData) && postsData.length > 0) {
+          if ((postsRes as any)?.ok && Array.isArray(postsData)) {
             const isIso = (s: any) => typeof s === 'string' && s.includes('T') && !isNaN(Date.parse(s));
             const normalizePosts = (arr: any[]) => (arr || []).map((p: any) => {
               const np: any = { ...p };
@@ -510,19 +483,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               return np;
             });
             const postsNormalized = normalizePosts(postsData as any[]);
-            setPosts((prev: Post[]) => {
-              const merged = mergeAddOnly<Post>(prev, postsNormalized as Post[]);
-              localStorage.setItem('communityPosts', JSON.stringify(merged));
-              return merged;
-            });
+            setPosts(postsNormalized as Post[]);
+            localStorage.setItem('communityPosts', JSON.stringify(postsNormalized));
           }
           
-          if (Array.isArray(commentsData) && commentsData.length > 0) {
-            setComments((prev: Comment[]) => {
-              const merged = mergeAddOnly<Comment>(prev, commentsData as Comment[]);
-              localStorage.setItem('communityComments', JSON.stringify(merged));
-              return merged;
-            });
+          if ((commentsRes as any)?.ok && Array.isArray(commentsData)) {
+            setComments(commentsData as Comment[]);
+            localStorage.setItem('communityComments', JSON.stringify(commentsData));
           }
           
           // Update last sync timestamp only if we successfully fetched
