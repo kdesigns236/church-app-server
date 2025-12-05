@@ -64,7 +64,7 @@ const HeaderLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     return (
         <>
             {showHeader && <Header />}
-            <div style={{ paddingTop: showHeader ? 'calc(env(safe-area-inset-top) + 3.5rem)' : 0 }}>
+            <div style={{ paddingTop: showHeader ? '3.5rem' : 0 }}>
                 {children}
             </div>
         </>

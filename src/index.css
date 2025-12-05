@@ -27,3 +27,6 @@ body.no-scroll,
   overflow: hidden;
   height: 100vh;
 }
+
+/* Import global utility classes (safe-area etc.) */
+@import '../styles/globals.css';

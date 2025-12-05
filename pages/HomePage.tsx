@@ -30,7 +30,7 @@ const HomePage: React.FC = () => {
     return (
         <div className="animate-fade-in">
             {/* Hero Section - Reduced size for mobile */}
-            <section className="relative text-white py-12 md:py-24 bg-gradient-divine dark:bg-gradient-divine-dark">
+            <section className="relative text-white py-8 md:py-16 bg-gradient-divine dark:bg-gradient-divine-dark">
                 <div className="absolute inset-0 bg-primary opacity-30"></div>
                 <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
                     <h1 className="text-3xl md:text-5xl font-serif font-bold text-white drop-shadow-lg animate-fade-in">Church of God Evening Light</h1>
