@@ -79,7 +79,11 @@ const ProtectedRoutes: React.FC = () => {
         '/prostream',
         '/create-post',
     ];
-    const showHeader = !hideHeaderOn.includes(location.pathname);
+    const path = (location.pathname || '/').toLowerCase().replace(/\/$/, '');
+    const showHeader = !hideHeaderOn.some((r) => {
+        const base = r.toLowerCase().replace(/\/$/, '');
+        return path === base || path.startsWith(base + '/');
+    });
 
     // Ensure screen sleep unless on allowed pages
     useEffect(() => {
