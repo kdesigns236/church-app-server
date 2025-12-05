@@ -52,11 +52,11 @@
     <style>
       /* Safe area for mobile devices */
       body {
-        /* Let app manage header offset; keep only safe-area edges */
-        padding-top: env(safe-area-inset-top);
+        /* Let app manage header offset entirely to avoid top bar being squeezed */
+        padding-top: 0;
         padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
+        padding-left: 0;
+        padding-right: 0;
         -webkit-overflow-scrolling: touch;
       }
       

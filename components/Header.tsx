@@ -56,9 +56,9 @@ export const Header: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const baseClasses = "fixed top-0 left-0 right-0 z-[100] transition-all duration-300 pt-safe shadow-md border-b border-black/10 dark:border-white/10";
-  const scrolledClasses = "bg-primary/95 dark:bg-gray-900/95 backdrop-blur-sm shadow-lg";
-  const topClasses = "bg-primary/95 dark:bg-gray-900/95 backdrop-blur-sm";
+  const baseClasses = "fixed top-0 left-0 right-0 z-50 transition-all duration-300 pt-safe";
+  const scrolledClasses = "bg-primary dark:bg-gray-900 shadow-md";
+  const topClasses = "bg-primary dark:bg-gray-900";
 
   return (
     <header className={`${baseClasses} ${isScrolled ? scrolledClasses : topClasses}`}>
