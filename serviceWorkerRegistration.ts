@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+
 // This optional code is used to register a service worker.
 // register() is not called by default.
 
@@ -13,6 +15,19 @@ type Config = {
 };
 
 export function register(config?: Config) {
+  // Skip SW on native builds (Capacitor WebView) and proactively unregister
+  try {
+    if (Capacitor && typeof Capacitor.isNativePlatform === 'function' && Capacitor.isNativePlatform()) {
+      try { unregister(); } catch {}
+      try {
+        if ('serviceWorker' in navigator && (navigator as any).serviceWorker?.getRegistrations) {
+          (navigator as any).serviceWorker.getRegistrations().then((regs: any[]) => regs.forEach((r: any) => r.unregister()));
+        }
+      } catch {}
+      return;
+    }
+  } catch {}
+
   if ('serviceWorker' in navigator) {
     const publicUrl = new URL(window.location.href);
     if (publicUrl.origin !== window.location.origin) {
