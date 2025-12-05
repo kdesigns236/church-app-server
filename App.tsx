@@ -64,7 +64,7 @@ const HeaderLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     return (
         <>
             {showHeader && <Header />}
-            <div style={{ paddingTop: showHeader ? '3.5rem' : 0 }}>
+            <div style={{ paddingTop: showHeader ? 'calc(env(safe-area-inset-top) + 3.5rem)' : 0 }}>
                 {children}
             </div>
         </>
@@ -222,7 +222,7 @@ const App: React.FC = () => {
             try {
                 await StatusBar.setOverlaysWebView({ overlay: false });
                 await StatusBar.setBackgroundColor({ color: '#1B365D' });
-                await StatusBar.setStyle({ style: Style.Dark });
+                await StatusBar.setStyle({ style: Style.Light });
             } catch {}
         })();
     }, []);
