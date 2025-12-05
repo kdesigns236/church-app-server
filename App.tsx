@@ -43,6 +43,32 @@ const LoadingFallback: React.FC = () => (
 );
 
 
+const HeaderLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const location = useLocation();
+    const hideHeaderOn = [
+        '/sermons',
+        '/chat',
+        '/chat-room',
+        '/video-call',
+        '/golive',
+        '/prostream',
+        '/create-post',
+    ];
+    const path = (location.pathname || '/').toLowerCase().replace(/\/$/, '');
+    const showHeader = path === '' || !hideHeaderOn.some((r) => {
+        const base = r.toLowerCase().replace(/\/$/, '');
+        return path === base || path.startsWith(base + '/');
+    });
+    return (
+        <>
+            {showHeader && <Header />}
+            <div style={{ paddingTop: showHeader ? 'calc(env(safe-area-inset-top) + 3.5rem)' : 0 }}>
+                {children}
+            </div>
+        </>
+    );
+};
+
 const PageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const location = useLocation();
     const showFooter = location.pathname === '/';
@@ -72,8 +98,6 @@ const ProtectedRoutes: React.FC = () => {
         '/sermons',
         '/chat',
         '/chat-room',
-        '/pastor-ai',
-        '/bible',
         '/video-call',
         '/golive',
         '/prostream',
@@ -84,6 +108,16 @@ const ProtectedRoutes: React.FC = () => {
         const base = r.toLowerCase().replace(/\/$/, '');
         return path === base || path.startsWith(base + '/');
     });
+    try {
+        console.log('[HeaderVisibility]', {
+            locationPathname: location.pathname,
+            computedPath: path,
+            hideHeaderOn,
+            showHeader,
+            hash: typeof window !== 'undefined' ? window.location.hash : undefined,
+            href: typeof window !== 'undefined' ? window.location.href : undefined,
+        });
+    } catch {}
 
     // Ensure screen sleep unless on allowed pages
     useEffect(() => {
@@ -121,9 +155,6 @@ const ProtectedRoutes: React.FC = () => {
 
     return (
         <>
-            <OfflineIndicator />
-            {showHeader && <Header />}
-            <div style={{ paddingTop: showHeader ? 'calc(env(safe-area-inset-top) + 3.5rem)' : 0 }}>
             <PageLayout>
                 <Suspense fallback={<LoadingFallback />}>
                     <Routes>
@@ -159,7 +190,6 @@ const ProtectedRoutes: React.FC = () => {
                     </Routes>
                 </Suspense>
             </PageLayout>
-            </div>
         </>
     );
 };
@@ -294,27 +324,30 @@ const App: React.FC = () => {
       <Router>
         <UpdateNotification />
         <OfflineIndicator />
-        
-        {/* Meeting Notification Banner */}
-        {meetingNotification && (
-          <a
-            href="/#/video-call"
-            onClick={() => setMeetingNotification(null)}
-            className="fixed left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 animate-slide-down cursor-pointer"
-            style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}
-          >
-            <div className="bg-secondary text-primary rounded-lg shadow-2xl p-4 flex items-center gap-3 hover:bg-gold-light transition-colors">
-              <SermonsIcon className="w-10 h-10 text-primary animate-pulse flex-shrink-0" />
-              <div className="flex-1">
-                <p className="font-bold text-lg">{meetingNotification.userName} is in a meeting</p>
-                <p className="text-sm opacity-90">Tap anywhere to join!</p>
+
+        {/* Centralized header manager to ensure visibility across app */}
+        <HeaderLayout>
+          {/* Meeting Notification Banner */}
+          {meetingNotification && (
+            <a
+              href="/#/video-call"
+              onClick={() => setMeetingNotification(null)}
+              className="fixed left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 animate-slide-down cursor-pointer"
+              style={{ top: 'calc(env(safe-area-inset-top) + 1rem)' }}
+            >
+              <div className="bg-secondary text-primary rounded-lg shadow-2xl p-4 flex items-center gap-3 hover:bg-gold-light transition-colors">
+                <SermonsIcon className="w-10 h-10 text-primary animate-pulse flex-shrink-0" />
+                <div className="flex-1">
+                  <p className="font-bold text-lg">{meetingNotification.userName} is in a meeting</p>
+                  <p className="text-sm opacity-90">Tap anywhere to join!</p>
+                </div>
+                <ArrowRightIcon className="w-6 h-6 text-primary flex-shrink-0" />
               </div>
-              <ArrowRightIcon className="w-6 h-6 text-primary flex-shrink-0" />
-            </div>
-          </a>
-        )}
-        
-        {isAuthenticated ? <ProtectedRoutes /> : <AuthRoutes />}
+            </a>
+          )}
+
+          {isAuthenticated ? <ProtectedRoutes /> : <AuthRoutes />}
+        </HeaderLayout>
       </Router>
     );
 };
