@@ -1,3 +1,6 @@
+/* Import global utility classes (safe-area etc.) must be at the very top */
+@import '../styles/globals.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -28,5 +31,4 @@ body.no-scroll,
   height: 100vh;
 }
 
-/* Import global utility classes (safe-area etc.) */
-@import '../styles/globals.css';
+/* end */
