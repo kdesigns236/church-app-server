@@ -77,6 +77,7 @@ const ProtectedRoutes: React.FC = () => {
         '/video-call',
         '/golive',
         '/prostream',
+        '/create-post',
     ];
     const showHeader = !hideHeaderOn.includes(location.pathname);
 
