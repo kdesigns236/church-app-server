@@ -352,7 +352,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const isFullScreenMode = isLandscape || rotation % 180 !== 0;
 
   return (
-    <div className="relative w-screen h-screen snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: '100dvw', height: '100dvh' }}>
+    <div className="relative snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: 'var(--app-vw, 100vw)', height: 'var(--app-vh, 100vh)' }}>
       {videoSrc ? (
         <div className="relative w-full h-full flex items-center justify-center">
           {isActive && isReady && objectFit === 'contain' && (

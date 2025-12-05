@@ -46,6 +46,13 @@ const SermonsPage: React.FC = () => {
 
       setIsLandscape(landscape);
 
+      // Update CSS viewport variables for reliable mobile sizing
+      try {
+        const root = document.documentElement;
+        root.style.setProperty('--app-vh', `${window.innerHeight}px`);
+        root.style.setProperty('--app-vw', `${window.innerWidth}px`);
+      } catch {}
+
       if (!landscape) {
         setShowChrome(true);
         if (chromeTimeoutRef.current) {
@@ -173,7 +180,7 @@ const SermonsPage: React.FC = () => {
       <div 
         ref={containerRef}
         className="reel-container h-screen w-screen bg-black overflow-y-scroll snap-y snap-mandatory scrollbar-hide" 
-        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', height: '100dvh', width: '100dvw' }}
+        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', height: 'var(--app-vh, 100vh)', width: 'var(--app-vw, 100vw)' }}
       >
         {sortedSermons.length > 0 ? (
           sortedSermons.map((sermon, index) => (
