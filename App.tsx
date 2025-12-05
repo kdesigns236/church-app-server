@@ -179,6 +179,30 @@ const App: React.FC = () => {
         })();
     }, []);
 
+    // Runtime API switcher: allow setting base API via ?api=... in hash URL, persist to localStorage
+    useEffect(() => {
+        try {
+            const href = window.location.href;
+            const hash = window.location.hash || '';
+            const query = hash.includes('?') ? hash.split('?')[1] : '';
+            if (!query) return;
+            const params = new URLSearchParams(query);
+            const api = params.get('api');
+            if (!api) return;
+            const decoded = decodeURIComponent(api);
+            localStorage.setItem('apiBaseUrl', decoded);
+            console.log('[App] Runtime API base set to:', decoded);
+            // remove api param from URL to avoid repeated handling
+            params.delete('api');
+            const baseHash = hash.split('?')[0];
+            const newHash = baseHash + (params.toString() ? '?' + params.toString() : '');
+            window.history.replaceState(null, '', href.replace(hash, newHash));
+            // Reconnect websocket with new URL
+            try { websocketService.disconnect(); } catch {}
+            try { websocketService.connect(); } catch {}
+        } catch {}
+    }, []);
+
     // (moved wake-lock page/visibility watchers into ProtectedRoutes below)
     
     // Always ask for local notification permission when the app starts

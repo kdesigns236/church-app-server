@@ -30,15 +30,36 @@ class WebSocketService {
   private apiUrl: string;
 
   constructor() {
-    this.apiUrl = import.meta.env.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+    this.apiUrl = this.resolveApiUrl();
     // Remove /api suffix for Socket.io connection (Socket.io uses its own /socket.io/ path)
     this.serverUrl = this.apiUrl.replace('/api', '');
     console.log('[WebSocket] API URL:', this.apiUrl);
     console.log('[WebSocket] Server URL:', this.serverUrl);
   }
 
+  // Determine API URL at runtime without rebuilds
+  private resolveApiUrl(): string {
+    try {
+      const w: any = (typeof window !== 'undefined') ? window : {};
+      const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+      const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+      const fromEnv = (import.meta as any).env?.VITE_API_URL;
+      const fallback = 'https://church-app-server.onrender.com/api';
+      const url = (fromStorage || fromWindow || fromEnv || fallback) as string;
+      return url.endsWith('/') ? url.replace(/\/$/, '') : url;
+    } catch {
+      return 'https://church-app-server.onrender.com/api';
+    }
+  }
+
+  private refreshUrls() {
+    this.apiUrl = this.resolveApiUrl();
+    this.serverUrl = this.apiUrl.replace('/api', '');
+  }
+
   // Connect to WebSocket server
   connect(): void {
+    this.refreshUrls();
     if (this.socket?.connected) {
       console.log('[WebSocket] Already connected');
       return;
@@ -167,6 +188,7 @@ class WebSocketService {
 
   // Push update to server
   async pushUpdate(syncData: Omit<SyncData, 'timestamp'>): Promise<void> {
+    this.refreshUrls();
     const dataWithTimestamp = {
       ...syncData,
       timestamp: Date.now()
@@ -215,6 +237,7 @@ class WebSocketService {
 
   // Pull all data from server
   async pullFromServer(): Promise<any> {
+    this.refreshUrls();
     try {
       const response = await fetch(`${this.apiUrl}/sync/data`);
       

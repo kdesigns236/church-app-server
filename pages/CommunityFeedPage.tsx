@@ -378,7 +378,20 @@ const CommunityFeedPage: React.FC = () => {
   useEffect(() => {
     if (stories.length > 0) return;
     let cancelled = false;
-    const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+    const resolveApiUrl = (): string => {
+      try {
+        const w: any = (typeof window !== 'undefined') ? window : {};
+        const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+        const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+        const fromEnv = (import.meta as any)?.env?.VITE_API_URL;
+        const fallback = 'https://church-app-server.onrender.com/api';
+        const url = (fromStorage || fromWindow || fromEnv || fallback) as string;
+        return url.endsWith('/') ? url.replace(/\/$/, '') : url;
+      } catch {
+        return 'https://church-app-server.onrender.com/api';
+      }
+    };
+    const apiUrl = resolveApiUrl();
     const fetchInitialStories = async () => {
       try {
         const controller = new AbortController();

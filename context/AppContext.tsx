@@ -366,12 +366,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
+    // Helper: resolve API URL at runtime (no rebuild needed)
+    const resolveApiUrl = (): string => {
+      try {
+        const w: any = (typeof window !== 'undefined') ? window : {};
+        const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+        const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+        const fromEnv = (import.meta as any)?.env?.VITE_API_URL;
+        const fallback = 'https://church-app-server.onrender.com/api';
+        const url = (fromStorage || fromWindow || fromEnv || fallback) as string;
+        return url.endsWith('/') ? url.replace(/\/$/, '') : url;
+      } catch {
+        return 'https://church-app-server.onrender.com/api';
+      }
+    };
+
     // Fetch initial data from server on app load
     useEffect(() => {
       const fetchInitialData = async () => {
         try {
           console.log('[AppContext] 🔄 Fetching fresh data from server...');
-          const apiUrl = ((import.meta as any).env.VITE_API_URL || 'https://church-app-server.onrender.com/api') as string;
+          const apiUrl = resolveApiUrl();
           
           // Always fetch fresh data on app start; rely on localStorage as initial render only
           console.log('[AppContext] 📡 Fetching fresh data from server (no-cache)...');
@@ -453,22 +468,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             stories: Array.isArray(storiesData) ? storiesData.length : 0,
           });
 
-          // Only update if we got valid data (not empty from failed fetch)
-          // This prevents clearing localStorage when offline
+          // Only overwrite local cached data if server has items OR local is empty
           if ((sermonsRes as any)?.ok && Array.isArray(sermonsData)) {
-            setSermons(sermonsData as Sermon[]);
-            localStorage.setItem('sermons', JSON.stringify(sermonsData));
-            prefetchSermonVideos(sermonsData);
+            const shouldUpdate = (sermonsData.length > 0) || (Array.isArray(sermons) && sermons.length === 0);
+            if (shouldUpdate) {
+              setSermons(sermonsData as Sermon[]);
+              localStorage.setItem('sermons', JSON.stringify(sermonsData));
+              prefetchSermonVideos(sermonsData);
+            }
           }
           
           if ((announcementsRes as any)?.ok && Array.isArray(announcementsData)) {
-            setAnnouncements(announcementsData as Announcement[]);
-            localStorage.setItem('announcements', JSON.stringify(announcementsData));
+            const shouldUpdate = (announcementsData.length > 0) || (Array.isArray(announcements) && announcements.length === 0);
+            if (shouldUpdate) {
+              setAnnouncements(announcementsData as Announcement[]);
+              localStorage.setItem('announcements', JSON.stringify(announcementsData));
+            }
           }
           
           if ((eventsRes as any)?.ok && Array.isArray(eventsData)) {
-            setEvents(eventsData as Event[]);
-            localStorage.setItem('events', JSON.stringify(eventsData));
+            const shouldUpdate = (eventsData.length > 0) || (Array.isArray(events) && events.length === 0);
+            if (shouldUpdate) {
+              setEvents(eventsData as Event[]);
+              localStorage.setItem('events', JSON.stringify(eventsData));
+            }
           }
           
           if ((siteContentRes as any)?.ok && siteContentData && typeof siteContentData === 'object') {
@@ -477,18 +500,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
           
           if ((prayerRequestsRes as any)?.ok && Array.isArray(prayerRequestsData)) {
-            setPrayerRequests(prayerRequestsData as PrayerRequest[]);
-            localStorage.setItem('prayerRequests', JSON.stringify(prayerRequestsData));
+            const shouldUpdate = (prayerRequestsData.length > 0) || (Array.isArray(prayerRequests) && prayerRequests.length === 0);
+            if (shouldUpdate) {
+              setPrayerRequests(prayerRequestsData as PrayerRequest[]);
+              localStorage.setItem('prayerRequests', JSON.stringify(prayerRequestsData));
+            }
           }
           
           if ((bibleStudiesRes as any)?.ok && Array.isArray(bibleStudiesData)) {
-            setBibleStudies(bibleStudiesData as BibleStudy[]);
-            localStorage.setItem('bibleStudies', JSON.stringify(bibleStudiesData));
+            const shouldUpdate = (bibleStudiesData.length > 0) || (Array.isArray(bibleStudies) && bibleStudies.length === 0);
+            if (shouldUpdate) {
+              setBibleStudies(bibleStudiesData as BibleStudy[]);
+              localStorage.setItem('bibleStudies', JSON.stringify(bibleStudiesData));
+            }
           }
           
           if ((chatMessagesRes as any)?.ok && Array.isArray(chatMessagesData)) {
-            setChatMessages(chatMessagesData as ChatMessage[]);
-            localStorage.setItem('chatMessages', JSON.stringify(chatMessagesData));
+            const shouldUpdate = (chatMessagesData.length > 0) || (Array.isArray(chatMessages) && chatMessages.length === 0);
+            if (shouldUpdate) {
+              setChatMessages(chatMessagesData as ChatMessage[]);
+              localStorage.setItem('chatMessages', JSON.stringify(chatMessagesData));
+            }
           }
           
           if ((postsRes as any)?.ok && Array.isArray(postsData)) {
@@ -511,28 +543,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               return np;
             });
             const postsNormalized = normalizePosts(postsData as any[]);
-            setPosts(postsNormalized as Post[]);
-            localStorage.setItem('communityPosts', JSON.stringify(postsNormalized));
+            const shouldUpdate = (postsNormalized.length > 0) || (Array.isArray(posts) && posts.length === 0);
+            if (shouldUpdate) {
+              setPosts(postsNormalized as Post[]);
+              localStorage.setItem('communityPosts', JSON.stringify(postsNormalized));
+            }
           }
           
           if ((commentsRes as any)?.ok && Array.isArray(commentsData)) {
-            setComments(commentsData as Comment[]);
-            localStorage.setItem('communityComments', JSON.stringify(commentsData));
+            const shouldUpdate = (commentsData.length > 0) || (Array.isArray(comments) && comments.length === 0);
+            if (shouldUpdate) {
+              setComments(commentsData as Comment[]);
+              localStorage.setItem('communityComments', JSON.stringify(commentsData));
+            }
           }
           
           // Pull full snapshot as a consistency check
           try {
             const full = await websocketService.pullFromServer();
             if (full && typeof full === 'object') {
-              if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); }
-              if (Array.isArray(full.announcements)) { setAnnouncements(full.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(full.announcements)); }
-              if (Array.isArray(full.events)) { setEvents(full.events as Event[]); localStorage.setItem('events', JSON.stringify(full.events)); }
+              if (Array.isArray(full.sermons) && (full.sermons.length > 0 || sermons.length === 0)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); }
+              if (Array.isArray(full.announcements) && (full.announcements.length > 0 || announcements.length === 0)) { setAnnouncements(full.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(full.announcements)); }
+              if (Array.isArray(full.events) && (full.events.length > 0 || events.length === 0)) { setEvents(full.events as Event[]); localStorage.setItem('events', JSON.stringify(full.events)); }
               if (full.siteContent && typeof full.siteContent === 'object') { setSiteContent(full.siteContent as any); localStorage.setItem('siteContent', JSON.stringify(full.siteContent)); }
-              if (Array.isArray(full.prayerRequests)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
-              if (Array.isArray(full.bibleStudies)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
-              if (Array.isArray(full.chatMessages)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
-              if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); localStorage.setItem('communityPosts', JSON.stringify(full.posts)); }
-              if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); localStorage.setItem('communityComments', JSON.stringify(full.comments)); }
+              if (Array.isArray(full.prayerRequests) && (full.prayerRequests.length > 0 || prayerRequests.length === 0)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
+              if (Array.isArray(full.bibleStudies) && (full.bibleStudies.length > 0 || bibleStudies.length === 0)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
+              if (Array.isArray(full.chatMessages) && (full.chatMessages.length > 0 || chatMessages.length === 0)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
+              if (Array.isArray(full.posts) && (full.posts.length > 0 || posts.length === 0)) { setPosts(full.posts as Post[]); localStorage.setItem('communityPosts', JSON.stringify(full.posts)); }
+              if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); localStorage.setItem('communityComments', JSON.stringify(full.comments)); }
               if (Array.isArray(full.communityStories)) {
                 try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {}
               }
