@@ -6,6 +6,8 @@ export type MinimalSermon = { id: string | number; videoUrl?: string };
 
 const FILE_MAP_KEY = 'videoFiles'; // { [sermonId]: filePath }
 const VIDEO_DIR = 'videos';
+let bfInitStarted = false;
+let bfConfigured = false;
 
 function getFileMap(): Record<string, string> {
   try {
@@ -63,12 +65,14 @@ export const backgroundDownloadService = {
       const plat = (Capacitor as any)?.getPlatform?.() || 'web';
       const isNative = (Capacitor as any)?.isNativePlatform?.() || false;
       if (!isNative || plat !== 'android') return;
+      if (bfConfigured || bfInitStarted) return;
+      bfInitStarted = true;
     } catch {}
     const minimumFetchInterval = Math.max(15, config?.intervalMinutes ?? 60);
     // Configure recurring background fetch
     try {
       // Defer a bit after app start to avoid race with WebView init
-      await new Promise((r) => setTimeout(r, 1200));
+      await new Promise((r) => setTimeout(r, 5000));
       const mod = await import('@transistorsoft/capacitor-background-fetch');
       const BF: any = (mod as any).BackgroundFetch;
       if (!BF) return;
@@ -95,7 +99,11 @@ export const backgroundDownloadService = {
           try { await BF.finish(taskId); } catch {}
         }
       );
-    } catch {}
+      bfConfigured = true;
+      bfInitStarted = false;
+    } catch {
+      bfInitStarted = false;
+    }
 
     // Headless (Android terminated) - optional on some versions
     try {
