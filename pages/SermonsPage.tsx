@@ -17,7 +17,8 @@ const SermonsPage: React.FC = () => {
   const [activeSermonId, setActiveSermonId] = useState<string | null>(null);
   const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
-  const [isMuted, setIsMuted] = useState<boolean>(() => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)); // Start unmuted as requested
+  // Videos should always play with sound as requested
+  const isMuted = false;
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLandscape, setIsLandscape] = useState(false);
   const [showChrome, setShowChrome] = useState(true);
@@ -195,8 +196,8 @@ const SermonsPage: React.FC = () => {
               onComment={() => handleOpenComments(sermon)}
               onShare={() => handleShare(sermon)}
               onSave={() => handleSermonInteraction(sermon.id, 'save')}
-              isMuted={isMuted}
-              onToggleMute={() => setIsMuted(!isMuted)}
+              isMuted={false}
+              onToggleMute={() => {}}
               isActive={index === currentIndex}
               showChrome={showChrome}
               onUserInteraction={handleUserInteraction}

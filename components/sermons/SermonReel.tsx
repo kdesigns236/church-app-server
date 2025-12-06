@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Sermon } from '../../types';
-import { PlayIcon, PauseIcon, SoundOnIcon, SoundOffIcon } from '../../constants/icons';
+import { PlayIcon, PauseIcon } from '../../constants/icons';
 import { FaSyncAlt, FaVideoSlash } from 'react-icons/fa';
 import { SermonOverlay } from './SermonOverlay';
 import { videoStorageService } from '../../services/videoStorageService';
@@ -134,16 +134,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         if (isMountedRef.current) setVideoSrc('');
       }
     };
-
-  const handlePointerDown = () => {
-    if (isLandscape && !showChrome) {
-      if (onUserInteraction) onUserInteraction();
-      setShowControls(true);
-      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
-      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
-    }
-  };
-
     loadVideo();
 
     return () => {
@@ -342,6 +332,15 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
   };
 
+  const handlePointerDown = () => {
+    if (isLandscape && !showChrome) {
+      if (onUserInteraction) onUserInteraction();
+      setShowControls(true);
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
+    }
+  };
+
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const video = videoRef.current;
     if (video) {
@@ -392,7 +391,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             loop
             autoPlay
             playsInline
-            muted={isMuted}
+            muted={false}
             src={videoSrc}
             preload={isActive ? 'auto' : 'metadata'}
             aria-label={`Sermon titled ${sermon.title}`}
@@ -464,38 +463,15 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         </button>
       )}
 
-      {/* Top Right Controls */}
+      {/* Top Right Controls (rotate only) */}
       {shouldShowUi && (
         <div className="absolute top-5 right-4 z-30 flex flex-col gap-2.5" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
-          <button 
-            onClick={onToggleMute}
-            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
-            aria-label={isMuted ? 'Unmute video' : 'Mute video'}
-          >
-            {isMuted ? 
-              <SoundOffIcon className="w-5 h-5 text-white"/> : 
-              <SoundOnIcon className="w-5 h-5 text-red-400"/>
-            }
-          </button>
-
           <button 
             onClick={handleRotate}
             className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
             aria-label="Rotate video"
           >
             <FaSyncAlt className="w-5 h-5 text-white" />
-          </button>
-
-          <button 
-            onClick={handleVideoPress}
-            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_26px_rgba(248,113,113,0.8)] hover:bg-black/80 hover:shadow-[0_0_34px_rgba(248,113,113,1)] hover:scale-110 active:scale-95 transition-all duration-300"
-            aria-label={isPlaying ? 'Pause video' : 'Play video'}
-          >
-            {isPlaying ? (
-              <PauseIcon className="w-5 h-5 text-white" />
-            ) : (
-              <PlayIcon className="w-5 h-5 text-red-400" />
-            )}
           </button>
         </div>
       )}
