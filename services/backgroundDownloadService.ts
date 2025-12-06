@@ -8,6 +8,7 @@ const FILE_MAP_KEY = 'videoFiles'; // { [sermonId]: filePath }
 const VIDEO_DIR = 'videos';
 let bfInitStarted = false;
 let bfConfigured = false;
+let fgTimer: any = null;
 
 function getFileMap(): Record<string, string> {
   try {
@@ -94,58 +95,80 @@ export const backgroundDownloadService = {
       bfInitStarted = true;
       serverLog('INFO','BGFetch','init start');
     } catch {}
-    const minimumFetchInterval = Math.max(15, config?.intervalMinutes ?? 60);
+    const minimumFetchInterval = Math.max(1, config?.intervalMinutes ?? 60);
     // Configure recurring background fetch
     try {
-      // Defer a bit after app start to avoid race with WebView init
-      await new Promise((r) => setTimeout(r, 5000));
-      const mod = await import('@transistorsoft/capacitor-background-fetch');
-      const BF: any = (mod as any).BackgroundFetch;
-      if (!BF) return;
-      // Optionally probe status; ignore result
-      try { await BF.status(); } catch {}
-      serverLog('INFO','BGFetch','configuring');
-      await BF.configure(
-        {
-          minimumFetchInterval,
-          stopOnTerminate: false,
-          startOnBoot: true,
-          enableHeadless: false,
-          requiredNetworkType: (config?.wifiOnly ? BF.NETWORK_TYPE_UNMETERED : BF.NETWORK_TYPE_ANY)
-        },
-        async (taskId: string) => {
-          try {
-            const sermonsRaw = localStorage.getItem('sermons');
-            const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
-            await this.scheduleForSermons(sermons);
-          } finally {
+      const ENABLE_BF = false;
+      if (ENABLE_BF) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const mod = await import('@transistorsoft/capacitor-background-fetch');
+        const BF: any = (mod as any).BackgroundFetch;
+        if (!BF) return;
+        try { await BF.status(); } catch {}
+        serverLog('INFO','BGFetch','configuring');
+        await BF.configure(
+          {
+            minimumFetchInterval,
+            stopOnTerminate: false,
+            startOnBoot: true,
+            enableHeadless: false,
+            requiredNetworkType: (config?.wifiOnly ? BF.NETWORK_TYPE_UNMETERED : BF.NETWORK_TYPE_ANY)
+          },
+          async (taskId: string) => {
+            try {
+              const sermonsRaw = localStorage.getItem('sermons');
+              const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
+              await this.scheduleForSermons(sermons);
+            } finally {
+              try { await BF.finish(taskId); } catch {}
+            }
+          },
+          async (taskId: string) => {
             try { await BF.finish(taskId); } catch {}
           }
-        },
-        async (taskId: string) => {
-          try { await BF.finish(taskId); } catch {}
-        }
-      );
-      serverLog('INFO','BGFetch','configured ok');
-      bfConfigured = true;
-      bfInitStarted = false;
+        );
+        serverLog('INFO','BGFetch','configured ok');
+        bfConfigured = true;
+        bfInitStarted = false;
+      }
     } catch (e) {
       bfInitStarted = false;
       try { serverLog('ERROR','BGFetch','configure failed', (e && (e as any).message) ? (e as any).message : String(e)); } catch {}
     }
 
+    try {
+      const intervalMs = Math.max(1, minimumFetchInterval) * 60 * 1000;
+      if (fgTimer) { clearInterval(fgTimer); fgTimer = null; }
+      const run = async () => {
+        try {
+          const sermonsRaw = localStorage.getItem('sermons');
+          const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
+          await this.scheduleForSermons(sermons);
+          try { serverLog('INFO','FGFetch','tick ok'); } catch {}
+        } catch (err) {
+          try { serverLog('ERROR','FGFetch','tick failed', (err && (err as any).message) ? (err as any).message : String(err)); } catch {}
+        }
+      };
+      await run();
+      fgTimer = setInterval(run, intervalMs);
+      try { serverLog('INFO','FGFetch','timer started', { intervalMinutes: intervalMs / 60000 }); } catch {}
+    } catch {}
+
     // Headless (Android terminated) - optional on some versions
     try {
-      const mod = await import('@transistorsoft/capacitor-background-fetch');
-      const anyBF: any = (mod as any).BackgroundFetch as any;
-      if (false && anyBF.registerHeadlessTask) {
-        anyBF.registerHeadlessTask(async (_event: any) => {
-          try {
-            const sermonsRaw = localStorage.getItem('sermons');
-            const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
-            await backgroundDownloadService.scheduleForSermons(sermons);
-          } catch {}
-        });
+      const ENABLE_BF = false;
+      if (ENABLE_BF) {
+        const mod = await import('@transistorsoft/capacitor-background-fetch');
+        const anyBF: any = (mod as any).BackgroundFetch as any;
+        if (false && anyBF.registerHeadlessTask) {
+          anyBF.registerHeadlessTask(async (_event: any) => {
+            try {
+              const sermonsRaw = localStorage.getItem('sermons');
+              const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
+              await backgroundDownloadService.scheduleForSermons(sermons);
+            } catch {}
+          });
+        }
       }
     } catch {}
   },
