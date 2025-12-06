@@ -31,6 +31,7 @@ import { localNotificationService } from './services/localNotificationService';
 import { websocketService } from './services/websocketService';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { keepAwakeService } from './services/keepAwakeService';
+import { backgroundDownloadService } from './services/backgroundDownloadService';
 
 // Lazy load the Bible page because of its large data dependency
 const BiblePage = lazy(() => import('./pages/BiblePage'));
@@ -224,6 +225,16 @@ const App: React.FC = () => {
                 await StatusBar.setBackgroundColor({ color: '#1B365D' });
                 await StatusBar.setStyle({ style: Style.Light });
             } catch {}
+        })();
+    }, []);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                await backgroundDownloadService.init({ intervalMinutes: 60, wifiOnly: false });
+            } catch (e) {
+                console.warn('[App] Background download init failed (plugin not available on web):', e);
+            }
         })();
     }, []);
 

@@ -417,6 +417,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
     }, [sermons]);
 
+    // Periodically pull fresh data from server so app stays up-to-date without manual reopen
+    useEffect(() => {
+      let cancelled = false;
+      const pull = async () => {
+        try {
+          const data = await websocketService.pullFromServer();
+          if (cancelled || !data || typeof data !== 'object') return;
+          if (Array.isArray(data.sermons) && data.sermons.length > 0) { setSermons(data.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(data.sermons)); }
+          if (Array.isArray(data.announcements) && data.announcements.length > 0) { setAnnouncements(data.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(data.announcements)); }
+          if (Array.isArray(data.events) && data.events.length > 0) { setEvents(data.events as Event[]); localStorage.setItem('events', JSON.stringify(data.events)); }
+          if (data.siteContent && typeof data.siteContent === 'object' && Object.keys(data.siteContent).length > 0) { setSiteContent(data.siteContent as SiteContent); localStorage.setItem('siteContent', JSON.stringify(data.siteContent)); }
+        } catch {}
+      };
+
+      const interval = window.setInterval(() => {
+        if (navigator.onLine) pull();
+      }, 10 * 60 * 1000); // every 10 minutes
+
+      // Also run one minute after start if online
+      const startTimer = window.setTimeout(() => { if (navigator.onLine) pull(); }, 60 * 1000);
+      return () => { cancelled = true; window.clearInterval(interval); window.clearTimeout(startTimer); };
+    }, []);
+
     // Helper: resolve API URL at runtime (no rebuild needed)
     const resolveApiUrl = (): string => {
       try {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   FiMessageCircle,
@@ -101,11 +101,23 @@ const CommunityFeedPage: React.FC = () => {
   const [activePostMenuId, setActivePostMenuId] = useState<number | null>(null);
   const [showSyncHint, setShowSyncHint] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
+  const storyVideoRef = useRef<HTMLVideoElement | null>(null);
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
     return story.type === 'video' ? 30000 : 5000;
   };
+
+  // Autoplay story video with sound when story changes (no controls)
+  useEffect(() => {
+    const v = storyVideoRef.current;
+    if (!v) return;
+    try {
+      v.muted = false;
+      v.volume = 1;
+      v.play().catch(() => {});
+    } catch {}
+  }, [viewingStory]);
 
   const formatRelativeTime = (input: string | null | undefined): string => {
     if (!input) return '';
@@ -983,12 +995,14 @@ const CommunityFeedPage: React.FC = () => {
         {posts.map((post) => (
           <div
             key={post.id}
+            onClick={() => setActiveComment(post.id)}
             style={{
               backgroundColor: isDark ? '#020617' : 'white',
               borderRadius: '8px',
               marginBottom: '16px',
               boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
               position: 'relative',
+              cursor: 'pointer',
             }}
           >
             {/* Post Header */}
@@ -1081,9 +1095,10 @@ const CommunityFeedPage: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() =>
-                  setActivePostMenuId((prev) => (prev === post.id ? null : post.id))
-                }
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActivePostMenuId((prev) => (prev === post.id ? null : post.id));
+                }}
                 style={{
                   border: 'none',
                   background: 'transparent',
@@ -1797,8 +1812,14 @@ const CommunityFeedPage: React.FC = () => {
                   />
                 ) : (
                   <video
+                    ref={storyVideoRef}
                     src={viewingStory.media.url}
-                    controls
+                    autoPlay
+                    playsInline
+                    onTouchStart={() => storyVideoRef.current?.pause()}
+                    onTouchEnd={() => storyVideoRef.current?.play()}
+                    onPointerDown={() => storyVideoRef.current?.pause()}
+                    onPointerUp={() => storyVideoRef.current?.play()}
                     style={{
                       width: '100%',
                       maxHeight: '80%',

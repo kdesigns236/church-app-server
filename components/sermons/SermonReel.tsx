@@ -5,6 +5,7 @@ import { PlayIcon, PauseIcon } from '../../constants/icons';
 import { FaSyncAlt, FaVideoSlash } from 'react-icons/fa';
 import { SermonOverlay } from './SermonOverlay';
 import { videoStorageService } from '../../services/videoStorageService';
+import { backgroundDownloadService } from '../../services/backgroundDownloadService';
 import { auth, storage } from '../../config/firebase';
 import { keepAwakeService } from '../../services/keepAwakeService';
 import { ref, getDownloadURL } from 'firebase/storage';
@@ -63,6 +64,18 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         
     const loadVideo = async () => {
       try {
+        // Prefer native-downloaded file if available
+        if (sermon.id) {
+          try {
+            const localPath = await backgroundDownloadService.getWebSrcIfDownloaded(String(sermon.id));
+            if (localPath && isMountedRef.current) {
+              objectUrl = localPath;
+              setVideoSrc(localPath);
+              return;
+            }
+          } catch {}
+        }
+
         // Prefer cached offline video from IndexedDB if available
         if (sermon.id) {
           try {
@@ -452,16 +465,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         </div>
       )}
 
-      {/* Subtle Play Button (only after ready) */}
-      {shouldShowUi && isReady && !isPlaying && videoSrc && (
-        <button 
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-20 bg-black/40 border border-white/20 rounded-full p-3 cursor-pointer backdrop-blur-md hover:scale-110 active:scale-95 transition-transform duration-300"
-          onClick={handleVideoPress}
-          aria-label="Play video"
-        >
-          <PlayIcon className="w-8 h-8 text-white" />
-        </button>
-      )}
+      
 
       {/* Top Right Controls (rotate only) */}
       {shouldShowUi && (
