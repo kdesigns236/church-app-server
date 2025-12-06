@@ -135,6 +135,15 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       }
     };
 
+  const handlePointerDown = () => {
+    if (isLandscape && !showChrome) {
+      if (onUserInteraction) onUserInteraction();
+      setShowControls(true);
+      if (controlsTimeoutRef.current) clearTimeout(controlsTimeoutRef.current);
+      controlsTimeoutRef.current = setTimeout(() => setShowControls(false), 8000);
+    }
+  };
+
     loadVideo();
 
     return () => {
@@ -187,14 +196,17 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       return;
     }
     if (!vw || !vh) {
-      setObjectFit(isLandscape ? 'contain' : 'cover');
+      // Fallback to cover so landscape feels immersive on mobile when dimensions are unknown
+      setObjectFit(isLandscape ? 'cover' : 'cover');
       return;
     }
     const isVideoLandscape = vw / vh >= 1.0;
     if (isLandscape || rotation % 180 !== 0) {
-      setObjectFit('contain');
+      // In landscape (or rotated), fill the screen for landscape videos, otherwise contain
+      setObjectFit(isVideoLandscape ? 'cover' : 'contain');
       return;
     }
+    // In portrait, avoid cropping wide videos but fill for tall ones
     setObjectFit(isVideoLandscape ? 'contain' : 'cover');
   }, [videoWidth, videoHeight, isLandscape, rotation, userFitOverride]);
 
@@ -373,8 +385,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             ref={videoRef}
             onClick={handleVideoPress}
             onTouchEnd={handleVideoPress}
+            onTouchStart={handlePointerDown}
+            onPointerDown={handlePointerDown}
             className={`transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
-            style={{ transform: `rotate(${rotation}deg)` }}
+            style={{ transform: `rotate(${rotation}deg)`, touchAction: 'manipulation' }}
             loop
             autoPlay
             playsInline

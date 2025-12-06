@@ -67,10 +67,12 @@ const SermonsPage: React.FC = () => {
     updateOrientation();
     window.addEventListener('resize', updateOrientation);
     window.addEventListener('orientationchange', updateOrientation);
+    try { (screen as any).orientation?.addEventListener?.('change', updateOrientation); } catch {}
 
     return () => {
       window.removeEventListener('resize', updateOrientation);
       window.removeEventListener('orientationchange', updateOrientation);
+      try { (screen as any).orientation?.removeEventListener?.('change', updateOrientation); } catch {}
       if (chromeTimeoutRef.current) {
         clearTimeout(chromeTimeoutRef.current);
       }
@@ -181,6 +183,8 @@ const SermonsPage: React.FC = () => {
         ref={containerRef}
         className="reel-container h-screen w-screen bg-black overflow-y-scroll snap-y snap-mandatory scrollbar-hide" 
         style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', height: 'var(--app-vh, 100vh)', width: 'var(--app-vw, 100vw)' }}
+        onPointerDown={handleUserInteraction}
+        onTouchStart={handleUserInteraction}
       >
         {sortedSermons.length > 0 ? (
           sortedSermons.map((sermon, index) => (
