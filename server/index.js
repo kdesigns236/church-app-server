@@ -1,4 +1,4 @@
-console.time('[Server] Startup');
+﻿console.time('[Server] Startup');
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
@@ -716,14 +716,14 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
         return res.status(400).json({ error: `${type} is not an array` });
       }
       dataStore[type].unshift(data);
-      console.log(`[Server] ✅ Added ${type}: ${data.id}`);
+      console.log(`[Server] âœ… Added ${type}: ${data.id}`);
     } else if (action === 'update') {
       // Update existing item
       if (Array.isArray(dataStore[type])) {
         const index = dataStore[type].findIndex(item => item.id === data.id);
         if (index !== -1) {
           dataStore[type][index] = data;
-          console.log(`[Server] ✅ Updated ${type}: ${data.id}`);
+          console.log(`[Server] âœ… Updated ${type}: ${data.id}`);
         } else {
           console.warn(`[Server] Item not found for update: ${type} ${data.id}`);
         }
@@ -734,7 +734,7 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
         const index = dataStore[type].findIndex(item => item.id === data.id);
         if (index !== -1) {
           dataStore[type].splice(index, 1);
-          console.log(`[Server] ✅ Deleted ${type}: ${data.id}`);
+          console.log(`[Server] âœ… Deleted ${type}: ${data.id}`);
         }
       }
     }
@@ -793,7 +793,7 @@ app.post('/api/sermons', verifyAdmin, async (req, res) => {
     // Broadcast update
     broadcastUpdate({ type: 'sermons', action: 'add', data: newSermon });
     
-    console.log('[Server] ✅ Sermon created:', newSermon.id);
+    console.log('[Server] âœ… Sermon created:', newSermon.id);
     res.json({ success: true, sermon: newSermon });
   } catch (error) {
     console.error('[Server] Error creating sermon:', error);
@@ -922,11 +922,29 @@ app.get('/api/app-version', (req, res) => {
   res.json({
     version: '2.1.0', // UPDATE THIS when you release new version
     downloadUrl: 'https://your-lime-link-here.com', // Replace with actual download link
-    releaseNotes: `✅ JWT authentication enabled\n✅ Socket.io real-time sync\n✅ Health checks working`,
+    releaseNotes: `âœ… JWT authentication enabled\nâœ… Socket.io real-time sync\nâœ… Health checks working`,
     forceUpdate: false // Set to true if old versions shouldn't work
   });
 });
 
+app.post('/api/mobile-log', (req, res) => {
+  try {
+    const { level, tag, message, data, ts } = req.body || {};
+    const time = ts ? new Date(ts).toISOString() : new Date().toISOString();
+    const t = tag ? String(tag) : 'Mobile';
+    const lv = level ? String(level).toUpperCase() : 'INFO';
+    const msg = typeof message === 'string' ? message : JSON.stringify(message || '');
+    console.log(`[MobileLog] ${time} [${t}] ${lv} ${msg}`);
+    if (data !== undefined) {
+      try {
+        console.log('[MobileLogData]', typeof data === 'string' ? data : JSON.stringify(data));
+      } catch {}
+    }
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: true });
+  }
+});
 // Start server
 (async () => {
   try {
