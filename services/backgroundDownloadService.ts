@@ -1,6 +1,5 @@
 import { CapacitorDownloader } from '@capgo/capacitor-downloader';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import { BackgroundFetch } from '@transistorsoft/capacitor-background-fetch';
 import { Capacitor } from '@capacitor/core';
 
 export type MinimalSermon = { id: string | number; videoUrl?: string };
@@ -68,13 +67,20 @@ export const backgroundDownloadService = {
     const minimumFetchInterval = Math.max(15, config?.intervalMinutes ?? 60);
     // Configure recurring background fetch
     try {
-      await BackgroundFetch.configure(
+      // Defer a bit after app start to avoid race with WebView init
+      await new Promise((r) => setTimeout(r, 1200));
+      const mod = await import('@transistorsoft/capacitor-background-fetch');
+      const BF: any = (mod as any).BackgroundFetch;
+      if (!BF) return;
+      // Optionally probe status; ignore result
+      try { await BF.status(); } catch {}
+      await BF.configure(
         {
           minimumFetchInterval,
           stopOnTerminate: false,
           startOnBoot: true,
           enableHeadless: false,
-          requiredNetworkType: (config?.wifiOnly ? BackgroundFetch.NETWORK_TYPE_UNMETERED : BackgroundFetch.NETWORK_TYPE_ANY)
+          requiredNetworkType: (config?.wifiOnly ? BF.NETWORK_TYPE_UNMETERED : BF.NETWORK_TYPE_ANY)
         },
         async (taskId: string) => {
           try {
@@ -82,19 +88,20 @@ export const backgroundDownloadService = {
             const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
             await this.scheduleForSermons(sermons);
           } finally {
-            BackgroundFetch.finish(taskId);
+            try { await BF.finish(taskId); } catch {}
           }
         },
         async (taskId: string) => {
-          BackgroundFetch.finish(taskId);
+          try { await BF.finish(taskId); } catch {}
         }
       );
     } catch {}
 
     // Headless (Android terminated) - optional on some versions
     try {
-      const anyBF: any = BackgroundFetch as any;
-      if (anyBF.registerHeadlessTask) {
+      const mod = await import('@transistorsoft/capacitor-background-fetch');
+      const anyBF: any = (mod as any).BackgroundFetch as any;
+      if (false && anyBF.registerHeadlessTask) {
         anyBF.registerHeadlessTask(async (_event: any) => {
           try {
             const sermonsRaw = localStorage.getItem('sermons');

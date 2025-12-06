@@ -58,12 +58,17 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const lastTapRef = useRef<number>(0);
   const aspectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Load video from cloud or IndexedDB
+  // Load video from cloud or IndexedDB (only when active)
   useEffect(() => {
     let objectUrl: string | null = null;
         
     const loadVideo = async () => {
       try {
+        // Do not load when not active to keep memory low on mobile
+        if (!isActive) {
+          setVideoSrc('');
+          return;
+        }
         // Prefer native-downloaded file if available
         if (sermon.id) {
           try {
@@ -155,7 +160,21 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [sermon.videoUrl]);
+  }, [sermon.videoUrl, isActive]);
+
+  // When becoming inactive, aggressively unload the video to free memory
+  useEffect(() => {
+    if (!isActive) {
+      try {
+        const v = videoRef.current;
+        if (v) {
+          v.pause();
+          v.removeAttribute('src');
+          v.load();
+        }
+      } catch {}
+    }
+  }, [isActive]);
 
   // Track orientation to adjust layout (fullscreen video in landscape)
   useEffect(() => {
@@ -406,7 +425,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             playsInline
             muted={false}
             src={videoSrc}
-            preload={isActive ? 'auto' : 'metadata'}
+            preload={isActive ? 'auto' : 'none'}
             aria-label={`Sermon titled ${sermon.title}`}
             onError={async (e) => {
               console.error('Video load error:', e);
