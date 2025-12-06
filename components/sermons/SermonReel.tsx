@@ -69,6 +69,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           setVideoSrc('');
           return;
         }
+        // Set remote URL immediately for faster first frame
+        if (typeof sermon.videoUrl === 'string' && (sermon.videoUrl.startsWith('http://') || sermon.videoUrl.startsWith('https://'))) {
+          if (isMountedRef.current) setVideoSrc(sermon.videoUrl);
+        }
         // Prefer native-downloaded file if available
         if (sermon.id) {
           try {
@@ -106,7 +110,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         if (typeof sermon.videoUrl === 'string' && 
             (sermon.videoUrl.startsWith('http://') || sermon.videoUrl.startsWith('https://'))) {
           console.log('[SermonReel] Loading video from cloud:', sermon.videoUrl);
-          // For all URLs (Firebase and Cloudinary)
           if (isMountedRef.current) setVideoSrc(sermon.videoUrl);
           return;
         }
@@ -252,13 +255,20 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       ([entry]) => {
         if (entry.isIntersecting && isActive) {
           video.play().catch(() => {
-            // Autoplay prevented
+            try {
+              video.muted = true;
+              video.play().then(() => {
+                setTimeout(() => {
+                  try { video.muted = false; video.volume = 1; } catch {}
+                }, 300);
+              }).catch(() => {});
+            } catch {}
           });
         } else {
           video.pause();
         }
       },
-      { threshold: 0.65 }
+      { threshold: 0.35 }
     );
 
     observer.observe(video);
@@ -398,19 +408,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     <div className="relative snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: 'var(--app-vw, 100vw)', height: 'var(--app-vh, 100vh)' }}>
       {videoSrc ? (
         <div className="relative w-full h-full flex items-center justify-center">
-          {isActive && isReady && objectFit === 'contain' && (
-            <video
-              key={`bg-${videoSrc}`}
-              className="absolute inset-0 w-full h-full object-cover blur-2xl scale-125 opacity-50 pointer-events-none"
-              style={{ filter: 'blur(24px) brightness(0.6)' }}
-              src={videoSrc}
-              muted
-              loop
-              autoPlay
-              playsInline
-              aria-hidden
-            />
-          )}
+          
           <video
             key={videoSrc}
             ref={videoRef}

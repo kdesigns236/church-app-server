@@ -741,11 +741,19 @@ const CommunityFeedPage: React.FC = () => {
                     background:
                       story.media && story.media.type === 'image'
                         ? `url(${story.media.url}) center/cover no-repeat`
-                        : story.media && story.media.type === 'video'
-                        ? 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)'
                         : 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)',
                   }}
                 >
+                  {story.media && story.media.type === 'video' && (
+                    <video
+                      src={story.media.url}
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      onLoadedData={(e) => { try { (e.currentTarget as HTMLVideoElement).pause(); } catch {} }}
+                    />
+                  )}
                   <div
                     style={{
                       display: 'flex',
@@ -1816,6 +1824,7 @@ const CommunityFeedPage: React.FC = () => {
                     src={viewingStory.media.url}
                     autoPlay
                     playsInline
+                    preload="auto"
                     onTouchStart={() => storyVideoRef.current?.pause()}
                     onTouchEnd={() => storyVideoRef.current?.play()}
                     onPointerDown={() => storyVideoRef.current?.pause()}
