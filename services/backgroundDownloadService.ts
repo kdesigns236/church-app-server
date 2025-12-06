@@ -60,40 +60,49 @@ async function toWebPath(filePath: string): Promise<string> {
 
 export const backgroundDownloadService = {
   async init(config?: { intervalMinutes?: number; wifiOnly?: boolean }) {
+    try {
+      const plat = (Capacitor as any)?.getPlatform?.() || 'web';
+      const isNative = (Capacitor as any)?.isNativePlatform?.() || false;
+      if (!isNative || plat !== 'android') return;
+    } catch {}
     const minimumFetchInterval = Math.max(15, config?.intervalMinutes ?? 60);
     // Configure recurring background fetch
-    await BackgroundFetch.configure(
-      {
-        minimumFetchInterval,
-        stopOnTerminate: false,
-        startOnBoot: true,
-        enableHeadless: true,
-        requiredNetworkType: (config?.wifiOnly ? BackgroundFetch.NETWORK_TYPE_UNMETERED : BackgroundFetch.NETWORK_TYPE_ANY)
-      },
-      async (taskId: string) => {
-        try {
-          const sermonsRaw = localStorage.getItem('sermons');
-          const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
-          await this.scheduleForSermons(sermons);
-        } finally {
+    try {
+      await BackgroundFetch.configure(
+        {
+          minimumFetchInterval,
+          stopOnTerminate: false,
+          startOnBoot: true,
+          enableHeadless: false,
+          requiredNetworkType: (config?.wifiOnly ? BackgroundFetch.NETWORK_TYPE_UNMETERED : BackgroundFetch.NETWORK_TYPE_ANY)
+        },
+        async (taskId: string) => {
+          try {
+            const sermonsRaw = localStorage.getItem('sermons');
+            const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
+            await this.scheduleForSermons(sermons);
+          } finally {
+            BackgroundFetch.finish(taskId);
+          }
+        },
+        async (taskId: string) => {
           BackgroundFetch.finish(taskId);
         }
-      },
-      async (taskId: string) => {
-        BackgroundFetch.finish(taskId);
-      }
-    );
+      );
+    } catch {}
 
     // Headless (Android terminated) - optional on some versions
     try {
       const anyBF: any = BackgroundFetch as any;
-      anyBF.registerHeadlessTask?.(async (_event: any) => {
-        try {
-          const sermonsRaw = localStorage.getItem('sermons');
-          const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
-          await backgroundDownloadService.scheduleForSermons(sermons);
-        } catch {}
-      });
+      if (anyBF.registerHeadlessTask) {
+        anyBF.registerHeadlessTask(async (_event: any) => {
+          try {
+            const sermonsRaw = localStorage.getItem('sermons');
+            const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
+            await backgroundDownloadService.scheduleForSermons(sermons);
+          } catch {}
+        });
+      }
     } catch {}
   },
 

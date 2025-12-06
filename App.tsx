@@ -30,6 +30,7 @@ import { LoadingScreen } from './components/LoadingScreen';
 import { localNotificationService } from './services/localNotificationService';
 import { websocketService } from './services/websocketService';
 import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 import { keepAwakeService } from './services/keepAwakeService';
 import { backgroundDownloadService } from './services/backgroundDownloadService';
 
@@ -231,9 +232,12 @@ const App: React.FC = () => {
     useEffect(() => {
         (async () => {
             try {
+                const plat = (Capacitor as any)?.getPlatform?.() || 'web';
+                const isNative = (Capacitor as any)?.isNativePlatform?.() || false;
+                if (!(isNative && plat === 'android')) return;
                 await backgroundDownloadService.init({ intervalMinutes: 60, wifiOnly: false });
             } catch (e) {
-                console.warn('[App] Background download init failed (plugin not available on web):', e);
+                console.warn('[App] Background download init failed (plugin not available on this platform):', e);
             }
         })();
     }, []);
