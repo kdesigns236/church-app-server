@@ -1,6 +1,6 @@
 import { Downloader } from '@capgo/capacitor-downloader';
 import { Filesystem, Directory } from '@capacitor/filesystem';
-import BackgroundFetch from '@transistorsoft/capacitor-background-fetch';
+import { BackgroundFetch } from '@transistorsoft/capacitor-background-fetch';
 import { Capacitor } from '@capacitor/core';
 
 export type MinimalSermon = { id: string | number; videoUrl?: string };
