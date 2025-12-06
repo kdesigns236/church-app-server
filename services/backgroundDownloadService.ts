@@ -1,4 +1,4 @@
-import { Downloader } from '@capgo/capacitor-downloader';
+import { CapacitorDownloader } from '@capgo/capacitor-downloader';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { BackgroundFetch } from '@transistorsoft/capacitor-background-fetch';
 import { Capacitor } from '@capacitor/core';
@@ -84,14 +84,17 @@ export const backgroundDownloadService = {
       }
     );
 
-    // Headless (Android terminated)
-    BackgroundFetch.registerHeadlessTask(async (event: any) => {
-      try {
-        const sermonsRaw = localStorage.getItem('sermons');
-        const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
-        await backgroundDownloadService.scheduleForSermons(sermons);
-      } catch {}
-    });
+    // Headless (Android terminated) - optional on some versions
+    try {
+      const anyBF: any = BackgroundFetch as any;
+      anyBF.registerHeadlessTask?.(async (_event: any) => {
+        try {
+          const sermonsRaw = localStorage.getItem('sermons');
+          const sermons = sermonsRaw ? (JSON.parse(sermonsRaw) as MinimalSermon[]) : [];
+          await backgroundDownloadService.scheduleForSermons(sermons);
+        } catch {}
+      });
+    } catch {}
   },
 
   async scheduleForSermons(sermons: MinimalSermon[]) {
@@ -119,7 +122,7 @@ export const backgroundDownloadService = {
 
         // Build absolute destination URI in app data dir
         const uri = await Filesystem.getUri({ directory: Directory.Data, path: relPath });
-        await Downloader.download({
+        await CapacitorDownloader.download({
           id: `sermon-${id}`,
           url,
           destination: uri.uri,
