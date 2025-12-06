@@ -59,6 +59,31 @@ async function toWebPath(filePath: string): Promise<string> {
   }
 }
 
+function resolveApiUrl(): string {
+  try {
+    const w: any = (typeof window !== 'undefined') ? window : {};
+    const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+    const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+    const fromEnv = (import.meta as any).env?.VITE_API_URL;
+    const fallback = 'https://church-app-server.onrender.com/api';
+    const url = (fromStorage || fromWindow || fromEnv || fallback) as string;
+    return url.endsWith('/') ? url.replace(/\/$/, '') : url;
+  } catch {
+    return 'https://church-app-server.onrender.com/api';
+  }
+}
+
+async function serverLog(level: string, tag: string, message: string, data?: any) {
+  try {
+    const url = resolveApiUrl() + '/mobile-log';
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ts: Date.now(), level, tag, message, data })
+    });
+  } catch {}
+}
+
 export const backgroundDownloadService = {
   async init(config?: { intervalMinutes?: number; wifiOnly?: boolean }) {
     try {
@@ -67,6 +92,7 @@ export const backgroundDownloadService = {
       if (!isNative || plat !== 'android') return;
       if (bfConfigured || bfInitStarted) return;
       bfInitStarted = true;
+      serverLog('INFO','BGFetch','init start');
     } catch {}
     const minimumFetchInterval = Math.max(15, config?.intervalMinutes ?? 60);
     // Configure recurring background fetch
@@ -78,6 +104,7 @@ export const backgroundDownloadService = {
       if (!BF) return;
       // Optionally probe status; ignore result
       try { await BF.status(); } catch {}
+      serverLog('INFO','BGFetch','configuring');
       await BF.configure(
         {
           minimumFetchInterval,
@@ -99,10 +126,12 @@ export const backgroundDownloadService = {
           try { await BF.finish(taskId); } catch {}
         }
       );
+      serverLog('INFO','BGFetch','configured ok');
       bfConfigured = true;
       bfInitStarted = false;
-    } catch {
+    } catch (e) {
       bfInitStarted = false;
+      try { serverLog('ERROR','BGFetch','configure failed', (e && (e as any).message) ? (e as any).message : String(e)); } catch {}
     }
 
     // Headless (Android terminated) - optional on some versions
@@ -158,6 +187,7 @@ export const backgroundDownloadService = {
       } catch (e) {
         // Continue with next
         console.warn('[BackgroundDownloader] Failed to download', id, e);
+        try { serverLog('WARN','Downloader','download failed', { id, error: (e && (e as any).message) ? (e as any).message : String(e) }); } catch {}
       }
     }
 
