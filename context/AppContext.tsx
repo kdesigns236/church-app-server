@@ -366,6 +366,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
+    // Request persistent storage so downloaded videos are not evicted by the browser
+    useEffect(() => {
+      (async () => {
+        try {
+          if ((navigator as any)?.storage?.persist) {
+            const persisted = await (navigator as any).storage.persisted?.();
+            if (!persisted) {
+              await (navigator as any).storage.persist();
+              console.log('[AppContext] Requested persistent storage for offline videos');
+            }
+          }
+        } catch (e) {
+          console.warn('[AppContext] Could not request persistent storage', e);
+        }
+      })();
+    }, []);
+
+    // Keep prefetching when we come online / periodically while the app is open
+    useEffect(() => {
+      const kick = () => {
+        try { if (Array.isArray(sermons) && sermons.length > 0) prefetchSermonVideos(sermons); } catch {}
+      };
+
+      // Prefetch immediately if online
+      if (typeof navigator !== 'undefined' && navigator.onLine) {
+        kick();
+      }
+
+      // When network comes back, prefetch missing videos
+      window.addEventListener('online', kick);
+
+      // Light periodic check while app is open (every 30 minutes)
+      const interval = window.setInterval(() => {
+        if (navigator.onLine) kick();
+      }, 30 * 60 * 1000);
+
+      // If user backgrounds the app and returns, attempt a prefetch shortly after
+      const onVis = () => {
+        if (document.visibilityState === 'visible' && navigator.onLine) {
+          setTimeout(kick, 1500);
+        }
+      };
+      document.addEventListener('visibilitychange', onVis);
+
+      return () => {
+        window.removeEventListener('online', kick);
+        window.clearInterval(interval);
+        document.removeEventListener('visibilitychange', onVis);
+      };
+    }, [sermons]);
+
     // Helper: resolve API URL at runtime (no rebuild needed)
     const resolveApiUrl = (): string => {
       try {
