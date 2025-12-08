@@ -749,9 +749,10 @@ const CommunityFeedPage: React.FC = () => {
                       src={story.media.url}
                       muted
                       playsInline
+                      autoPlay
+                      loop
                       preload="metadata"
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-                      onLoadedData={(e) => { try { (e.currentTarget as HTMLVideoElement).pause(); } catch {} }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
                     />
                   )}
                   <div

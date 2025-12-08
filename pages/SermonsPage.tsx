@@ -3,8 +3,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { SermonReel } from '../components/sermons/SermonReel';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
-import { CommentModal } from '../components/sermons/CommentModal';
-import { ShareModal } from '../components/sermons/ShareModal';
 import { Sermon } from '../types';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon } from '../constants/icons';
@@ -15,8 +13,6 @@ const SermonsPage: React.FC = () => {
   const navigate = useNavigate();
   
   const [activeSermonId, setActiveSermonId] = useState<string | null>(null);
-  const [isCommentModalOpen, setIsCommentModalOpen] = useState(false);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   // Videos should always play with sound as requested
   const isMuted = false;
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -125,38 +121,7 @@ const SermonsPage: React.FC = () => {
     }, 4000);
   };
 
-  const handleOpenComments = (sermon: Sermon) => {
-    setActiveSermonId(sermon.id);
-    setIsCommentModalOpen(true);
-  };
-  
-  const handleAddComment = (sermonId: string, content: string) => {
-    if (user) {
-        addSermonComment(sermonId, content, user);
-    }
-  };
-
-  const handleShare = async (sermon: Sermon) => {
-    setActiveSermonId(sermon.id);
-    const shareData = {
-      title: sermon.title,
-      text: `Watch this sermon from Church of God Evening Light: "${sermon.title}" by ${sermon.pastor}.`,
-      url: window.location.href, // In a real app, this would be a deep link to the sermon
-    };
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (error) {
-        console.error('Error sharing:', error);
-        // Fallback to modal if user cancels share
-        setIsShareModalOpen(true);
-      }
-    } else {
-      // Fallback for browsers that don't support Web Share API
-      setIsShareModalOpen(true);
-    }
-  };
+  // Removed comments/sharing overlays for a minimal player
 
   return (
     <>
@@ -172,12 +137,7 @@ const SermonsPage: React.FC = () => {
         </button>
       )}
 
-      {/* Sermon Counter */}
-      {sortedSermons.length > 0 && (!isLandscape || showChrome) && (
-        <div className="fixed left-1/2 -translate-x-1/2 z-50 px-3 py-1.5 bg-black/50 backdrop-blur-md rounded-full text-white text-xs sm:text-sm font-bold shadow-lg" style={{ top: 'calc(env(safe-area-inset-top) + 0.75rem)' }}>
-          {currentIndex + 1} / {sortedSermons.length}
-        </div>
-      )}
+      
 
       {/* Reels Container */}
       <div 
@@ -192,12 +152,6 @@ const SermonsPage: React.FC = () => {
             <SermonReel
               key={sermon.id}
               sermon={sermon}
-              onLike={() => handleSermonInteraction(sermon.id, 'like')}
-              onComment={() => handleOpenComments(sermon)}
-              onShare={() => handleShare(sermon)}
-              onSave={() => handleSermonInteraction(sermon.id, 'save')}
-              isMuted={false}
-              onToggleMute={() => {}}
               isActive={index === currentIndex}
               showChrome={showChrome}
               onUserInteraction={handleUserInteraction}
@@ -218,19 +172,7 @@ const SermonsPage: React.FC = () => {
         )}
       </div>
       
-      <CommentModal 
-        isOpen={isCommentModalOpen}
-        onClose={() => setIsCommentModalOpen(false)}
-        sermon={activeSermon}
-        onAddComment={handleAddComment}
-      />
-
-      <ShareModal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        url={window.location.href}
-        title={activeSermon?.title || 'Check out this sermon'}
-      />
+      
 
       <style>{`
         .scrollbar-hide::-webkit-scrollbar {
