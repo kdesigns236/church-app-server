@@ -231,8 +231,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
   // Compute best-fit strategy based on intrinsic video dimensions and screen orientation
   useEffect(() => {
-    // Keep a simple default: cover in portrait, contain in landscape
-    setObjectFit(isLandscape || rotation % 180 !== 0 ? 'contain' : 'cover');
+    setObjectFit(isLandscape || rotation % 180 !== 0 ? 'cover' : 'contain');
   }, [isLandscape, rotation]);
 
   const gcd = (a: number, b: number): number => {
@@ -259,10 +258,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       const w = v.videoWidth || 0;
       const h = v.videoHeight || 0;
       if (!w || !h) return;
-      const isVerticalVideo = h >= w;
-      const fit = isVerticalVideo && rotation % 180 === 0 && !isLandscape
-        ? 'cover'
-        : (isLandscape || rotation % 180 !== 0 ? 'contain' : 'cover');
+      const fit = (isLandscape || rotation % 180 !== 0) ? 'cover' : 'contain';
       setObjectFit(fit);
     } catch {}
   };
