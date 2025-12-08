@@ -35,10 +35,23 @@ app.use(express.json({ limit: '5mb' }));
 const serverPublicDir = path.join(__dirname, 'public');
 const rootPublicDir = path.join(__dirname, '..', 'public');
 
+const staticOptions = {
+  etag: false,
+  lastModified: false,
+  maxAge: 0,
+  setHeaders: (res, p) => {
+    if (p.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    } else {
+      res.setHeader('Cache-Control', 'public, max-age=300');
+    }
+  },
+};
+
 if (fs.existsSync(serverPublicDir)) {
-  app.use(express.static(serverPublicDir));
+  app.use(express.static(serverPublicDir, staticOptions));
 } else if (fs.existsSync(rootPublicDir)) {
-  app.use(express.static(rootPublicDir));
+  app.use(express.static(rootPublicDir, staticOptions));
 }
 
 // Explicit Bible JSON routes so they are always available in deployment,

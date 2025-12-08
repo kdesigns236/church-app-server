@@ -55,27 +55,4 @@ videoStorageService.initialize().then(() => {
   console.error('[VideoStorage] Failed to initialize:', error);
 });
 
-// Register service worker for offline functionality (only in production)
-if ((import.meta as any).env?.PROD) {
-  serviceWorkerRegistration.register({
-    onSuccess: () => {
-      console.log('[PWA] App is ready for offline use!');
-      // Request storage permission after PWA is ready
-      setTimeout(() => {
-        storageService.requestStoragePermissionWithDialog();
-      }, 2000); // Wait 2 seconds before asking
-    },
-    onUpdate: (registration) => {
-      console.log('[PWA] New content available! Please refresh.');
-      // Optionally show a notification to the user
-      if (confirm('New version available! Reload to update?')) {
-        if (registration.waiting) {
-          registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-          window.location.reload();
-        }
-      }
-    },
-  });
-} else {
-  console.log('[PWA] Service worker disabled in development mode');
-}
+serviceWorkerRegistration.unregister();

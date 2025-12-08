@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "build:client": "npm --prefix .. run build",
+    "postinstall": "npm_config_production=false npm --prefix .. install && npm --prefix .. run build"
   },
   "dependencies": {
     "bcrypt": "^5.1.1",
