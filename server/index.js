@@ -14,6 +14,55 @@ const youtubeLiveRoutes = require('./routes/youtubeLiveRoutes');
 let database;
 let useDatabase = false;
 
+const STORY_TTL_MS = 24 * 60 * 60 * 1000;
+
+async function pruneExpiredStories(options = { save: true, broadcast: false }) {
+  try {
+    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
+    if (list.length === 0) return;
+
+    const now = Date.now();
+    const removed = [];
+    const keep = [];
+
+    for (const s of list) {
+      let created = null;
+      if (s && s.expiresAt) {
+        const exp = new Date(s.expiresAt).getTime();
+        if (!isNaN(exp) && now >= exp) {
+          removed.push(s);
+          continue;
+        }
+        keep.push(s);
+        continue;
+      }
+      if (s && s.createdAt) {
+        const ct = new Date(s.createdAt).getTime();
+        if (!isNaN(ct)) created = ct;
+      }
+      if (created == null) {
+        if (typeof s?.id === 'number') created = s.id;
+        else if (typeof s?.id === 'string' && /^\d{10,}$/.test(s.id)) created = parseInt(s.id, 10);
+      }
+      if (created != null && !isNaN(created) && now - created > STORY_TTL_MS) {
+        removed.push(s);
+      } else {
+        keep.push(s);
+      }
+    }
+
+    if (removed.length > 0) {
+      dataStore.communityStories = keep;
+      if (options.save) {
+        try { await saveData(); } catch {}
+      }
+      if (options.broadcast) {
+        try { removed.forEach((r) => broadcastUpdate({ type: 'communityStories', action: 'delete', data: { id: r.id } })); } catch {}
+      }
+    }
+  } catch {}
+}
+
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
@@ -854,8 +903,9 @@ app.get('/api/community-comments', (req, res) => {
   res.json(dataStore.comments || []);
 });
 
-app.get('/api/community-stories', (req, res) => {
+app.get('/api/community-stories', async (req, res) => {
   console.log('[Server] Fetching all community stories');
+  await pruneExpiredStories({ save: true, broadcast: false });
   res.json(dataStore.communityStories || []);
 });
 
@@ -873,6 +923,8 @@ app.post('/api/community-stories', verifyAdmin, async (req, res) => {
       media, // { url, type: 'image' | 'video' }
       viewed: false,
       type: media ? (media.type === 'video' ? 'video' : 'photo') : (type || 'text'),
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + STORY_TTL_MS).toISOString(),
     };
     const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
     dataStore.communityStories = [story, ...list];

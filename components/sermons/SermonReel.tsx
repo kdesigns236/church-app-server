@@ -39,6 +39,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         const u = new URL(url);
         return u.searchParams.get('v');
       }
+      if (url.includes('youtube.com/shorts/')) {
+        const m = url.match(/youtube\.com\/shorts\/([^?&#/]+)/i);
+        return m ? m[1] : null;
+      }
       if (url.includes('youtu.be/')) {
         const m = url.match(/youtu\.be\/([^?&#/]+)/i);
         return m ? m[1] : null;
@@ -58,9 +62,42 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     } catch { return null; }
   };
 
+  const resolveFirebaseDownloadUrl = async (maybePath: string): Promise<string | null> => {
+    try {
+      // Ensure anonymous auth for tokens
+      try { await signInAnonymously(auth); } catch {}
+      const r = ref(storage, maybePath);
+      const u = await getDownloadURL(r);
+      return u || null;
+    } catch {
+      return null;
+    }
+  };
+
   // Load video from cloud or IndexedDB (only when active)
   useEffect(() => {
     let objectUrl: string | null = null;
+    const pickSermonUrl = (s: any): string | null => {
+      const candidates: any[] = [
+        s?.videoUrl,
+        s?.video?.url,
+        s?.video?.link,
+        s?.url,
+        s?.media?.url,
+        s?.storagePath,
+        s?.firebaseStoragePath,
+        s?.videoPath,
+        s?.filePath,
+        s?.video?.storagePath,
+        s?.video?.path,
+        (s?.video?.bucket && s?.video?.path) ? `gs://${s.video.bucket}/${s.video.path}` : null,
+        Array.isArray(s?.sources) ? s.sources.find((x: any) => typeof x === 'string' && x) : null,
+      ];
+      for (const c of candidates) {
+        if (typeof c === 'string' && c.trim().length > 0) return c.trim();
+      }
+      return null;
+    };
         
     const loadVideo = async () => {
       try {
@@ -69,16 +106,18 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           setVideoSrc('');
           return;
         }
+        const rawUrl = pickSermonUrl(sermon);
+
         // Detect common providers (YouTube, Vimeo)
-        if (typeof sermon.videoUrl === 'string') {
-          const yt = parseYouTubeId(sermon.videoUrl);
+        if (typeof rawUrl === 'string') {
+          const yt = parseYouTubeId(rawUrl);
           if (yt) {
             setEmbedType('youtube');
             setEmbedId(yt);
             setVideoSrc('');
             return;
           }
-          const vm = parseVimeoId(sermon.videoUrl);
+          const vm = parseVimeoId(rawUrl);
           if (vm) {
             setEmbedType('vimeo');
             setEmbedId(vm);
@@ -87,8 +126,15 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           }
         }
         // Set remote URL immediately for faster first frame (direct files)
-        if (typeof sermon.videoUrl === 'string' && (sermon.videoUrl.startsWith('http://') || sermon.videoUrl.startsWith('https://'))) {
-          if (isMountedRef.current) setVideoSrc(sermon.videoUrl);
+        if (typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
+          if (isMountedRef.current) setVideoSrc(rawUrl);
+        } else if (typeof rawUrl === 'string') {
+          // Try resolving Firebase Storage paths (gs://bucket/path or plain path)
+          const resolved = await resolveFirebaseDownloadUrl(rawUrl);
+          if (resolved && isMountedRef.current) {
+            setVideoSrc(resolved);
+            return;
+          }
         }
         // Prefer native-downloaded file if available
         if (sermon.id) {
@@ -118,22 +164,30 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           }
         }
 
-        if (!sermon.videoUrl) {
+        if (!rawUrl) {
           setVideoSrc('');
           return;
         }
 
         // Cloud-hosted videos (fallback when no cached copy)
-        if (typeof sermon.videoUrl === 'string' && 
-            (sermon.videoUrl.startsWith('http://') || sermon.videoUrl.startsWith('https://'))) {
-          console.log('[SermonReel] Loading video from cloud:', sermon.videoUrl);
-          if (isMountedRef.current) setVideoSrc(sermon.videoUrl);
+        if (typeof rawUrl === 'string' && 
+            (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
+          console.log('[SermonReel] Loading video from cloud:', rawUrl);
+          if (isMountedRef.current) setVideoSrc(rawUrl);
           return;
+        }
+        // Firebase storage path fallback
+        if (typeof rawUrl === 'string') {
+          const resolved = await resolveFirebaseDownloadUrl(rawUrl);
+          if (resolved && isMountedRef.current) {
+            setVideoSrc(resolved);
+            return;
+          }
         }
 
         // IndexedDB videos (Backwards compatibility for legacy indexed-db:// URLs)
-        if (sermon.videoUrl && typeof sermon.videoUrl === 'string' && sermon.videoUrl.startsWith('indexed-db://')) {
-          const sermonId = sermon.videoUrl.replace('indexed-db://', '');
+        if (rawUrl && typeof rawUrl === 'string' && rawUrl.startsWith('indexed-db://')) {
+          const sermonId = rawUrl.replace('indexed-db://', '');
           console.log('[SermonReel] ⚠️ Old video format (IndexedDB):', sermonId);
           
           try {
