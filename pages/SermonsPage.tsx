@@ -100,8 +100,8 @@ const SermonsPage: React.FC = () => {
 
     const handleScroll = () => {
       const scrollTop = container.scrollTop;
-      const height = window.innerHeight;
-      const index = Math.round(scrollTop / height);
+      const height = container.clientHeight || window.innerHeight || 1;
+      const index = Math.floor((scrollTop + height / 2) / height);
       setCurrentIndex(Math.max(0, Math.min(index, sortedSermons.length - 1)));
     };
 

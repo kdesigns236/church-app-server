@@ -240,6 +240,33 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   };
   const getAspectLabel = (w: number, h: number): string => '';
 
+  const tryAutoplay = async (v: HTMLVideoElement) => {
+    try {
+      await v.play();
+    } catch {
+      try {
+        v.muted = true;
+        await v.play();
+        setTimeout(() => { try { v.muted = false; } catch {} }, 250);
+      } catch {}
+    }
+  };
+
+  const updateObjectFitFromVideo = () => {
+    try {
+      const v = videoRef.current;
+      if (!v) return;
+      const w = v.videoWidth || 0;
+      const h = v.videoHeight || 0;
+      if (!w || !h) return;
+      const isVerticalVideo = h >= w;
+      const fit = isVerticalVideo && rotation % 180 === 0 && !isLandscape
+        ? 'cover'
+        : (isLandscape || rotation % 180 !== 0 ? 'contain' : 'cover');
+      setObjectFit(fit);
+    } catch {}
+  };
+
   // Minimal playback events (no auto-play / intersection)
   useEffect(() => {
     const video = videoRef.current;
@@ -268,6 +295,20 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       video.removeEventListener('playing', handlePlaying);
     };
   }, [videoSrc]);
+
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v || !videoSrc) return;
+    if (isActive) {
+      tryAutoplay(v);
+    } else {
+      try { v.pause(); } catch {}
+    }
+  }, [isActive, videoSrc]);
+
+  useEffect(() => {
+    updateObjectFitFromVideo();
+  }, [rotation, isLandscape]);
 
   const handleVideoPress = () => {
     if (isPlaying) videoRef.current?.pause(); else videoRef.current?.play();
@@ -310,7 +351,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               style={{ border: '0' }}
             />
           )}
-          <div className="absolute left-3 bottom-3 right-3 text-white bg-black/40 backdrop-blur-sm rounded-md p-3">
+          <div className="absolute left-3 right-auto max-w-[80%] text-white bg-black/40 backdrop-blur-sm rounded-md p-3 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
             <div className="text-sm font-semibold truncate">{sermon.title}</div>
             <div className="text-xs opacity-90 truncate">{sermon.pastor}</div>
             {sermon.scripture ? (
@@ -329,11 +370,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             onPointerDown={handlePointerDown}
             className={`transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
             style={{ transform: `rotate(${rotation}deg)`, touchAction: 'manipulation' }}
+            autoPlay
             controls
             playsInline
             muted={false}
             src={videoSrc}
             preload={isActive ? 'auto' : 'none'}
+            onLoadedMetadata={updateObjectFitFromVideo}
             aria-label={`Sermon titled ${sermon.title}`}
             onError={async (e) => {
               console.error('Video load error:', e);
@@ -357,8 +400,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               }
             }}
           />
-          {/* Minimal text overlay for title/pastor/scripture */}
-          <div className="absolute left-3 bottom-3 right-3 text-white bg-black/40 backdrop-blur-sm rounded-md p-3">
+          <div className="absolute left-3 right-auto max-w-[80%] text-white bg-black/40 backdrop-blur-sm rounded-md p-3 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
             <div className="text-sm font-semibold truncate">{sermon.title}</div>
             <div className="text-xs opacity-90 truncate">{sermon.pastor}</div>
             {sermon.scripture ? (
