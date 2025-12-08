@@ -930,6 +930,27 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/api/db-info', (req, res) => {
+  try {
+    const storageName = (database && typeof database.getStorageName === 'function')
+      ? database.getStorageName()
+      : (process.env.USE_FIREBASE_DB ? 'Firebase Firestore' : (process.env.DATABASE_URL ? 'PostgreSQL' : 'File storage'));
+    res.json({
+      useDatabase,
+      storage: storageName,
+      env: {
+        USE_FIREBASE_DB: !!(process.env.USE_FIREBASE_DB && (String(process.env.USE_FIREBASE_DB).toLowerCase() === 'true' || process.env.USE_FIREBASE_DB === '1')),
+        DATABASE_URL: !!process.env.DATABASE_URL,
+        FIREBASE_PROJECT_ID: !!process.env.FIREBASE_PROJECT_ID,
+        FIREBASE_CLIENT_EMAIL: !!process.env.FIREBASE_CLIENT_EMAIL,
+        FIREBASE_PRIVATE_KEY: !!process.env.FIREBASE_PRIVATE_KEY,
+      }
+    });
+  } catch {
+    res.status(500).json({ ok: false });
+  }
+});
+
 // App version endpoint - for update notifications
 app.get('/api/app-version', (req, res) => {
   res.json({
