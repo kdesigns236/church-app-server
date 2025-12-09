@@ -35,6 +35,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [embedType, setEmbedType] = useState<null | 'youtube' | 'vimeo'>(null);
   const [embedId, setEmbedId] = useState<string>('');
   const [muted, setMuted] = useState(true);
+  const playPauseTimer = useRef<number | null>(null);
 
   const parseYouTubeId = (url: string): string | null => {
     try {
@@ -81,8 +82,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (typeof u !== 'string') return u as any;
       if (u.includes('firebasestorage.googleapis.com')) {
         return u.replace(/\/(b)\/([^/]+)\//, (_m, g1, bucket) => {
-          const fixed = String(bucket).replace('.firebasestorage.app', 'appspot.com');
-          return `/${g1}/${fixed}/`;
+          let b = String(bucket);
+          b = b.replace('.firebasestorage.app', '.appspot.com');
+          if (b.endsWith('appspot.com') && !b.includes('.appspot.com')) {
+            b = b.replace('appspot.com', '.appspot.com');
+          }
+          return `/${g1}/${b}/`;
         });
       }
       return u;
@@ -128,11 +133,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         
     const loadVideo = async () => {
       try {
-        // Do not load when not active to keep memory low on mobile
-        if (!isActive) {
-          setVideoSrc('');
-          return;
-        }
         const rawUrlUnnorm = pickSermonUrl(sermon);
         const rawUrl = typeof rawUrlUnnorm === 'string' ? normalizeFirebasePublicUrl(rawUrlUnnorm) : rawUrlUnnorm;
 
@@ -315,7 +315,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const getAspectLabel = (w: number, h: number): string => '';
 
   const tryAutoplay = async (v: HTMLVideoElement) => {
-    try { v.muted = true; await v.play(); } catch {}
+    try { v.muted = true; await v.play(); } catch (e: any) { if (!e || e.name !== 'AbortError') { console.warn('[SermonReel] Autoplay failed:', e); } }
   };
 
   const updateObjectFitFromVideo = () => {
@@ -369,11 +369,16 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   useEffect(() => {
     const v = videoRef.current;
     if (!v || !videoSrc) return;
-    if (isActive) {
-      tryAutoplay(v);
-    } else {
-      try { v.pause(); } catch {}
-    }
+    if (playPauseTimer.current) window.clearTimeout(playPauseTimer.current);
+    playPauseTimer.current = window.setTimeout(() => {
+      if (!videoRef.current) return;
+      if (isActive) {
+        tryAutoplay(videoRef.current);
+      } else {
+        try { videoRef.current.pause(); } catch {}
+      }
+    }, 120);
+    return () => { if (playPauseTimer.current) window.clearTimeout(playPauseTimer.current); };
   }, [isActive, videoSrc]);
 
   useEffect(() => {

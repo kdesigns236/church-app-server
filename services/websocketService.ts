@@ -68,12 +68,15 @@ class WebSocketService {
     console.log('[WebSocket] Connecting to:', this.serverUrl);
 
     this.socket = io(this.serverUrl, {
-      transports: ['polling'], // Try polling first for Render compatibility
+      // Prefer native WebSocket, fall back to polling when needed
+      transports: ['websocket', 'polling'],
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
+      reconnectionDelayMax: 8000,
       reconnectionAttempts: this.maxReconnectAttempts,
-      timeout: 10000
+      timeout: 20000,
+      path: '/socket.io'
     });
 
     this.setupEventHandlers();

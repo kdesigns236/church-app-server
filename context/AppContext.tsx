@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
 import { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStudy, ChatMessage, User, SermonComment, Post, Comment } from '../types';
 import { websocketService } from '../services/websocketService';
 import { notificationService } from '../services/notificationService';
@@ -320,6 +320,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
+    const prefetchInFlightRef = useRef<Set<string>>(new Set());
+
     // Background prefetch: automatically download sermon videos into IndexedDB
     const prefetchSermonVideos = async (sermonsToPrefetch: Sermon[]) => {
       try {
@@ -327,6 +329,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return;
         }
 
+        let prefetched = 0;
         for (const sermon of sermonsToPrefetch) {
           if (!sermon || !sermon.videoUrl) continue;
           if (typeof sermon.videoUrl !== 'string') continue;
@@ -338,12 +341,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           const sermonId = String(sermon.id || '');
           if (!sermonId) continue;
+          if (prefetchInFlightRef.current.has(sermonId)) continue;
 
           try {
             const alreadyHas = await videoStorageService.hasVideo(sermonId);
             if (alreadyHas) continue;
 
+            prefetchInFlightRef.current.add(sermonId);
             console.log('[AppContext] 🎥 Prefetching video for sermon', sermonId);
+            // Optional HEAD check to avoid huge downloads on limited connections
+            try {
+              const head = await fetch(sermon.videoUrl, { method: 'HEAD' as any });
+              const len = head.headers?.get('content-length');
+              if (len) {
+                const size = parseInt(len, 10);
+                const max = 120 * 1024 * 1024; // 120MB cap per prefetch
+                if (!isNaN(size) && size > max) {
+                  console.warn('[AppContext] Skipping prefetch (too large):', sermonId, Math.round(size/1024/1024), 'MB');
+                  continue;
+                }
+              }
+            } catch {}
+
             const response = await fetch(sermon.videoUrl);
             if (!response.ok) {
               console.warn('[AppContext] Failed to prefetch video for sermon', sermonId, response.status);
@@ -357,8 +376,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             await videoStorageService.saveVideo(sermonId, file);
             console.log('[AppContext] ✅ Prefetched video for sermon', sermonId);
+            prefetched += 1;
+            if (prefetched >= 2) break;
           } catch (error) {
             console.error('[AppContext] Error prefetching video for sermon', sermon.id, error);
+          } finally {
+            prefetchInFlightRef.current.delete(sermonId);
           }
         }
       } catch (err) {

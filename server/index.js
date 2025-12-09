@@ -83,7 +83,12 @@ const io = socketIo(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"]
-  }
+  },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true,
+  pingTimeout: 30000,
+  pingInterval: 25000,
+  path: '/socket.io'
 });
 
 const PORT = process.env.PORT || 3001;
