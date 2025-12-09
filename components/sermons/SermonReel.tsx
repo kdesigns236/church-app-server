@@ -58,6 +58,17 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     } catch { return null; }
   };
 
+  const handleLoadedMetadata = () => {
+    try {
+      updateObjectFitFromVideo();
+      const v = videoRef.current;
+      if (!v) return;
+      if (v.currentTime < 0.01) {
+        try { v.currentTime = 0.01; } catch {}
+      }
+    } catch {}
+  };
+
   const parseVimeoId = (url: string): string | null => {
     try {
       const m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
@@ -339,7 +350,14 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     const handlePlay = () => { setIsPlaying(true); setIsBuffering(false); };
     const handlePause = () => { setIsPlaying(false); };
     const handleEnded = () => { setIsPlaying(false); };
-    const handleCanPlay = () => { setIsReady(true); setIsBuffering(false); };
+    const handleCanPlay = () => {
+      setIsReady(true);
+      setIsBuffering(false);
+      try {
+        const v = videoRef.current;
+        if (v && isActive) tryAutoplay(v);
+      } catch {}
+    };
     const handleWaiting = () => { setIsBuffering(true); };
     const handlePlaying = () => { setIsReady(true); setIsBuffering(false); };
 
@@ -364,6 +382,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     const v = videoRef.current;
     if (!v || !videoSrc) return;
     if (isActive) {
+      try { v.preload = 'auto'; v.load(); } catch {}
       tryAutoplay(v);
     } else {
       try { v.pause(); } catch {}
@@ -440,10 +459,11 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             autoPlay
             controls
             playsInline
+            crossOrigin="anonymous"
             muted={muted}
             src={videoSrc}
             preload={preloadHint}
-            onLoadedMetadata={updateObjectFitFromVideo}
+            onLoadedMetadata={handleLoadedMetadata}
             aria-label={`Sermon titled ${sermon.title}`}
             onError={async (e) => {
               console.error('Video load error:', e);

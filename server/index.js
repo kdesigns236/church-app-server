@@ -16,6 +16,20 @@ let useDatabase = false;
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 
+let lastStoryTs = 0;
+let lastStoryInc = 0;
+function nextStoryId() {
+  const now = Date.now();
+  if (now === lastStoryTs) {
+    lastStoryInc += 1;
+  } else {
+    lastStoryTs = now;
+    lastStoryInc = 0;
+  }
+  const suffix = String(lastStoryInc).padStart(3, '0');
+  return Number(`${now}${suffix}`);
+}
+
 async function pruneExpiredStories(options = { save: true, broadcast: false }) {
   try {
     const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
@@ -915,24 +929,30 @@ app.get('/api/community-stories', async (req, res) => {
 app.post('/api/community-stories', verifyAdmin, async (req, res) => {
   try {
     const { author, content, media, type } = req.body || {};
-    const id = Date.now();
     const avatar = (author || 'A').toString().trim().charAt(0).toUpperCase();
-    const story = {
-      id,
-      author: author || 'Admin',
-      avatar,
-      content: content || '',
-      media, // { url, type: 'image' | 'video' }
-      viewed: false,
-      type: media ? (media.type === 'video' ? 'video' : 'photo') : (type || 'text'),
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + STORY_TTL_MS).toISOString(),
-    };
     const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
-    dataStore.communityStories = [story, ...list];
+
+    const mediaItems = Array.isArray(media) ? media : (media ? [media] : []);
+
+    const storiesToAdd = (mediaItems.length > 0 ? mediaItems : [null]).map((m) => {
+      const t = m ? (m.type === 'video' ? 'video' : 'photo') : (type || 'text');
+      return {
+        id: nextStoryId(),
+        author: author || 'Admin',
+        avatar,
+        content: content || '',
+        media: m || null,
+        viewed: false,
+        type: t,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + STORY_TTL_MS).toISOString(),
+      };
+    });
+
+    dataStore.communityStories = [...storiesToAdd, ...list];
     await saveData();
-    broadcastUpdate({ type: 'communityStories', action: 'add', data: story });
-    res.json({ success: true, story });
+    storiesToAdd.forEach((s) => broadcastUpdate({ type: 'communityStories', action: 'add', data: s }));
+    res.json({ success: true, story: storiesToAdd[0], stories: storiesToAdd });
   } catch (error) {
     console.error('[Server] Error creating community story:', error);
     res.status(500).json({ error: 'Failed to create story' });
@@ -946,7 +966,10 @@ app.put('/api/community-stories/:id', verifyAdmin, async (req, res) => {
     const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
     const index = list.findIndex((s) => Number(s.id) === id);
     if (index === -1) return res.status(404).json({ error: 'Story not found' });
-    const updated = { ...list[index], ...req.body, id: list[index].id };
+    const base = { ...list[index], ...req.body, id: list[index].id };
+    const updated = req.body && Object.prototype.hasOwnProperty.call(req.body, 'media')
+      ? { ...base, type: req.body.media ? (req.body.media.type === 'video' ? 'video' : 'photo') : base.type }
+      : base;
     dataStore.communityStories[index] = updated;
     await saveData();
     broadcastUpdate({ type: 'communityStories', action: 'update', data: updated });
