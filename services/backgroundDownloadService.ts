@@ -5,6 +5,16 @@ import { Capacitor } from '@capacitor/core';
 export type MinimalSermon = { id: string | number; videoUrl?: string };
 
 const FILE_MAP_KEY = 'videoFiles'; // { [sermonId]: filePath }
+
+function isNativeBgEnabled(): boolean {
+  try {
+    const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('enableNativeBgFetch') : null;
+    const fromEnv = (import.meta as any)?.env?.VITE_ENABLE_NATIVE_BG_FETCH;
+    return fromStorage === '1' || String(fromEnv) === 'true';
+  } catch {
+    return false;
+  }
+}
 const VIDEO_DIR = 'videos';
 let bfInitStarted = false;
 let bfConfigured = false;
@@ -98,7 +108,7 @@ export const backgroundDownloadService = {
     const minimumFetchInterval = Math.max(1, config?.intervalMinutes ?? 60);
     // Configure recurring background fetch
     try {
-      const ENABLE_BF = false;
+      const ENABLE_BF = isNativeBgEnabled();
       if (ENABLE_BF) {
         await new Promise((r) => setTimeout(r, 5000));
         const mod = await import('@transistorsoft/capacitor-background-fetch');
@@ -156,7 +166,7 @@ export const backgroundDownloadService = {
 
     // Headless (Android terminated) - optional on some versions
     try {
-      const ENABLE_BF = false;
+      const ENABLE_BF = isNativeBgEnabled();
       if (ENABLE_BF) {
         const mod = await import('@transistorsoft/capacitor-background-fetch');
         const anyBF: any = (mod as any).BackgroundFetch as any;

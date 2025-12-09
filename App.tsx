@@ -235,6 +235,18 @@ const App: React.FC = () => {
                 const plat = (Capacitor as any)?.getPlatform?.() || 'web';
                 const isNative = (Capacitor as any)?.isNativePlatform?.() || false;
                 if (!(isNative && plat === 'android')) return;
+                let enableNative = false;
+                try {
+                    enableNative = localStorage.getItem('enableNativeBgFetch') === '1' || ((import.meta as any)?.env?.VITE_ENABLE_NATIVE_BG_FETCH === 'true');
+                } catch {}
+                if (!enableNative) {
+                    console.log('[App] Native background fetch disabled');
+                    return;
+                }
+                if (document.readyState !== 'complete') {
+                    await new Promise((resolve) => window.addEventListener('load', resolve, { once: true }));
+                }
+                await new Promise((r) => setTimeout(r, 5000));
                 await backgroundDownloadService.init({ intervalMinutes: 60, wifiOnly: false });
             } catch (e) {
                 console.warn('[App] Background download init failed (plugin not available on this platform):', e);

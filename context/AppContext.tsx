@@ -6,6 +6,7 @@ import { localNotificationService } from '../services/localNotificationService';
 import { initialSiteContent } from '../constants/siteContent';
 import { useAuth } from '../hooks/useAuth';
 import { videoStorageService } from '../services/videoStorageService';
+import { safeBackgroundFetchService } from '../services/safeBackgroundFetchService';
 
 interface AppContextType {
     sermons: Sermon[];
@@ -328,6 +329,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (typeof window === 'undefined' || !navigator.onLine) {
           return;
         }
+        if (document.readyState !== 'complete') {
+          return;
+        }
 
         let prefetched = 0;
         for (const sermon of sermonsToPrefetch) {
@@ -349,21 +353,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             prefetchInFlightRef.current.add(sermonId);
             console.log('[AppContext] 🎥 Prefetching video for sermon', sermonId);
-            // Optional HEAD check to avoid huge downloads on limited connections
             try {
               const head = await fetch(sermon.videoUrl, { method: 'HEAD' as any });
               const len = head.headers?.get('content-length');
-              if (len) {
-                const size = parseInt(len, 10);
-                const max = 120 * 1024 * 1024; // 120MB cap per prefetch
-                if (!isNaN(size) && size > max) {
-                  console.warn('[AppContext] Skipping prefetch (too large):', sermonId, Math.round(size/1024/1024), 'MB');
-                  continue;
-                }
+              if (!len) {
+                continue;
               }
-            } catch {}
+              const size = parseInt(len, 10);
+              const max = 120 * 1024 * 1024;
+              if (!isNaN(size) && size > max) {
+                console.warn('[AppContext] Skipping prefetch (too large):', sermonId, Math.round(size/1024/1024), 'MB');
+                continue;
+              }
+            } catch {
+              continue;
+            }
 
-            const response = await fetch(sermon.videoUrl);
+            const controller = new AbortController();
+            const to = setTimeout(() => controller.abort(), 30000);
+            const response = await fetch(sermon.videoUrl, { signal: controller.signal, cache: 'default' as any });
+            clearTimeout(to);
             if (!response.ok) {
               console.warn('[AppContext] Failed to prefetch video for sermon', sermonId, response.status);
               continue;
@@ -378,6 +387,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             console.log('[AppContext] ✅ Prefetched video for sermon', sermonId);
             prefetched += 1;
             if (prefetched >= 2) break;
+            await new Promise((r) => setTimeout(r, 1500));
           } catch (error) {
             console.error('[AppContext] Error prefetching video for sermon', sermon.id, error);
           } finally {
@@ -409,7 +419,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Keep prefetching when we come online / periodically while the app is open
     useEffect(() => {
       const kick = () => {
-        try { if (Array.isArray(sermons) && sermons.length > 0) prefetchSermonVideos(sermons); } catch {}
+        try { if (Array.isArray(sermons) && sermons.length > 0) safeBackgroundFetchService.scheduleBackgroundFetch(sermons); } catch {}
       };
 
       // Prefetch immediately if online
@@ -438,6 +448,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         window.clearInterval(interval);
         document.removeEventListener('visibilitychange', onVis);
       };
+    }, [sermons]);
+
+    useEffect(() => {
+      let cancelled = false;
+      (async () => {
+        try {
+          if (!Array.isArray(sermons) || sermons.length === 0) return;
+          if (document.readyState !== 'complete') {
+            await new Promise((resolve) => window.addEventListener('load', resolve, { once: true }));
+          }
+          await new Promise((r) => setTimeout(r, 5000));
+          const ok = await safeBackgroundFetchService.initialize();
+          if (!ok || cancelled) return;
+          if (safeBackgroundFetchService.shouldFetch()) {
+            await safeBackgroundFetchService.scheduleBackgroundFetch(sermons);
+          }
+        } catch {}
+      })();
+      return () => { cancelled = true; };
     }, [sermons]);
 
     // Periodically pull fresh data from server so app stays up-to-date without manual reopen
@@ -505,7 +534,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if ((syncRes as any)?.ok) {
               const full = await syncRes.json();
               if (full && typeof full === 'object') {
-                if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); setTimeout(() => { try { prefetchSermonVideos(full.sermons); } catch {} }, 1200); }
+                if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); setTimeout(() => { try { safeBackgroundFetchService.scheduleBackgroundFetch(full.sermons); } catch {} }, 1200); }
                 if (Array.isArray(full.announcements)) { setAnnouncements(full.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(full.announcements)); }
                 if (Array.isArray(full.events)) { setEvents(full.events as Event[]); localStorage.setItem('events', JSON.stringify(full.events)); }
                 if (full.siteContent && typeof full.siteContent === 'object') { setSiteContent(full.siteContent as any); localStorage.setItem('siteContent', JSON.stringify(full.siteContent)); }
@@ -532,7 +561,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if ((syncRes2 as any)?.ok) {
                 const full = await syncRes2.json();
                 if (full && typeof full === 'object') {
-                  if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); setTimeout(() => { try { prefetchSermonVideos(full.sermons); } catch {} }, 1200); }
+                  if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); setTimeout(() => { try { safeBackgroundFetchService.scheduleBackgroundFetch(full.sermons); } catch {} }, 1200); }
                   if (Array.isArray(full.announcements)) { setAnnouncements(full.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(full.announcements)); }
                   if (Array.isArray(full.events)) { setEvents(full.events as Event[]); localStorage.setItem('events', JSON.stringify(full.events)); }
                   if (full.siteContent && typeof full.siteContent === 'object') { setSiteContent(full.siteContent as any); localStorage.setItem('siteContent', JSON.stringify(full.siteContent)); }
@@ -566,7 +595,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if ((sermonsRes as any)?.ok && Array.isArray(sermonsData)) {
               setSermons(sermonsData as Sermon[]);
               localStorage.setItem('sermons', JSON.stringify(sermonsData));
-              setTimeout(() => { try { prefetchSermonVideos(sermonsData); } catch {} }, 1200);
+              setTimeout(() => { try { safeBackgroundFetchService.scheduleBackgroundFetch(sermonsData); } catch {} }, 1200);
               anyFetchOk = true;
             }
             if ((siteContentRes as any)?.ok && siteContentData && typeof siteContentData === 'object') {
