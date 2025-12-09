@@ -13,6 +13,7 @@ interface SermonReelProps {
   isActive?: boolean;
   showChrome?: boolean;
   onUserInteraction?: () => void;
+  preloadHint?: 'none' | 'metadata' | 'auto';
 }
 
 export const SermonReel: React.FC<SermonReelProps> = ({ 
@@ -20,6 +21,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   isActive = true,
   showChrome = true,
   onUserInteraction,
+  preloadHint = 'metadata',
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -32,6 +34,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const isMountedRef = useRef(true);
   const [embedType, setEmbedType] = useState<null | 'youtube' | 'vimeo'>(null);
   const [embedId, setEmbedId] = useState<string>('');
+  const [muted, setMuted] = useState(true);
 
   const parseYouTubeId = (url: string): string | null => {
     try {
@@ -60,6 +63,19 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       const m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
       return m ? m[1] : null;
     } catch { return null; }
+  };
+
+  const normalizeFirebasePublicUrl = (u: string): string => {
+    try {
+      if (typeof u !== 'string') return u as any;
+      if (u.includes('firebasestorage.googleapis.com')) {
+        return u.replace(/\/(b)\/([^/]+)\//, (_m, g1, bucket) => {
+          const fixed = String(bucket).replace('.firebasestorage.app', 'appspot.com');
+          return `/${g1}/${fixed}/`;
+        });
+      }
+      return u;
+    } catch { return u; }
   };
 
   const resolveFirebaseDownloadUrl = async (maybePath: string): Promise<string | null> => {
@@ -106,7 +122,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           setVideoSrc('');
           return;
         }
-        const rawUrl = pickSermonUrl(sermon);
+        const rawUrlUnnorm = pickSermonUrl(sermon);
+        const rawUrl = typeof rawUrlUnnorm === 'string' ? normalizeFirebasePublicUrl(rawUrlUnnorm) : rawUrlUnnorm;
 
         // Detect common providers (YouTube, Vimeo)
         if (typeof rawUrl === 'string') {
@@ -211,8 +228,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         }
 
         // File object
-        if (typeof sermon.videoUrl === 'object' && 'name' in sermon.videoUrl) {
-          objectUrl = URL.createObjectURL(sermon.videoUrl as File);
+        const maybeFile: any = (sermon as any)?.videoUrl;
+        if (maybeFile && typeof maybeFile === 'object' && 'name' in maybeFile) {
+          objectUrl = URL.createObjectURL(maybeFile as File);
           if (isMountedRef.current) setVideoSrc(objectUrl);
           return;
         }
@@ -229,12 +247,16 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     loadVideo();
 
     return () => {
-      isMountedRef.current = false;
       if (objectUrl) {
         URL.revokeObjectURL(objectUrl);
       }
     };
   }, [sermon.videoUrl, isActive]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   // When becoming inactive, aggressively unload the video to free memory
   useEffect(() => {
@@ -294,15 +316,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const getAspectLabel = (w: number, h: number): string => '';
 
   const tryAutoplay = async (v: HTMLVideoElement) => {
-    try {
-      await v.play();
-    } catch {
-      try {
-        v.muted = true;
-        await v.play();
-        setTimeout(() => { try { v.muted = false; } catch {} }, 250);
-      } catch {}
-    }
+    try { v.muted = true; await v.play(); } catch {}
   };
 
   const updateObjectFitFromVideo = () => {
@@ -361,7 +375,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   }, [rotation, isLandscape]);
 
   const handleVideoPress = () => {
-    if (isPlaying) videoRef.current?.pause(); else videoRef.current?.play();
+    const v = videoRef.current;
+    if (!v) return;
+    if (muted) { setMuted(false); try { v.muted = false; v.play(); } catch {} }
+    else { if (isPlaying) v.pause(); else v.play(); }
     if (onUserInteraction) onUserInteraction();
   };
 
@@ -423,9 +440,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             autoPlay
             controls
             playsInline
-            muted={false}
+            muted={muted}
             src={videoSrc}
-            preload={isActive ? 'auto' : 'none'}
+            preload={preloadHint}
             onLoadedMetadata={updateObjectFitFromVideo}
             aria-label={`Sermon titled ${sermon.title}`}
             onError={async (e) => {
