@@ -466,13 +466,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           console.log('[AppContext] 📡 Fetching fresh data from server (no-cache)...');
           
           // Add 10-second timeout to prevent app from hanging
-          const fetchWithTimeout = (url: string, timeout = 10000) => {
-            return Promise.race([
-              fetch(url, { cache: 'no-store' as RequestCache }),
-              new Promise<Response>((_, reject) => 
-                setTimeout(() => reject(new Error('Request timeout')), timeout)
-              )
-            ]);
+          const fetchWithTimeout = (url: string, timeout = 6000) => {
+            const controller = new AbortController();
+            const t = setTimeout(() => controller.abort(new Error('Request timeout') as any), timeout);
+            return fetch(url, { cache: 'no-store' as RequestCache, signal: controller.signal }).finally(() => clearTimeout(t));
           };
           
           // Prefer a single round-trip for first-load speed
@@ -482,7 +479,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if ((syncRes as any)?.ok) {
               const full = await syncRes.json();
               if (full && typeof full === 'object') {
-                if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); prefetchSermonVideos(full.sermons); }
+                if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); setTimeout(() => { try { prefetchSermonVideos(full.sermons); } catch {} }, 1200); }
                 if (Array.isArray(full.announcements)) { setAnnouncements(full.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(full.announcements)); }
                 if (Array.isArray(full.events)) { setEvents(full.events as Event[]); localStorage.setItem('events', JSON.stringify(full.events)); }
                 if (full.siteContent && typeof full.siteContent === 'object') { setSiteContent(full.siteContent as any); localStorage.setItem('siteContent', JSON.stringify(full.siteContent)); }
@@ -509,7 +506,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if ((sermonsRes as any)?.ok && Array.isArray(sermonsData)) {
               setSermons(sermonsData as Sermon[]);
               localStorage.setItem('sermons', JSON.stringify(sermonsData));
-              prefetchSermonVideos(sermonsData);
+              setTimeout(() => { try { prefetchSermonVideos(sermonsData); } catch {} }, 1200);
             }
             if ((siteContentRes as any)?.ok && siteContentData && typeof siteContentData === 'object') {
               setSiteContent(siteContentData as any);

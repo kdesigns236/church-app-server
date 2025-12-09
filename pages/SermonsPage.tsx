@@ -18,6 +18,7 @@ const SermonsPage: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLandscape, setIsLandscape] = useState(false);
   const [showChrome, setShowChrome] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const chromeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   
@@ -90,6 +91,15 @@ const SermonsPage: React.FC = () => {
     return dateB - dateA; // Newest first when order is the same or not set
   });
   
+  useEffect(() => {
+    if (sortedSermons.length > 0) setInitialLoading(false);
+  }, [sortedSermons.length]);
+  
+  useEffect(() => {
+    const t = setTimeout(() => setInitialLoading(false), 6000);
+    return () => clearTimeout(t);
+  }, []);
+  
   // Get active sermon from sermons array (always up-to-date)
   const activeSermon = activeSermonId ? sortedSermons.find(s => s.id === activeSermonId) || null : null;
 
@@ -156,6 +166,16 @@ const SermonsPage: React.FC = () => {
               showChrome={showChrome}
               onUserInteraction={handleUserInteraction}
             />
+          ))
+        ) : initialLoading ? (
+          Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="relative snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: 'var(--app-vw, 100vw)', height: 'var(--app-vh, 100vh)' }}>
+              <div className="w-full h-full animate-pulse bg-gradient-to-b from-gray-800/60 to-gray-900/60" />
+              <div className="absolute left-3 right-auto max-w-[80%] text-white bg-white/5 backdrop-blur-sm rounded-md p-3 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
+                <div className="h-4 w-40 bg-white/20 rounded mb-2" />
+                <div className="h-3 w-28 bg-white/15 rounded" />
+              </div>
+            </div>
           ))
         ) : (
           <div className="h-screen flex items-center justify-center text-white">
