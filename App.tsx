@@ -235,11 +235,37 @@ const App: React.FC = () => {
                 const plat = (Capacitor as any)?.getPlatform?.() || 'web';
                 const isNative = (Capacitor as any)?.isNativePlatform?.() || false;
                 if (!(isNative && plat === 'android')) return;
-                let enableNative = false;
+                let effective = false;
                 try {
-                    enableNative = localStorage.getItem('enableNativeBgFetch') === '1' || ((import.meta as any)?.env?.VITE_ENABLE_NATIVE_BG_FETCH === 'true');
+                    const override = localStorage.getItem('nativeBgFetchOverride');
+                    if (override !== null) {
+                        effective = override === '1';
+                    } else {
+                        const eff = localStorage.getItem('enableNativeBgFetch');
+                        if (eff !== null) {
+                            effective = eff === '1';
+                        } else {
+                            // Check site content feature flag persisted locally
+                            let fromSite = false;
+                            try {
+                                const scRaw = localStorage.getItem('siteContent');
+                                if (scRaw) {
+                                    const sc = JSON.parse(scRaw);
+                                    fromSite = !!(sc?.featureFlags?.enableNativeBgFetch);
+                                }
+                            } catch {}
+                            if (fromSite) {
+                                effective = true;
+                                try { localStorage.setItem('enableNativeBgFetch', '1'); } catch {}
+                            } else {
+                                const fromEnv = ((import.meta as any)?.env?.VITE_ENABLE_NATIVE_BG_FETCH === 'true');
+                                effective = !!fromEnv;
+                                try { localStorage.setItem('enableNativeBgFetch', fromEnv ? '1' : '0'); } catch {}
+                            }
+                        }
+                    }
                 } catch {}
-                if (!enableNative) {
+                if (!effective) {
                     console.log('[App] Native background fetch disabled');
                     return;
                 }
@@ -263,18 +289,42 @@ const App: React.FC = () => {
             if (!query) return;
             const params = new URLSearchParams(query);
             const api = params.get('api');
-            if (!api) return;
-            const decoded = decodeURIComponent(api);
-            localStorage.setItem('apiBaseUrl', decoded);
-            console.log('[App] Runtime API base set to:', decoded);
-            // remove api param from URL to avoid repeated handling
-            params.delete('api');
-            const baseHash = hash.split('?')[0];
-            const newHash = baseHash + (params.toString() ? '?' + params.toString() : '');
-            window.history.replaceState(null, '', href.replace(hash, newHash));
-            // Reconnect websocket with new URL
-            try { websocketService.disconnect(); } catch {}
-            try { websocketService.connect(); } catch {}
+            if (api) {
+                const decoded = decodeURIComponent(api);
+                localStorage.setItem('apiBaseUrl', decoded);
+                console.log('[App] Runtime API base set to:', decoded);
+                // remove api param from URL to avoid repeated handling
+                params.delete('api');
+                const baseHash = hash.split('?')[0];
+                const newHash = baseHash + (params.toString() ? '?' + params.toString() : '');
+                window.history.replaceState(null, '', href.replace(hash, newHash));
+                // Reconnect websocket with new URL
+                try { websocketService.disconnect(); } catch {}
+                try { websocketService.connect(); } catch {}
+                return;
+            }
+
+            // Background fetch toggle via ?bg=1 or ?bg=0 (device override)
+            const bg = params.get('bg');
+            if (bg !== null) {
+                const enable = bg === '1' || bg === 'true';
+                try {
+                    if (enable) {
+                        localStorage.setItem('nativeBgFetchOverride', '1');
+                        localStorage.setItem('enableNativeBgFetch', '1');
+                        console.log('[App] Native background fetch ENABLED via URL param');
+                    } else {
+                        localStorage.setItem('nativeBgFetchOverride', '0');
+                        localStorage.setItem('enableNativeBgFetch', '0');
+                        console.log('[App] Native background fetch DISABLED via URL param');
+                    }
+                } catch {}
+                params.delete('bg');
+                const baseHash = hash.split('?')[0];
+                const newHash = baseHash + (params.toString() ? '?' + params.toString() : '');
+                window.history.replaceState(null, '', href.replace(hash, newHash));
+                return;
+            }
         } catch {}
     }, []);
 

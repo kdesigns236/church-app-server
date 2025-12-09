@@ -123,7 +123,10 @@ export interface SiteContent {
         facebook: string;
         youtube: string;
         tiktok: string;
-    }
+    };
+    featureFlags?: {
+        enableNativeBgFetch?: boolean;
+    };
 }
 
 export interface PrayerRequest {

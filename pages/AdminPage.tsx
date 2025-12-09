@@ -6,6 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 import { CapacitorHttp } from '@capacitor/core';
 import { uploadService } from '../services/uploadService';
 import { uploadSermonWithVideo } from '../services/firebaseUploadService';
+import { BackgroundFetchSettings } from '../components/BackgroundFetchSettings';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
     <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md flex items-center gap-4 animate-slide-in-up">
@@ -324,6 +325,16 @@ const AdminPage: React.FC = () => {
     // State for video upload progress
     const [uploadingVideo, setUploadingVideo] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const [nativeBgEnabled, setNativeBgEnabled] = useState<boolean>(() => {
+        try { return localStorage.getItem('enableNativeBgFetch') === '1'; } catch { return false; }
+    });
+
+    const enableNativeBg = () => {
+        try { localStorage.setItem('enableNativeBgFetch','1'); setNativeBgEnabled(true); alert('Native background fetch ENABLED. Please restart the app to initialize.'); } catch {}
+    };
+    const disableNativeBg = () => {
+        try { localStorage.removeItem('enableNativeBgFetch'); setNativeBgEnabled(false); alert('Native background fetch DISABLED.'); } catch {}
+    };
 
     useEffect(() => {
         setEditableSiteContent(siteContent);
@@ -556,6 +567,60 @@ const AdminPage: React.FC = () => {
                         <StatCard title="Upcoming Events" value={events.length} icon={EventsIcon} />
                         <StatCard title="Prayer Requests" value={prayerRequests.length} icon={GivingIcon} />
                     </div>
+
+                    <AdminSection title="Background Downloads">
+                        <div className="space-y-6">
+                            <BackgroundFetchSettings />
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Native Android Background Fetch</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">Current status: <span className={`font-medium ${nativeBgEnabled ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>{nativeBgEnabled ? 'Enabled' : 'Disabled'}</span></p>
+                                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">After enabling, restart the app to initialize the native background service.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button onClick={enableNativeBg} className="px-3 py-2 text-sm rounded-md bg-green-600 text-white hover:bg-green-700">Enable</button>
+                                        <button onClick={disableNativeBg} className="px-3 py-2 text-sm rounded-md bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-400 dark:hover:bg-gray-600">Disable</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Global toggle for all devices via Site Content feature flags */}
+                            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">Global: Enable Native Background Fetch (All Devices)</p>
+                                        <p className="text-xs text-gray-600 dark:text-gray-400">Current status: <span className={`font-medium ${siteContent?.featureFlags?.enableNativeBgFetch ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>{siteContent?.featureFlags?.enableNativeBgFetch ? 'Enabled' : 'Disabled'}</span></p>
+                                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">Takes effect on next app start. Devices can still override locally if needed.</p>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => {
+                                                const updated = {
+                                                    ...siteContent,
+                                                    featureFlags: { ...(siteContent?.featureFlags || {}), enableNativeBgFetch: true }
+                                                } as any;
+                                                updateSiteContent(updated);
+                                                alert('Global native background fetch ENABLED. Users should restart the app to take effect.');
+                                            }}
+                                            className="px-3 py-2 text-sm rounded-md bg-green-600 text-white hover:bg-green-700"
+                                        >Enable for All</button>
+                                        <button
+                                            onClick={() => {
+                                                const updated = {
+                                                    ...siteContent,
+                                                    featureFlags: { ...(siteContent?.featureFlags || {}), enableNativeBgFetch: false }
+                                                } as any;
+                                                updateSiteContent(updated);
+                                                alert('Global native background fetch DISABLED.');
+                                            }}
+                                            className="px-3 py-2 text-sm rounded-md bg-gray-300 dark:bg-gray-700 text-gray-900 dark:text-white hover:bg-gray-400 dark:hover:bg-gray-600"
+                                        >Disable for All</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </AdminSection>
 
                     <AdminSection title="Site Content Management">
                         <form onSubmit={handleSaveSiteContent} className="space-y-6">
