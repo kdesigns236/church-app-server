@@ -483,7 +483,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const fetchInitialData = async () => {
         try {
           console.log('[AppContext] 🔄 Fetching fresh data from server...');
-          const apiUrl = resolveApiUrl();
+          const fallbackApi = 'https://church-app-server.onrender.com/api';
+          let apiUrl = resolveApiUrl();
+          console.log('[AppContext] Resolved API URL:', apiUrl);
           
           // Always fetch fresh data on app start; rely on localStorage as initial render only
           console.log('[AppContext] 📡 Fetching fresh data from server (no-cache)...');
@@ -518,7 +520,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 anyFetchOk = true;
               }
             }
-          } catch {}
+          } catch (e) {
+            console.warn('[AppContext] Primary sync/data fetch failed:', e);
+          }
+
+          // If sync failed and API URL was an override, try falling back to default API (may fix bad local override or QUIC issues)
+          if (!syncOk && apiUrl !== fallbackApi) {
+            try {
+              console.log('[AppContext] Retrying with fallback API URL:', fallbackApi);
+              const syncRes2 = await fetchWithTimeout(`${fallbackApi}/sync/data`);
+              if ((syncRes2 as any)?.ok) {
+                const full = await syncRes2.json();
+                if (full && typeof full === 'object') {
+                  if (Array.isArray(full.sermons)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); setTimeout(() => { try { prefetchSermonVideos(full.sermons); } catch {} }, 1200); }
+                  if (Array.isArray(full.announcements)) { setAnnouncements(full.announcements as Announcement[]); localStorage.setItem('announcements', JSON.stringify(full.announcements)); }
+                  if (Array.isArray(full.events)) { setEvents(full.events as Event[]); localStorage.setItem('events', JSON.stringify(full.events)); }
+                  if (full.siteContent && typeof full.siteContent === 'object') { setSiteContent(full.siteContent as any); localStorage.setItem('siteContent', JSON.stringify(full.siteContent)); }
+                  if (Array.isArray(full.prayerRequests)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
+                  if (Array.isArray(full.bibleStudies)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
+                  if (Array.isArray(full.chatMessages)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
+                  if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); localStorage.setItem('communityPosts', JSON.stringify(full.posts)); }
+                  if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); localStorage.setItem('communityComments', JSON.stringify(full.comments)); }
+                  if (Array.isArray(full.communityStories)) { try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {} }
+                  localStorage.setItem('lastSyncTime', Date.now().toString());
+                  syncOk = true;
+                  anyFetchOk = true;
+                  // Persist the working API URL to avoid future failures
+                  try { localStorage.setItem('apiBaseUrl', fallbackApi); } catch {}
+                  apiUrl = fallbackApi;
+                }
+              }
+            } catch (e) {
+              console.warn('[AppContext] Fallback sync/data fetch failed:', e);
+            }
+          }
 
           if (!syncOk) {
             console.log('[AppContext] Falling back to multi-endpoint fetch');

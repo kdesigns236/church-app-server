@@ -306,6 +306,43 @@ async function initializeData() {
     if (useDatabase) {
       dataStore = await database.getAllData();
       console.log(`[Server] Using ${database.getStorageName()} for data storage`);
+
+      // If Firestore is enabled but currently empty, try to hydrate from local file once
+      try {
+        const empty =
+          Array.isArray(dataStore.sermons) && dataStore.sermons.length === 0 &&
+          Array.isArray(dataStore.announcements) && dataStore.announcements.length === 0 &&
+          Array.isArray(dataStore.events) && dataStore.events.length === 0 &&
+          dataStore.siteContent && Object.keys(dataStore.siteContent).length === 0 &&
+          Array.isArray(dataStore.prayerRequests) && dataStore.prayerRequests.length === 0 &&
+          Array.isArray(dataStore.bibleStudies) && dataStore.bibleStudies.length === 0 &&
+          Array.isArray(dataStore.chatMessages) && dataStore.chatMessages.length === 0 &&
+          Array.isArray(dataStore.users) && dataStore.users.length === 0 &&
+          Array.isArray(dataStore.posts) && dataStore.posts.length === 0 &&
+          Array.isArray(dataStore.comments) && dataStore.comments.length === 0 &&
+          Array.isArray(dataStore.communityStories) && dataStore.communityStories.length === 0;
+
+        if (empty && fs.existsSync(DATA_FILE)) {
+          console.log('[Server] Firestore is empty; attempting one-time hydration from data.json');
+          await loadDataFromFile();
+          const nonEmpty =
+            (Array.isArray(dataStore.sermons) && dataStore.sermons.length > 0) ||
+            (dataStore.siteContent && Object.keys(dataStore.siteContent).length > 0) ||
+            (Array.isArray(dataStore.announcements) && dataStore.announcements.length > 0) ||
+            (Array.isArray(dataStore.events) && dataStore.events.length > 0) ||
+            (Array.isArray(dataStore.communityStories) && dataStore.communityStories.length > 0);
+          if (nonEmpty) {
+            try {
+              await saveData(); // Persist hydrated data into Firestore
+              console.log('[Server] ✅ Hydrated Firestore from data.json');
+            } catch (e) {
+              console.warn('[Server] ⚠️ Hydration save failed:', e?.message || e);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[Server] Hydration check failed:', e?.message || e);
+      }
     } else {
       await loadDataFromFile();
       console.log('[Server] Using data.json for data storage');
