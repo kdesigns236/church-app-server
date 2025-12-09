@@ -474,6 +474,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           
           // Prefer a single round-trip for first-load speed
           let syncOk = false;
+          let anyFetchOk = false;
           try {
             const syncRes = await fetchWithTimeout(`${apiUrl}/sync/data`);
             if ((syncRes as any)?.ok) {
@@ -491,6 +492,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (Array.isArray(full.communityStories)) { try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {} }
                 localStorage.setItem('lastSyncTime', Date.now().toString());
                 syncOk = true;
+                anyFetchOk = true;
               }
             }
           } catch {}
@@ -507,10 +509,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               setSermons(sermonsData as Sermon[]);
               localStorage.setItem('sermons', JSON.stringify(sermonsData));
               setTimeout(() => { try { prefetchSermonVideos(sermonsData); } catch {} }, 1200);
+              anyFetchOk = true;
             }
             if ((siteContentRes as any)?.ok && siteContentData && typeof siteContentData === 'object') {
               setSiteContent(siteContentData as any);
               localStorage.setItem('siteContent', JSON.stringify(siteContentData));
+              anyFetchOk = true;
             }
           }
           
@@ -534,7 +538,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           } catch {}
 
           // Update last sync timestamp
-          if (sermonsRes.ok || announcementsRes.ok || eventsRes.ok) {
+          if (anyFetchOk) {
             localStorage.setItem('lastSyncTime', Date.now().toString());
             console.log('[AppContext] ✅ Data synced successfully from server');
           } else {

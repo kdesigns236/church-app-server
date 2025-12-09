@@ -165,7 +165,15 @@ const SermonsPage: React.FC = () => {
               isActive={index === currentIndex}
               showChrome={showChrome}
               onUserInteraction={handleUserInteraction}
-              preloadHint={index === currentIndex ? 'auto' : index === currentIndex + 1 ? 'metadata' : 'none'}
+              preloadHint={
+                index === currentIndex
+                  ? 'auto'
+                  : index === currentIndex + 1
+                  ? 'auto'
+                  : index === currentIndex - 1
+                  ? 'metadata'
+                  : 'none'
+              }
             />
           ))
         ) : initialLoading ? (

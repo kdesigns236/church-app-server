@@ -101,7 +101,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     }
   };
 
-  // Load video from cloud or IndexedDB (only when active)
+  // Load video from cloud or IndexedDB (load once per sermon)
   useEffect(() => {
     let objectUrl: string | null = null;
     const pickSermonUrl = (s: any): string | null => {
@@ -262,26 +262,14 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [sermon.videoUrl, isActive]);
+  }, [sermon.id]);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
 
-  // When becoming inactive, aggressively unload the video to free memory
-  useEffect(() => {
-    if (!isActive) {
-      try {
-        const v = videoRef.current;
-        if (v) {
-          v.pause();
-          v.removeAttribute('src');
-          v.load();
-        }
-      } catch {}
-    }
-  }, [isActive]);
+  // Do not unload source on inactivity; just pause in the visibility effect below
 
   // Track orientation to adjust layout (fullscreen video in landscape)
   useEffect(() => {
@@ -382,7 +370,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     const v = videoRef.current;
     if (!v || !videoSrc) return;
     if (isActive) {
-      try { v.preload = 'auto'; v.load(); } catch {}
       tryAutoplay(v);
     } else {
       try { v.pause(); } catch {}
@@ -457,7 +444,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             className={`transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
             style={{ transform: `rotate(${rotation}deg)`, touchAction: 'manipulation' }}
             autoPlay
-            controls
+            loop
             playsInline
             crossOrigin="anonymous"
             muted={muted}
