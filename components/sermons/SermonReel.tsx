@@ -353,6 +353,19 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     } catch {}
   }, []);
 
+  useEffect(() => {
+    const handler = (e: any) => {
+      try {
+        const next = !!(e?.detail?.muted);
+        setMuted(next);
+        const v = videoRef.current;
+        if (v) { v.muted = next; if (!next) v.play().catch(() => {}); }
+      } catch {}
+    };
+    window.addEventListener('sermon-mute-changed', handler as any);
+    return () => window.removeEventListener('sermon-mute-changed', handler as any);
+  }, []);
+
   // First-visit scroll hint (one-time)
   useEffect(() => {
     try {
@@ -364,16 +377,25 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           try {
             window.removeEventListener('pointerdown', handler, true);
             window.removeEventListener('touchstart', handler, true);
+            window.removeEventListener('scroll', handler, true);
+            window.removeEventListener('wheel', handler, true);
+            window.removeEventListener('touchmove', handler, true);
           } catch {}
         };
         try {
           window.addEventListener('pointerdown', handler, true);
           window.addEventListener('touchstart', handler, true);
+          window.addEventListener('scroll', handler, true);
+          window.addEventListener('wheel', handler, true);
+          window.addEventListener('touchmove', handler, true);
         } catch {}
         return () => {
           try {
             window.removeEventListener('pointerdown', handler, true);
             window.removeEventListener('touchstart', handler, true);
+            window.removeEventListener('scroll', handler, true);
+            window.removeEventListener('wheel', handler, true);
+            window.removeEventListener('touchmove', handler, true);
           } catch {}
         };
       }
@@ -510,7 +532,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const handleVideoPress = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (muted) { setMuted(false); try { v.muted = false; v.play(); } catch {} }
+    if (muted) { setMuted(false); try { v.muted = false; v.play(); } catch {}; try { localStorage.setItem('sermonMuted', '0'); } catch {}; try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: false } })); } catch {} }
     else { if (isPlaying) v.pause(); else v.play(); }
     if (onUserInteraction) onUserInteraction();
   };
@@ -592,15 +614,16 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         </div>
       ) : videoSrc ? (
         <div className="relative w-full h-full flex items-center justify-center">
+          <div className="absolute inset-0" style={{ transform: `rotate(${rotation}deg)`, transformOrigin: 'center center' }}>
           <video
-            key={videoSrc}
+            key={sermon.id}
             ref={videoRef}
             onClick={handleVideoPress}
             onTouchEnd={handleVideoPress}
             onTouchStart={handlePointerDown}
             onPointerDown={handlePointerDown}
-            className={`transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
-            style={{ transform: `rotate(${rotation}deg)`, touchAction: 'manipulation' }}
+            className={`absolute inset-0 transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
+            style={{ touchAction: 'manipulation', objectPosition: 'center' as any }}
             autoPlay
             loop
             playsInline
@@ -632,12 +655,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               }
             }}
           />
+          </div>
           {(!isReady || isBuffering) && (
             <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
               <div className="h-10 w-10 rounded-full border-2 border-white/40 border-t-white animate-spin" />
             </div>
           )}
-          {durationSec > 0 && (
+          {durationSec > 0 && showProgress && (
             <div
               id={`sermon-progress-${sermon.id}`}
               className="absolute left-0 right-0 bottom-0 h-2 bg-white/20 cursor-pointer"
@@ -646,6 +670,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             >
               <div className="h-full bg-white" style={{ width: `${Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0))}%` }} />
             </div>
+          )}
+          {durationSec > 0 && !showProgress && (
+            <div
+              className="absolute left-0 right-0 bottom-0 h-0.5 bg-white/10 cursor-pointer"
+              onPointerDown={() => revealProgress(3500)}
+              onClick={() => revealProgress(3500)}
+            />
           )}
           <div className="absolute left-3 right-auto max-w-[80%] text-white bg-black/40 backdrop-blur-sm rounded-md p-3 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
             <div className="text-sm font-semibold truncate">{sermon.title}</div>
@@ -677,6 +708,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               setMuted(next);
               try { if (v) { v.muted = next; if (!next) v.play().catch(() => {}); } } catch {}
               try { localStorage.setItem('sermonMuted', next ? '1' : '0'); } catch {}
+              try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: next } })); } catch {}
             }}
             className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
             aria-label={muted ? 'Unmute' : 'Mute'}
