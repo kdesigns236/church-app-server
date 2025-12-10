@@ -51,14 +51,27 @@ const CommunityFeedPage: React.FC = () => {
         if (Array.isArray(parsed)) {
           const now = Date.now();
           const dayMs = 24 * 60 * 60 * 1000;
-          const filtered = parsed.filter((s: any) => {
-            const ts = typeof s?.createdAt === 'number' ? s.createdAt : (typeof s?.id === 'number' ? s.id : undefined);
-            if (!ts) return false;
-            return now - ts <= dayMs;
-          });
-          try { localStorage.setItem('communityStories', JSON.stringify(filtered)); } catch {}
-          console.log('[CommunityFeed] Loaded communityStories from localStorage (active only):', filtered.length);
-          return filtered as Story[];
+          const toTs = (s: any): number | undefined => {
+            if (typeof s?.createdAt === 'number') return s.createdAt;
+            if (typeof s?.createdAt === 'string') { const t = Date.parse(s.createdAt); if (!isNaN(t)) return t; }
+            if (typeof s?.id === 'number') return s.id;
+            if (typeof s?.id === 'string' && /^\d{10,}$/.test(s.id)) return parseInt(s.id, 10);
+            return undefined;
+          };
+          const norm = parsed.map((s: any) => { const ts = toTs(s); return ts ? { ...s, createdAt: ts } : null; }).filter(Boolean);
+          const filtered = (norm as any[]).filter((s: any) => now - s.createdAt <= dayMs);
+          const byId = new Map<string, any>();
+          for (const s of filtered) {
+            const k = String((s as any).id);
+            const prev = byId.get(k);
+            if (!prev) byId.set(k, s); else {
+              const prefer = ((s as any).media && !(prev as any).media) ? s : (((s as any).type === 'video' && (prev as any).type !== 'video') ? s : (s.createdAt > prev.createdAt ? s : prev));
+              byId.set(k, prefer);
+            }
+          }
+          const deduped = Array.from(byId.values()).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+          try { localStorage.setItem('communityStories', JSON.stringify(deduped)); } catch {}
+          return deduped as Story[];
         }
         console.warn('[CommunityFeed] communityStories in localStorage was not an array, resetting.');
         return [];
@@ -367,21 +380,34 @@ const CommunityFeedPage: React.FC = () => {
         setStories(prev => {
           const now = Date.now();
           const dayMs = 24 * 60 * 60 * 1000;
-          const incoming = syncData.data;
-          const ts = typeof incoming?.createdAt === 'number' ? incoming.createdAt : (typeof incoming?.id === 'number' ? incoming.id : now);
+          const incoming = syncData.data || {};
+          let ts: number | undefined;
+          if (typeof incoming.createdAt === 'number') ts = incoming.createdAt;
+          else if (typeof incoming.createdAt === 'string') { const t = Date.parse(incoming.createdAt); if (!isNaN(t)) ts = t; }
+          else if (typeof incoming.id === 'number') ts = incoming.id; else if (typeof incoming.id === 'string' && /^\d{10,}$/.test(incoming.id)) ts = parseInt(incoming.id, 10);
+          ts = ts || now;
           if (now - ts > dayMs) return prev;
-          if (prev.find((s) => s.id === incoming.id)) return prev;
-          return [{ ...incoming, createdAt: ts }, ...prev];
+          const merged = [...prev];
+          const idx = merged.findIndex((s) => String(s.id) === String(incoming.id));
+          const next = { ...incoming, createdAt: ts } as Story;
+          if (idx === -1) merged.unshift(next); else {
+            const prevObj = merged[idx] as any;
+            const prefer = (next.media && !prevObj.media) ? next : ((next.type === 'video' && prevObj.type !== 'video') ? next : (next.createdAt > (prevObj.createdAt || 0) ? next : prevObj));
+            merged[idx] = prefer;
+          }
+          return merged;
         });
       } else if (syncData.action === 'update') {
-        setStories(prev =>
-          prev.map((s) => {
-            if (s.id !== syncData.data.id) return s;
-            const incoming = syncData.data;
-            const ts = typeof incoming?.createdAt === 'number' ? incoming.createdAt : (typeof incoming?.id === 'number' ? incoming.id : Date.now());
-            return { ...incoming, createdAt: ts } as Story;
-          }),
-        );
+        setStories(prev => {
+          const incoming = syncData.data || {};
+          let ts: number | undefined;
+          if (typeof incoming.createdAt === 'number') ts = incoming.createdAt;
+          else if (typeof incoming.createdAt === 'string') { const t = Date.parse(incoming.createdAt); if (!isNaN(t)) ts = t; }
+          else if (typeof incoming.id === 'number') ts = incoming.id; else if (typeof incoming.id === 'string' && /^\d{10,}$/.test(incoming.id)) ts = parseInt(incoming.id, 10);
+          const next = { ...incoming, createdAt: ts || Date.now() } as Story;
+          const arr = prev.map(s => String(s.id) === String(next.id) ? next : s);
+          return arr;
+        });
       } else if (syncData.action === 'delete') {
         setStories(prev => prev.filter((s) => s.id !== syncData.data.id));
       }
@@ -424,15 +450,23 @@ const CommunityFeedPage: React.FC = () => {
         if (Array.isArray(data) && data.length > 0) {
           const now = Date.now();
           const dayMs = 24 * 60 * 60 * 1000;
-          const sanitized = data
-            .map((d: any) => {
-              const ts = typeof d?.createdAt === 'number' ? d.createdAt : (typeof d?.id === 'number' ? d.id : now);
-              return { ...d, createdAt: ts } as Story;
-            })
-            .filter((s: Story) => now - (s.createdAt || now) <= dayMs);
-          const existing = Array.isArray(stories) ? stories : [];
-          const ids = new Set(existing.map(s => s.id));
-          const merged = [...existing, ...sanitized.filter((d: any) => d && !ids.has(d.id))];
+          const norm = data.map((d: any) => {
+            let ts: number | undefined;
+            if (typeof d?.createdAt === 'number') ts = d.createdAt;
+            else if (typeof d?.createdAt === 'string') { const t = Date.parse(d.createdAt); if (!isNaN(t)) ts = t; }
+            else if (typeof d?.id === 'number') ts = d.id; else if (typeof d?.id === 'string' && /^\d{10,}$/.test(d.id)) ts = parseInt(d.id, 10);
+            return { ...d, createdAt: ts || now } as Story;
+          }).filter((s: Story) => now - (s.createdAt || now) <= dayMs);
+          const byId = new Map<string, Story>();
+          [...stories, ...norm].forEach((s: any) => {
+            const k = String(s.id);
+            const prev = byId.get(k);
+            if (!prev) byId.set(k, s); else {
+              const prefer = (s.media && !prev.media) ? s : ((s.type === 'video' && prev.type !== 'video') ? s : (s.createdAt > (prev.createdAt || 0) ? s : prev));
+              byId.set(k, prefer);
+            }
+          });
+          const merged = Array.from(byId.values()).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
           setStories(merged);
           try { localStorage.setItem('communityStories', JSON.stringify(merged)); } catch {}
         }
@@ -459,11 +493,13 @@ const CommunityFeedPage: React.FC = () => {
     const tick = () => {
       const now = Date.now();
       setStories(prev => {
-        const filtered = (prev || []).filter(s => {
-          const ts = typeof s?.createdAt === 'number' ? s.createdAt : (typeof (s as any)?.id === 'number' ? (s as any).id : undefined);
-          if (!ts) return false;
-          return now - ts <= dayMs;
-        });
+        const filtered = (prev || []).map((s: any) => {
+          if (typeof s?.createdAt === 'number') return s;
+          if (typeof s?.createdAt === 'string') { const t = Date.parse(s.createdAt); if (!isNaN(t)) return { ...s, createdAt: t }; }
+          if (typeof s?.id === 'number') return { ...s, createdAt: s.id };
+          if (typeof s?.id === 'string' && /^\d{10,}$/.test(s.id)) return { ...s, createdAt: parseInt(s.id, 10) };
+          return s;
+        }).filter((s: any) => typeof s.createdAt === 'number' ? (now - s.createdAt <= dayMs) : true);
         return filtered.length === prev.length ? prev : filtered;
       });
     };

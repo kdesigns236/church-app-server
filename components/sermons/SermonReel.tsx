@@ -40,6 +40,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [currentSec, setCurrentSec] = useState(0);
   const [showHint, setShowHint] = useState(false);
   const hlsRef = useRef<any>(null);
+  const [showProgress, setShowProgress] = useState(false);
+  const progressHideRef = useRef<number | null>(null);
 
   const parseYouTubeId = (url: string): string | null => {
     try {
@@ -413,10 +415,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     };
   }, []);
 
-  // Compute best-fit strategy based on orientation/rotation (prefer contain in landscape to avoid side cropping)
+  // Compute best-fit strategy: fill screen in landscape; avoid zoom in portrait
   useEffect(() => {
-    setObjectFit((isLandscape || (rotation % 180 !== 0)) ? 'contain' : 'cover');
-  }, [isLandscape, rotation]);
+    setObjectFit(isLandscape ? 'cover' : 'contain');
+  }, [isLandscape]);
 
   const gcd = (a: number, b: number): number => {
     return b ? gcd(b, a % b) : Math.abs(a);
@@ -434,8 +436,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       const w = v.videoWidth || 0;
       const h = v.videoHeight || 0;
       if (!w || !h) return;
-      // In landscape or rotated 90/270, avoid cropping by using contain
-      const fit = (isLandscape || (rotation % 180 !== 0)) ? 'contain' : 'cover';
+      // Fill in landscape; fit in portrait
+      const fit = isLandscape ? 'cover' : 'contain';
       setObjectFit(fit);
     } catch {}
   };
@@ -523,6 +525,37 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
   const isFullScreenMode = isLandscape || rotation % 180 !== 0;
 
+  const revealProgress = (ms: number = 2800) => {
+    setShowProgress(true);
+    if (progressHideRef.current) window.clearTimeout(progressHideRef.current);
+    progressHideRef.current = window.setTimeout(() => setShowProgress(false), ms);
+  };
+
+  const seekFromClientX = (clientX: number) => {
+    const v = videoRef.current;
+    if (!v || !durationSec) return;
+    const bar = document.getElementById(`sermon-progress-${sermon.id}`);
+    if (!bar) return;
+    const rect = bar.getBoundingClientRect();
+    const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+    const pct = rect.width > 0 ? x / rect.width : 0;
+    const t = pct * durationSec;
+    try { v.currentTime = t; setCurrentSec(t); } catch {}
+  };
+
+  const onBarPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    seekFromClientX(e.clientX);
+    revealProgress(3500);
+  };
+  const onBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    seekFromClientX(e.clientX);
+    revealProgress(3500);
+  };
+
+  useEffect(() => {
+    return () => { if (progressHideRef.current) window.clearTimeout(progressHideRef.current); };
+  }, []);
+
   return (
     <div className="relative snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: 'var(--app-vw, 100vw)', height: 'var(--app-vh, 100vh)' }}>
       {embedType ? (
@@ -599,8 +632,18 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               }
             }}
           />
+          {(!isReady || isBuffering) && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+              <div className="h-10 w-10 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+            </div>
+          )}
           {durationSec > 0 && (
-            <div className="absolute left-0 right-0 bottom-0 h-1.5 bg-white/20">
+            <div
+              id={`sermon-progress-${sermon.id}`}
+              className="absolute left-0 right-0 bottom-0 h-2 bg-white/20 cursor-pointer"
+              onPointerDown={onBarPointerDown}
+              onClick={onBarClick}
+            >
               <div className="h-full bg-white" style={{ width: `${Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0))}%` }} />
             </div>
           )}
