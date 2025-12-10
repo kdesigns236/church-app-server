@@ -34,9 +34,8 @@ export function register(config?: Config) {
       return;
     }
 
-    window.addEventListener('load', () => {
-      const swUrl = `/service-worker.js`;
-
+    const swUrl = `/service-worker.js`;
+    const run = () => {
       if (isLocalhost) {
         checkValidServiceWorker(swUrl, config);
         navigator.serviceWorker.ready.then(() => {
@@ -45,7 +44,12 @@ export function register(config?: Config) {
       } else {
         registerValidSW(swUrl, config);
       }
-    });
+    };
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      run();
+    } else {
+      window.addEventListener('DOMContentLoaded', run);
+    }
   }
 }
 
