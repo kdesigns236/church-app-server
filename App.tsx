@@ -344,6 +344,19 @@ const App: React.FC = () => {
         }
     }, [user]);
 
+    useEffect(() => {
+        let cancelled = false;
+        const urls = ['/bible/en.json', '/bible/sw.json'];
+        const run = () => { urls.forEach((u) => { try { fetch(u).catch(() => {}); } catch {} }); };
+        run();
+        try {
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.ready.then(() => { if (!cancelled) run(); }).catch(() => {});
+            }
+        } catch {}
+        return () => { cancelled = true; };
+    }, []);
+
     // Listen for meeting notifications
     useEffect(() => {
         if (!isAuthenticated) return;
