@@ -167,6 +167,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
   }, [user]);
 
+  // Presence heartbeat every 25s while authenticated
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const sock = websocketService.getSocket();
+    const emitPing = () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (token && sock && sock.connected) sock.emit('presence:ping', { token });
+      } catch {}
+    };
+    emitPing();
+    const id = window.setInterval(emitPing, 25000);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, [user]);
+
 
 
   // Bootstrap full users list from server once (ensures we see everyone even before they come online)

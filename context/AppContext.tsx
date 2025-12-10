@@ -1379,24 +1379,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const addChatMessage = (messageData: { content?: string; media?: { url: string; type: 'image' | 'video' | 'audio'; }; replyTo?: ChatMessage; }, user: User) => {
         if (!messageData.content && !messageData.media) return;
-
+        const clientId = new Date().getTime().toString();
         const newMessage: ChatMessage = {
-            id: new Date().getTime().toString(),
+            id: clientId,
             userId: user.id,
             senderName: user.name,
             content: messageData.content,
             media: messageData.media,
-            timestamp: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+            timestamp: new Date().toISOString(),
             replyTo: messageData.replyTo,
         };
+        // Optimistic update
         setChatMessages(prev => [...prev, newMessage]);
-        
-        // Push to server for syncing
-        websocketService.pushUpdate({
-            type: 'chatMessages',
-            action: 'add',
-            data: newMessage
-        });
+        try {
+          const token = localStorage.getItem('authToken');
+          const sock = websocketService.getSocket();
+          if (token && sock && (sock as any).connected) {
+            sock.emit('chat:send', { token, content: newMessage.content, media: newMessage.media, replyTo: newMessage.replyTo, clientId });
+            return;
+          }
+        } catch {}
+        // Fallback to sync push if socket not ready
+        websocketService.pushUpdate({ type: 'chatMessages', action: 'add', data: newMessage });
     };
 
     const deleteChatMessage = (messageId: string) => {

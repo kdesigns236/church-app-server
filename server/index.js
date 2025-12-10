@@ -494,6 +494,74 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Fast chat: receive message via socket and broadcast immediately
+  socket.on('chat:send', (payload) => {
+    try {
+      if (!payload) return;
+      const { token, content, media, replyTo, clientId } = payload || {};
+      if (!token) return;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const userId = decoded.id;
+      if (!userId) return;
+
+      const users = dataStore.users || [];
+      const uIdx = users.findIndex(u => u.id === userId);
+      const senderName = uIdx !== -1 ? (users[uIdx].name || 'Member') : 'Member';
+
+      const msg = {
+        id: String(clientId || Date.now()),
+        userId,
+        senderName,
+        content: typeof content === 'string' ? content : undefined,
+        media: media && typeof media === 'object' ? media : undefined,
+        timestamp: new Date().toISOString(),
+        replyTo: replyTo && typeof replyTo === 'object' ? replyTo : undefined,
+      };
+
+      try {
+        if (!Array.isArray(dataStore.chatMessages)) dataStore.chatMessages = [];
+        // de-dupe by id
+        if (!dataStore.chatMessages.find((m) => String(m.id) === String(msg.id))) {
+          dataStore.chatMessages.push(msg);
+          saveData().catch(() => {});
+        }
+      } catch {}
+
+      // Send to others immediately (exclude sender)
+      socket.broadcast.emit('chat:new', msg);
+      // Also emit sync_update for clients relying on generic handler
+      broadcastUpdate({ type: 'chatMessages', action: 'add', data: msg });
+    } catch (err) {
+      console.error('[Chat] Error handling chat:send:', err?.message || err);
+    }
+  });
+
+  // Presence heartbeat: refresh lastSeen and ensure online
+  socket.on('presence:ping', ({ token }) => {
+    try {
+      if (!token) return;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const userId = decoded.id;
+      if (!userId) return;
+      // Associate socket with user if not already
+      if (!presenceUserMap.has(socket.id)) {
+        presenceUserMap.set(socket.id, userId);
+      }
+      const users = dataStore.users || [];
+      const index = users.findIndex(u => u.id === userId);
+      if (index === -1) return;
+      users[index].lastSeen = Date.now();
+      if (!users[index].isOnline) {
+        users[index].isOnline = true;
+        const { password, ...safeUser } = users[index];
+        broadcastUpdate({ type: 'users', action: 'update', data: safeUser });
+      }
+      // Avoid frequent disk writes: do not save on every ping
+    } catch (err) {
+      console.error('[Presence] Error handling presence:ping:', err?.message || err);
+    }
+  });
+
   // Explicit offline event from client (logout / app close)
   socket.on('user-offline', ({ token }) => {
     try {
@@ -1089,6 +1157,24 @@ app.get('/api/app-version', (req, res) => {
     releaseNotes: `âœ… JWT authentication enabled\nâœ… Socket.io real-time sync\nâœ… Health checks working`,
     forceUpdate: false // Set to true if old versions shouldn't work
   });
+});
+
+// Presence snapshot: list currently online user IDs (+ lastSeen if known)
+app.get('/api/online-users', (req, res) => {
+  try {
+    const ids = Array.from(new Set(Array.from(presenceUserMap.values())));
+    const lastSeen = {};
+    try {
+      const users = dataStore.users || [];
+      ids.forEach((id) => {
+        const u = users.find((x) => x.id === id);
+        if (u && u.lastSeen) lastSeen[id] = u.lastSeen;
+      });
+    } catch {}
+    res.json({ ids, lastSeen });
+  } catch {
+    res.json({ ids: [], lastSeen: {} });
+  }
 });
 
 app.post('/api/mobile-log', (req, res) => {
