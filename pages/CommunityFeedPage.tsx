@@ -102,15 +102,23 @@ const CommunityFeedPage: React.FC = () => {
   const [showSyncHint, setShowSyncHint] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
   const storyVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [currentVideoDurationMs, setCurrentVideoDurationMs] = useState<number | null>(null);
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
-    return story.type === 'video' ? 30000 : 5000;
+    if (story.type === 'video') {
+      // Use measured duration if available (cap at 30s), otherwise default 30s
+      return (viewingStory && story.id === viewingStory.id && currentVideoDurationMs)
+        ? currentVideoDurationMs
+        : 30000;
+    }
+    return 5000;
   };
 
   // Autoplay story video with sound when story changes (no controls)
   useEffect(() => {
     const v = storyVideoRef.current;
+    setCurrentVideoDurationMs(null);
     if (!v) return;
     try {
       v.muted = false;
@@ -349,7 +357,7 @@ const CommunityFeedPage: React.FC = () => {
     }, duration);
 
     return () => window.clearTimeout(timer);
-  }, [activeStoryIndex, viewingStory, currentStoryAuthor, stories]);
+  }, [activeStoryIndex, viewingStory, currentStoryAuthor, stories, currentVideoDurationMs]);
 
   useEffect(() => {
     const handleSyncUpdate = (syncData: any) => {
@@ -745,15 +753,34 @@ const CommunityFeedPage: React.FC = () => {
                   }}
                 >
                   {story.media && story.media.type === 'video' && (
-                    <video
-                      src={story.media.url}
-                      muted
-                      playsInline
-                      autoPlay
-                      loop
-                      preload="metadata"
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-                    />
+                    <>
+                      <video
+                        src={story.media.url}
+                        muted
+                        playsInline
+                        preload="metadata"
+                        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 8,
+                          top: 8,
+                          width: 26,
+                          height: 26,
+                          borderRadius: 9999,
+                          backgroundColor: 'rgba(0,0,0,0.6)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        ▶
+                      </div>
+                    </>
                   )}
                   <div
                     style={{
@@ -1826,6 +1853,19 @@ const CommunityFeedPage: React.FC = () => {
                     autoPlay
                     playsInline
                     preload="auto"
+                    onLoadedMetadata={(e) => {
+                      try {
+                        const v = e.currentTarget as HTMLVideoElement;
+                        const durMs = Math.min(30000, Math.max(1000, (isFinite(v.duration) ? v.duration : 0) * 1000));
+                        if (durMs && isFinite(durMs)) {
+                          setCurrentVideoDurationMs(durMs);
+                        }
+                      } catch {}
+                    }}
+                    onEnded={() => {
+                      // Advance immediately when the video ends, even if timer hasn't elapsed
+                      goToNextStory();
+                    }}
                     onTouchStart={() => storyVideoRef.current?.pause()}
                     onTouchEnd={() => storyVideoRef.current?.play()}
                     onPointerDown={() => storyVideoRef.current?.pause()}

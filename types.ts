@@ -94,6 +94,7 @@ export interface Sermon {
   isLiked: boolean;
   isSaved: boolean;
   fullSermonUrl?: string;
+  hlsUrl?: string;
   order?: number;
 }
 

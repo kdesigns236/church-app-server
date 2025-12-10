@@ -4,6 +4,7 @@ import { SermonReel } from '../components/sermons/SermonReel';
 import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
 import { Sermon } from '../types';
+import { safeBackgroundFetchService } from '../services/safeBackgroundFetchService';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeftIcon } from '../constants/icons';
 
@@ -99,6 +100,64 @@ const SermonsPage: React.FC = () => {
     const t = setTimeout(() => setInitialLoading(false), 6000);
     return () => clearTimeout(t);
   }, []);
+
+  // Immediately schedule background downloads (ordered, resumable) to have videos ready
+  const scheduledRef = useRef(false);
+  useEffect(() => {
+    if (scheduledRef.current) return;
+    if (!sortedSermons || sortedSermons.length === 0) return;
+    scheduledRef.current = true;
+    // Fire and forget; service handles interval/resume/locks
+    safeBackgroundFetchService.scheduleBackgroundFetch(sortedSermons).catch(() => {});
+  }, [sortedSermons.length]);
+
+  // Preconnect to video origins and preload the next video resource for faster starts
+  useEffect(() => {
+    const links: HTMLLinkElement[] = [];
+    const addPreconnect = (url: string) => {
+      try {
+        const u = new URL(url, window.location.href);
+        const el = document.createElement('link');
+        el.rel = 'preconnect';
+        el.href = u.origin;
+        el.crossOrigin = 'anonymous';
+        document.head.appendChild(el);
+        links.push(el);
+      } catch {}
+    };
+    const addPreload = (url: string) => {
+      try {
+        const el = document.createElement('link');
+        el.rel = 'preload';
+        (el as any).as = 'video';
+        el.href = url;
+        document.head.appendChild(el);
+        links.push(el);
+      } catch {}
+    };
+
+    const pickUrl = (s: Sermon): string | null => {
+      const c: any[] = [
+        (s as any)?.videoUrl,
+        (s as any)?.fullSermonUrl,
+        (s as any)?.video?.url,
+        (s as any)?.url,
+        (s as any)?.media?.url,
+      ];
+      for (const v of c) { if (typeof v === 'string' && /^https?:\/\//i.test(v)) return v; }
+      return null;
+    };
+
+    const ahead = [currentIndex, currentIndex + 1, currentIndex + 2].filter(i => i >= 0 && i < sortedSermons.length);
+    const urls = ahead.map(i => pickUrl(sortedSermons[i])).filter((u): u is string => !!u);
+    const origins = Array.from(new Set(urls.map((u) => { try { return new URL(u).origin; } catch { return ''; } }).filter(Boolean)));
+    // Preconnect all unique origins we’ll need shortly
+    origins.forEach(o => addPreconnect(o));
+    // Preload the next video resource specifically
+    if (urls[1]) addPreload(urls[1]);
+
+    return () => { links.forEach(l => { try { l.parentNode?.removeChild(l); } catch {} }); };
+  }, [currentIndex, sortedSermons]);
   
   // Get active sermon from sermons array (always up-to-date)
   const activeSermon = activeSermonId ? sortedSermons.find(s => s.id === activeSermonId) || null : null;

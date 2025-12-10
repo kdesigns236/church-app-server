@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Sermon } from '../../types';
-import { FaSyncAlt } from 'react-icons/fa';
+import { FaSyncAlt, FaVolumeMute, FaVolumeUp, FaArrowDown } from 'react-icons/fa';
 import { videoStorageService } from '../../services/videoStorageService';
 import { backgroundDownloadService } from '../../services/backgroundDownloadService';
 import { auth, storage } from '../../config/firebase';
@@ -36,6 +36,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [embedId, setEmbedId] = useState<string>('');
   const [muted, setMuted] = useState(true);
   const playPauseTimer = useRef<number | null>(null);
+  const [durationSec, setDurationSec] = useState(0);
+  const [currentSec, setCurrentSec] = useState(0);
+  const [showHint, setShowHint] = useState(false);
+  const hlsRef = useRef<any>(null);
 
   const parseYouTubeId = (url: string): string | null => {
     try {
@@ -67,6 +71,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (v.currentTime < 0.01) {
         try { v.currentTime = 0.01; } catch {}
       }
+      try {
+        setDurationSec(isFinite(v.duration) ? v.duration : 0);
+        setCurrentSec(v.currentTime || 0);
+      } catch {}
     } catch {}
   };
 
@@ -111,6 +119,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     let objectUrl: string | null = null;
     const pickSermonUrl = (s: any): string | null => {
       const candidates: any[] = [
+        s?.hlsUrl,
         s?.videoUrl,
         s?.video?.url,
         s?.video?.link,
@@ -153,18 +162,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             return;
           }
         }
-        // Set remote URL immediately for faster first frame (direct files)
-        if (typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
-          if (isMountedRef.current) setVideoSrc(rawUrl);
-        } else if (typeof rawUrl === 'string') {
-          // Try resolving Firebase Storage paths (gs://bucket/path or plain path)
-          const resolved = await resolveFirebaseDownloadUrl(rawUrl);
-          if (resolved && isMountedRef.current) {
-            setVideoSrc(resolved);
-            return;
-          }
-        }
-        // Prefer native-downloaded file if available
+        // Prefer native-downloaded file if available (fastest)
         if (sermon.id) {
           try {
             const localPath = await backgroundDownloadService.getWebSrcIfDownloaded(String(sermon.id));
@@ -179,16 +177,23 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         // Prefer cached offline video from IndexedDB if available
         if (sermon.id) {
           try {
-            console.log('[SermonReel] Checking for cached video for sermon', sermon.id);
             const cachedUrl = await videoStorageService.getVideoUrl(String(sermon.id));
             if (cachedUrl && isMountedRef.current) {
               objectUrl = cachedUrl;
               setVideoSrc(cachedUrl);
-              console.log('[SermonReel] Playing cached offline video for sermon', sermon.id);
               return;
             }
-          } catch (e) {
-            console.error('[SermonReel] Error checking cached video:', e);
+          } catch {}
+        }
+
+        // Remote URL fallback
+        if (typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
+          if (isMountedRef.current) setVideoSrc(rawUrl);
+        } else if (typeof rawUrl === 'string') {
+          const resolved = await resolveFirebaseDownloadUrl(rawUrl);
+          if (resolved && isMountedRef.current) {
+            setVideoSrc(resolved);
+            return;
           }
         }
 
@@ -269,6 +274,110 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     return () => { isMountedRef.current = false; };
   }, []);
 
+  // Preconnect and preload current video source to speed up starts
+  useEffect(() => {
+    if (!videoSrc) return;
+    let preconnectEl: HTMLLinkElement | null = null;
+    let preloadEl: HTMLLinkElement | null = null;
+    try {
+      const u = new URL(videoSrc, window.location.href);
+      preconnectEl = document.createElement('link');
+      preconnectEl.rel = 'preconnect';
+      preconnectEl.href = u.origin;
+      preconnectEl.crossOrigin = 'anonymous';
+      document.head.appendChild(preconnectEl);
+
+      preloadEl = document.createElement('link');
+      preloadEl.rel = 'preload';
+      (preloadEl as any).as = 'video';
+      preloadEl.href = videoSrc;
+      document.head.appendChild(preloadEl);
+    } catch {}
+    return () => {
+      try { if (preconnectEl && preconnectEl.parentNode) preconnectEl.parentNode.removeChild(preconnectEl); } catch {}
+      try { if (preloadEl && preloadEl.parentNode) preloadEl.parentNode.removeChild(preloadEl); } catch {}
+    };
+  }, [videoSrc]);
+
+  // HLS (.m3u8) fallback using hls.js with dynamic CDN load
+  useEffect(() => {
+    const v = videoRef.current;
+    const src = videoSrc;
+    if (!v || !src) return;
+    const isHls = /\.m3u8(\?.*)?$/i.test(src);
+    const canNative = v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl');
+    let scriptEl: HTMLScriptElement | null = null;
+    let cancelled = false;
+    const cleanup = () => {
+      try { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } } catch {}
+      try { if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl); } catch {}
+    };
+    if (!isHls) { cleanup(); return; }
+    if (canNative) {
+      try { v.src = src; } catch {}
+      return () => { /* native */ };
+    }
+    const attachHls = () => {
+      try {
+        if ((window as any).Hls && (window as any).Hls.isSupported()) {
+          const HlsCtor = (window as any).Hls;
+          const hls = new HlsCtor({ enableWorker: true, lowLatencyMode: true });
+          hlsRef.current = hls;
+          hls.attachMedia(v);
+          hls.on((window as any).Hls.Events.MEDIA_ATTACHED, () => {
+            if (cancelled) return;
+            try { hls.loadSource(src); } catch {}
+          });
+          return true;
+        }
+      } catch {}
+      return false;
+    };
+    if (!attachHls()) {
+      scriptEl = document.createElement('script');
+      scriptEl.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';
+      scriptEl.async = true;
+      scriptEl.onload = () => { if (!cancelled) attachHls(); };
+      document.head.appendChild(scriptEl);
+    }
+    return () => { cancelled = true; cleanup(); };
+  }, [videoSrc]);
+
+  // Load persisted mute preference (per device)
+  useEffect(() => {
+    try {
+      const m = localStorage.getItem('sermonMuted');
+      if (m === '0') setMuted(false);
+    } catch {}
+  }, []);
+
+  // First-visit scroll hint (one-time)
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem('sermonHintShown')) {
+        setShowHint(true);
+        const handler = () => {
+          setShowHint(false);
+          try { localStorage.setItem('sermonHintShown', '1'); } catch {}
+          try {
+            window.removeEventListener('pointerdown', handler, true);
+            window.removeEventListener('touchstart', handler, true);
+          } catch {}
+        };
+        try {
+          window.addEventListener('pointerdown', handler, true);
+          window.addEventListener('touchstart', handler, true);
+        } catch {}
+        return () => {
+          try {
+            window.removeEventListener('pointerdown', handler, true);
+            window.removeEventListener('touchstart', handler, true);
+          } catch {}
+        };
+      }
+    } catch {}
+  }, []);
+
   // Do not unload source on inactivity; just pause in the visibility effect below
 
   // Track orientation to adjust layout (fullscreen video in landscape)
@@ -304,9 +413,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     };
   }, []);
 
-  // Compute best-fit strategy based on intrinsic video dimensions and screen orientation
+  // Compute best-fit strategy based on orientation/rotation (prefer contain in landscape to avoid side cropping)
   useEffect(() => {
-    setObjectFit(isLandscape || rotation % 180 !== 0 ? 'cover' : 'contain');
+    setObjectFit((isLandscape || (rotation % 180 !== 0)) ? 'contain' : 'cover');
   }, [isLandscape, rotation]);
 
   const gcd = (a: number, b: number): number => {
@@ -325,7 +434,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       const w = v.videoWidth || 0;
       const h = v.videoHeight || 0;
       if (!w || !h) return;
-      const fit = (isLandscape || rotation % 180 !== 0) ? 'cover' : 'contain';
+      // In landscape or rotated 90/270, avoid cropping by using contain
+      const fit = (isLandscape || (rotation % 180 !== 0)) ? 'contain' : 'cover';
       setObjectFit(fit);
     } catch {}
   };
@@ -348,6 +458,14 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     };
     const handleWaiting = () => { setIsBuffering(true); };
     const handlePlaying = () => { setIsReady(true); setIsBuffering(false); };
+    const handleTimeUpdate = () => {
+      try {
+        const v = videoRef.current;
+        if (!v) return;
+        setCurrentSec(v.currentTime || 0);
+        if (!durationSec && isFinite(v.duration)) setDurationSec(v.duration);
+      } catch {}
+    };
 
     video.addEventListener('play', handlePlay);
     video.addEventListener('pause', handlePause);
@@ -355,6 +473,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     video.addEventListener('canplay', handleCanPlay);
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
+    video.addEventListener('timeupdate', handleTimeUpdate);
 
     return () => {
       video.removeEventListener('play', handlePlay);
@@ -363,8 +482,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       video.removeEventListener('canplay', handleCanPlay);
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
     };
-  }, [videoSrc]);
+  }, [videoSrc, durationSec]);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -453,7 +573,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             playsInline
             crossOrigin="anonymous"
             muted={muted}
-            src={videoSrc}
+            src={/\.m3u8(\?.*)?$/i.test(videoSrc) && !(videoRef.current && videoRef.current.canPlayType && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) ? undefined : videoSrc}
             preload={preloadHint}
             onLoadedMetadata={handleLoadedMetadata}
             aria-label={`Sermon titled ${sermon.title}`}
@@ -479,6 +599,11 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               }
             }}
           />
+          {durationSec > 0 && (
+            <div className="absolute left-0 right-0 bottom-0 h-1.5 bg-white/20">
+              <div className="h-full bg-white" style={{ width: `${Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0))}%` }} />
+            </div>
+          )}
           <div className="absolute left-3 right-auto max-w-[80%] text-white bg-black/40 backdrop-blur-sm rounded-md p-3 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
             <div className="text-sm font-semibold truncate">{sermon.title}</div>
             <div className="text-xs opacity-90 truncate">{sermon.pastor}</div>
@@ -500,6 +625,36 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           <FaSyncAlt className="w-5 h-5 text-white" />
         </button>
       </div>
+      {!embedType && videoSrc && (
+        <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4.25rem)' }}>
+          <button
+            onClick={() => {
+              const v = videoRef.current;
+              const next = !muted;
+              setMuted(next);
+              try { if (v) { v.muted = next; if (!next) v.play().catch(() => {}); } } catch {}
+              try { localStorage.setItem('sermonMuted', next ? '1' : '0'); } catch {}
+            }}
+            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
+            aria-label={muted ? 'Unmute' : 'Mute'}
+          >
+            {muted ? <FaVolumeMute className="w-5 h-5 text-white" /> : <FaVolumeUp className="w-5 h-5 text-white" />}
+          </button>
+        </div>
+      )}
+
+      {showHint && (
+        <div
+          className="absolute inset-x-0 bottom-8 z-30 flex flex-col items-center gap-2"
+          onClick={() => { setShowHint(false); try { localStorage.setItem('sermonHintShown', '1'); } catch {} }}
+          style={{ pointerEvents: 'auto' }}
+        >
+          <div className="rounded-full bg-black/60 border border-white/10 p-3 animate-bounce">
+            <FaArrowDown className="w-5 h-5 text-white" />
+          </div>
+          <div className="text-white text-xs bg-black/50 px-2 py-1 rounded-md">Scroll to navigate sermons</div>
+        </div>
+      )}
     </div>
   );
 };

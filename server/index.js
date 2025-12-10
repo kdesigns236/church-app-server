@@ -124,6 +124,15 @@ if (fs.existsSync(serverPublicDir)) {
   app.use(express.static(rootPublicDir, staticOptions));
 }
 
+const swSource = `
+const STATIC='static-v2',DATA='data-v2';
+self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil((async()=>{const c=await caches.open(STATIC);await c.addAll(['/','/index.html']);const optional=['/bible/en.json','/bible/sw.json'];await Promise.all(optional.map(u=>fetch(u).then(r=>{if(r&&r.ok)c.put(u,r.clone())}).catch(()=>{})));})())});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.map(k=>{if(k!==STATIC&&k!==DATA)return caches.delete(k)}))).then(()=>self.clients.claim()))});
+self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET')return;if(e.request.mode==='navigate'){e.respondWith(fetch(e.request).then(r=>{const c=r.clone();caches.open(STATIC).then(cc=>cc.put('/index.html',c));return r}).catch(()=>caches.match('/index.html')));return}if(u.pathname.startsWith('/api/')){e.respondWith(caches.open(DATA).then(cache=>cache.match(e.request).then(cached=>{const fetchP=fetch(e.request).then(r=>{cache.put(e.request,r.clone());return r});return cached?(fetchP.catch(()=>{}),cached):fetchP})));return}if(u.pathname.startsWith('/bible/')){e.respondWith(caches.match(e.request).then(cached=>cached||fetch(e.request).then(r=>{const rc=r.clone();caches.open(STATIC).then(cc=>cc.put(e.request,rc));return r})));return}if(u.pathname.includes('/assets/')||/\.(js|css|png|jpg|jpeg|gif|svg|webp|woff2?)$/i.test(u.pathname)){e.respondWith(caches.match(e.request).then(cached=>cached||fetch(e.request).then(r=>{const rc=r.clone();caches.open(STATIC).then(cc=>cc.put(e.request,rc));return r})));return}});
+`;
+
+app.get('/service-worker.js',(req,res)=>{res.setHeader('Cache-Control','no-store');res.type('application/javascript').send(swSource)});
+
 // Explicit Bible JSON routes so they are always available in deployment,
 // even if static middleware behaves differently on the host platform.
 const bibleEnServerPath = path.join(serverPublicDir, 'bible', 'en.json');

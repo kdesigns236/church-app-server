@@ -22,6 +22,13 @@ class ChunkedVideoDownloader {
   private dbVersion = 1;
   private db: IDBDatabase | null = null;
 
+  private setProgress(id: string, percent: number, bytesDone: number, totalBytes: number) {
+    try {
+      const payload = { id, percent: Math.max(0, Math.min(100, Math.floor(percent))), bytesDone, totalBytes, updatedAt: Date.now() };
+      localStorage.setItem('bgdl_progress', JSON.stringify(payload));
+    } catch {}
+  }
+
   private async init(): Promise<void> {
     if (this.db) return;
     await new Promise<void>((resolve, reject) => {
@@ -187,6 +194,9 @@ class ChunkedVideoDownloader {
     await this.putPartial(meta);
 
     const have = await this.getChunkIndices(id);
+    // Initial progress from existing chunks
+    const initialDone = Math.min(total, have.size * chunkSize);
+    this.setProgress(id, (initialDone / total) * 100, initialDone, total);
 
     for (let index = 0; index < totalChunks; index++) {
       if (have.has(index)) continue;
@@ -206,12 +216,15 @@ class ChunkedVideoDownloader {
         const ext = (mime.split('/') [1] || 'mp4');
         const file = new File([blob], `sermon-${id}.${ext}`, { type: mime });
         await videoStorageService.saveVideo(id, file);
+        this.setProgress(id, 100, total, total);
         await this.clearChunks(id);
         await this.deletePartial(id);
         return;
       }
       await this.putChunk(id, index, blob);
       await this.putPartial({ ...meta, lastUpdated: Date.now() });
+      const done = Math.min(total, Math.min((index + 1 + have.size) * chunkSize, total));
+      this.setProgress(id, (done / total) * 100, done, total);
       // Yield a little between chunks
       await new Promise((r) => setTimeout(r, 250));
     }
@@ -221,6 +234,7 @@ class ChunkedVideoDownloader {
     const ext = (mime.split('/')[1] || 'mp4');
     const file = new File([finalBlob], `sermon-${id}.${ext}`, { type: mime });
     await videoStorageService.saveVideo(id, file);
+    this.setProgress(id, 100, total, total);
 
     // Cleanup partials
     await this.clearChunks(id);

@@ -68,14 +68,14 @@ class WebSocketService {
     console.log('[WebSocket] Connecting to:', this.serverUrl);
 
     this.socket = io(this.serverUrl, {
-      // Prefer native WebSocket, fall back to polling when needed
-      transports: ['websocket', 'polling'],
-      upgrade: true,
+      // Force pure WebSocket to avoid noisy polling 400s on some networks
+      transports: ['websocket'],
+      upgrade: false,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 8000,
       reconnectionAttempts: this.maxReconnectAttempts,
-      timeout: 20000,
+      timeout: 30000,
       path: '/socket.io'
     });
 

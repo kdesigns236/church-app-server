@@ -108,6 +108,13 @@ function checkValidServiceWorker(swUrl: string, config?: Config) {
 
 export function unregister() {
   if ('serviceWorker' in navigator) {
+    try {
+      const isProd = !!((import.meta as any)?.env?.PROD);
+      if (isProd) {
+        register();
+        return;
+      }
+    } catch {}
     navigator.serviceWorker.ready
       .then((registration) => {
         registration.unregister();
