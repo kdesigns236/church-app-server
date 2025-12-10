@@ -127,8 +127,8 @@ if (fs.existsSync(serverPublicDir)) {
 }
 
 const swSource = `
-const STATIC='static-v3',DATA='data-v3';
-self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil((async()=>{const c=await caches.open(STATIC);await c.addAll(['/','/index.html']);const dc=await caches.open(DATA);const prim=['/api/sermons','/api/site-content','/api/sync/data'];await Promise.all(prim.map(u=>fetch(u).then(r=>{if(r&&r.ok)dc.put(u,r.clone())}).catch(()=>{})));const optional=['/bible/en.json','/bible/sw.json'];await Promise.all(optional.map(u=>fetch(u).then(r=>{if(r&&r.ok)c.put(u,r.clone())}).catch(()=>{})));})())});
+const STATIC='static-v4',DATA='data-v4';
+self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil((async()=>{const c=await caches.open(STATIC);await c.addAll(['/','/index.html']);const dc=await caches.open(DATA);const prim=['/api/sermons','/api/site-content','/api/sync/data','/api/announcements','/api/events'];await Promise.all(prim.map(u=>fetch(u).then(r=>{if(r&&r.ok)dc.put(u,r.clone())}).catch(()=>{})));const optional=['/bible/en.json','/bible/sw.json'];await Promise.all(optional.map(u=>fetch(u).then(r=>{if(r&&r.ok)c.put(u,r.clone())}).catch(()=>{})));})())});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.map(k=>{if(k!==STATIC&&k!==DATA)return caches.delete(k)}))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{const u=new URL(e.request.url);if(e.request.method!=='GET')return;if(e.request.mode==='navigate'){e.respondWith(fetch(e.request).then(r=>{const c=r.clone();caches.open(STATIC).then(cc=>cc.put('/index.html',c));return r}).catch(()=>caches.match('/index.html')));return}if(u.pathname==='/api/sync/data'){e.respondWith((async()=>{const cache=await caches.open(DATA);const cached=await cache.match(e.request);const fetchP=fetch(e.request).then(r=>{cache.put(e.request,r.clone());return r}).catch(()=>null);if(cached){fetchP&&fetchP.catch(()=>{});return cached;}const [sRes,scRes]=await Promise.all([cache.match('/api/sermons'),cache.match('/api/site-content')]);if(sRes||scRes){let s=[],sc={};try{s=sRes?await sRes.json():[]}catch{}try{sc=scRes?await scRes.json():{}}catch{}const body=JSON.stringify({sermons:s,siteContent:sc});return new Response(body,{headers:{'Content-Type':'application/json'}});}if(fetchP){const r=await fetchP;if(r)return r;}return new Response('{}',{status:503});})());return}if(u.pathname.startsWith('/api/')){e.respondWith(caches.open(DATA).then(cache=>cache.match(e.request).then(cached=>{const fetchP=fetch(e.request).then(r=>{cache.put(e.request,r.clone());return r});return cached?(fetchP.catch(()=>{}),cached):fetchP})));return}if(u.pathname.startsWith('/bible/')){e.respondWith(caches.match(e.request).then(cached=>cached||fetch(e.request).then(r=>{const rc=r.clone();caches.open(STATIC).then(cc=>cc.put(e.request,rc));return r})));return}if(u.pathname.includes('/assets/')||/\.(js|css|png|jpg|jpeg|gif|svg|webp|woff2?)$/i.test(u.pathname)){e.respondWith(caches.match(e.request).then(cached=>cached||fetch(e.request).then(r=>{const rc=r.clone();caches.open(STATIC).then(cc=>cc.put(e.request,rc));return r})));return}});
 `;
@@ -1125,6 +1125,20 @@ app.post('/api/mobile-log', (req, res) => {
         .catch(err => {
           console.error('[Server] Background initialization error:', err);
         });
+
+      try {
+        const keepAliveEnabled = ((process.env.KEEPALIVE_ENABLED && (String(process.env.KEEPALIVE_ENABLED).toLowerCase() === 'true' || process.env.KEEPALIVE_ENABLED === '1')) || (process.env.NODE_ENV === 'production' && !process.env.KEEPALIVE_ENABLED));
+        if (keepAliveEnabled) {
+          const intervalMsRaw = parseInt(process.env.KEEPALIVE_INTERVAL_MS || '300000', 10);
+          const intervalMs = isNaN(intervalMsRaw) ? 300000 : intervalMsRaw;
+          setInterval(() => {
+            try { http.get(`http://localhost:${PORT}/api/health`, (r) => { try { r.resume(); } catch {} }).on('error', () => {}); } catch {}
+          }, intervalMs);
+          setTimeout(() => {
+            try { http.get(`http://localhost:${PORT}/api/health`, (r) => { try { r.resume(); } catch {} }).on('error', () => {}); } catch {}
+          }, 10000);
+        }
+      } catch {}
     });
   } catch (error) {
     console.error('[Server] Failed to start server:', error);
