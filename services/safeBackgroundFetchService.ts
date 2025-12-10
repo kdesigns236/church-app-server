@@ -65,6 +65,7 @@ class SafeBackgroundFetchService {
       }
 
       const cfg = this.getConfig();
+      if (!cfg.enabled) { this.running = false; return false; }
 
       const connection: any = (navigator as any).connection;
       const effective: string | undefined = connection?.effectiveType;

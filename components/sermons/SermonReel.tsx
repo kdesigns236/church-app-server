@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Sermon } from '../../types';
-import { FaSyncAlt, FaVolumeMute, FaVolumeUp, FaArrowDown } from 'react-icons/fa';
+import { FaSyncAlt, FaVolumeMute, FaVolumeUp, FaArrowDown, FaExpand, FaCompress } from 'react-icons/fa';
 import { videoStorageService } from '../../services/videoStorageService';
 import { backgroundDownloadService } from '../../services/backgroundDownloadService';
 import { auth, storage } from '../../config/firebase';
@@ -42,6 +42,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const hlsRef = useRef<any>(null);
   const [showProgress, setShowProgress] = useState(false);
   const progressHideRef = useRef<number | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const parseYouTubeId = (url: string): string | null => {
     try {
@@ -359,12 +361,18 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         const next = !!(e?.detail?.muted);
         setMuted(next);
         const v = videoRef.current;
-        if (v) { v.muted = next; if (!next) v.play().catch(() => {}); }
+        if (v) {
+          v.muted = next;
+          if (!next) {
+            if (isActive) v.play().catch(() => {});
+            else { try { v.pause(); } catch {} }
+          }
+        }
       } catch {}
     };
     window.addEventListener('sermon-mute-changed', handler as any);
     return () => window.removeEventListener('sermon-mute-changed', handler as any);
-  }, []);
+  }, [isActive]);
 
   // First-visit scroll hint (one-time)
   useEffect(() => {
@@ -579,7 +587,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   }, []);
 
   return (
-    <div className="relative snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: 'var(--app-vw, 100vw)', height: 'var(--app-vh, 100vh)' }}>
+    <div ref={wrapperRef} className="relative snap-start snap-always bg-black flex items-center justify-center overflow-hidden" style={{ width: 'var(--app-vw, 100vw)', height: 'var(--app-vh, 100vh)' }}>
       {embedType ? (
         <div className="relative w-full h-full flex items-center justify-center">
           {embedType === 'youtube' && (
@@ -699,6 +707,30 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           <FaSyncAlt className="w-5 h-5 text-white" />
         </button>
       </div>
+      {/* Fullscreen toggle (landscape only) */}
+      {isLandscape && !embedType && videoSrc && (
+        <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 2.75rem)' }}>
+          <button
+            onClick={async () => {
+              try {
+                const el: any = wrapperRef.current;
+                if (!document.fullscreenElement) {
+                  if (el?.requestFullscreen) await el.requestFullscreen();
+                  else if (videoRef.current && (videoRef.current as any).webkitEnterFullscreen) (videoRef.current as any).webkitEnterFullscreen();
+                  setIsFullscreen(true);
+                } else {
+                  if (document.exitFullscreen) await document.exitFullscreen();
+                  setIsFullscreen(false);
+                }
+              } catch {}
+            }}
+            className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
+            aria-label={isFullscreen ? 'Exit full screen' : 'Enter full screen'}
+          >
+            {isFullscreen ? <FaCompress className="w-5 h-5 text-white" /> : <FaExpand className="w-5 h-5 text-white" />}
+          </button>
+        </div>
+      )}
       {!embedType && videoSrc && (
         <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4.25rem)' }}>
           <button
