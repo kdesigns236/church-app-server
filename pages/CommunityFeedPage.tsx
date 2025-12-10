@@ -111,6 +111,7 @@ const CommunityFeedPage: React.FC = () => {
   const [viewingStory, setViewingStory] = useState<Story | null>(null);
   const [activeStoryIndex, setActiveStoryIndex] = useState<number | null>(null);
   const [currentStoryAuthor, setCurrentStoryAuthor] = useState<string | null>(null);
+  const [currentStoryAuthorId, setCurrentStoryAuthorId] = useState<string | undefined>(undefined);
   const [activePostMenuId, setActivePostMenuId] = useState<number | null>(null);
   const [showSyncHint, setShowSyncHint] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
@@ -227,6 +228,27 @@ const CommunityFeedPage: React.FC = () => {
   const otherStories = user ? stories.filter((s) => (s.authorId ? s.authorId !== user.id : s.author !== user.name)) : stories;
   const hasMyStories = myStories.length > 0;
   const latestMyStory = hasMyStories ? myStories[0] : null;
+  const myImageStory = myStories.find(s => (s.media && s.media.type === 'image') || s.type === 'photo');
+  const myVideoStory = myStories.find(s => (s.media && s.media.type === 'video') || s.type === 'video');
+
+  const otherGroups = React.useMemo(() => {
+    const map = new Map<string, { author: string; authorId?: string; stories: Story[]; latestTs: number }>();
+    for (const s of otherStories) {
+      const key = s.authorId ? `id:${s.authorId}` : `name:${s.author}`;
+      const entry = map.get(key);
+      if (entry) {
+        entry.stories.push(s);
+        const ts = s.createdAt || 0;
+        if (ts > entry.latestTs) entry.latestTs = ts;
+      } else {
+        map.set(key, { author: s.author, authorId: s.authorId, stories: [s], latestTs: s.createdAt || 0 });
+      }
+    }
+    const arr = Array.from(map.values());
+    arr.forEach((g) => g.stories.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+    arr.sort((a, b) => b.latestTs - a.latestTs);
+    return arr;
+  }, [otherStories]);
 
   const handleLike = (postId: number) => {
     handlePostInteraction(postId, 'like');
@@ -291,11 +313,12 @@ const CommunityFeedPage: React.FC = () => {
   };
 
   const viewStory = (story: Story) => {
-    const authorStories = stories.filter((s) => s.author === story.author);
+    const authorStories = stories.filter((s) => (story.authorId ? s.authorId === story.authorId : s.author === story.author));
     const indexInAuthor = authorStories.findIndex((s) => s.id === story.id);
     if (indexInAuthor === -1) return;
 
     setCurrentStoryAuthor(story.author);
+    setCurrentStoryAuthorId(story.authorId);
     setActiveStoryIndex(indexInAuthor);
     setViewingStory(story);
     setStories((prev) =>
@@ -307,11 +330,12 @@ const CommunityFeedPage: React.FC = () => {
     setViewingStory(null);
     setActiveStoryIndex(null);
     setCurrentStoryAuthor(null);
+    setCurrentStoryAuthorId(undefined);
   };
 
   const goToNextStory = () => {
     if (!currentStoryAuthor || activeStoryIndex === null) return;
-    const authorStories = stories.filter((s) => s.author === currentStoryAuthor);
+    const authorStories = stories.filter((s) => (currentStoryAuthorId ? s.authorId === currentStoryAuthorId : s.author === currentStoryAuthor));
     if (authorStories.length === 0) return;
 
     const nextIndex = activeStoryIndex + 1;
@@ -329,7 +353,7 @@ const CommunityFeedPage: React.FC = () => {
 
   const goToPreviousStory = () => {
     if (!currentStoryAuthor || activeStoryIndex === null) return;
-    const authorStories = stories.filter((s) => s.author === currentStoryAuthor);
+    const authorStories = stories.filter((s) => (currentStoryAuthorId ? s.authorId === currentStoryAuthorId : s.author === currentStoryAuthor));
     if (authorStories.length === 0) return;
 
     const prevIndex = activeStoryIndex - 1;
@@ -349,7 +373,7 @@ const CommunityFeedPage: React.FC = () => {
   useEffect(() => {
     if (activeStoryIndex === null || !viewingStory || !currentStoryAuthor) return;
 
-    const authorStories = stories.filter((s) => s.author === currentStoryAuthor);
+    const authorStories = stories.filter((s) => (currentStoryAuthorId ? s.authorId === currentStoryAuthorId : s.author === currentStoryAuthor));
     if (authorStories.length === 0) return;
 
     const duration = getStoryDurationMs(viewingStory);
@@ -370,7 +394,7 @@ const CommunityFeedPage: React.FC = () => {
     }, duration);
 
     return () => window.clearTimeout(timer);
-  }, [activeStoryIndex, viewingStory, currentStoryAuthor, stories, currentVideoDurationMs]);
+  }, [activeStoryIndex, viewingStory, currentStoryAuthor, currentStoryAuthorId, stories, currentVideoDurationMs]);
 
   useEffect(() => {
     const handleSyncUpdate = (syncData: any) => {
@@ -392,7 +416,9 @@ const CommunityFeedPage: React.FC = () => {
           const next = { ...incoming, createdAt: ts } as Story;
           if (idx === -1) merged.unshift(next); else {
             const prevObj = merged[idx] as any;
-            const prefer = (next.media && !prevObj.media) ? next : ((next.type === 'video' && prevObj.type !== 'video') ? next : (next.createdAt > (prevObj.createdAt || 0) ? next : prevObj));
+            const nextTs = (next as any).createdAt || 0;
+            const prevTs = (prevObj as any).createdAt || 0;
+            const prefer = (next.media && !prevObj.media) ? next : ((next.type === 'video' && prevObj.type !== 'video') ? next : (nextTs > prevTs ? next : prevObj));
             merged[idx] = prefer;
           }
           return merged;
@@ -662,14 +688,75 @@ const CommunityFeedPage: React.FC = () => {
               <div
                 style={{
                   height: '70%',
+                  position: 'relative',
                   background:
-                    latestMyStory &&
-                    latestMyStory.media &&
-                    latestMyStory.media.type === 'image'
-                      ? `url(${latestMyStory.media.url}) center/cover no-repeat`
-                      : 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)',
+                    !myImageStory && !myVideoStory
+                      ? 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)'
+                      : (myImageStory && !myVideoStory ? `url(${(myImageStory.media as any)?.url || ''}) center/cover no-repeat` : 'transparent'),
                 }}
-              />
+              >
+                {myImageStory && myVideoStory && (
+                  <>
+                    <div style={{ position: 'absolute', inset: 0, background: `url(${(myImageStory.media as any)?.url || ''}) center/cover no-repeat` }} />
+                    <video
+                      src={(myVideoStory.media as any)?.url || '' }
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{ position: 'absolute', right: 6, top: 6, width: '45%', height: '45%', objectFit: 'cover', borderRadius: 8, border: '2px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 10,
+                        top: 10,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 9999,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      ▶
+                    </div>
+                  </>
+                )}
+                {myVideoStory && !myImageStory && (
+                  <>
+                    <video
+                      src={(myVideoStory.media as any)?.url || '' }
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                    />
+                    <div
+                      style={{
+                        position: 'absolute',
+                        right: 8,
+                        top: 8,
+                        width: 24,
+                        height: 24,
+                        borderRadius: 9999,
+                        backgroundColor: 'rgba(0,0,0,0.6)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: 'white',
+                        fontSize: 12,
+                        fontWeight: 700,
+                      }}
+                    >
+                      ▶
+                    </div>
+                  </>
+                )}
+              </div>
               <div
                 style={{
                   position: 'absolute',
@@ -759,10 +846,16 @@ const CommunityFeedPage: React.FC = () => {
               </div>
             </div>
 
-            {otherStories.map((story) => (
+            {otherGroups.map((g) => {
+              const latest = g.stories[0];
+              const imageStory = g.stories.find(s => (s.media && s.media.type === 'image') || s.type === 'photo');
+              const videoStory = g.stories.find(s => (s.media && s.media.type === 'video') || s.type === 'video');
+              const anyViewed = g.stories.some(s => s.viewed);
+              const avatarInitial = (g.author || '').trim().charAt(0).toUpperCase() || '?';
+              return (
               <div
-                key={story.id}
-                onClick={() => viewStory(story)}
+                key={g.authorId ? `id:${g.authorId}` : `name:${g.author}`}
+                onClick={() => viewStory(latest)}
                 style={{
                   minWidth: '110px',
                   height: '190px',
@@ -778,20 +871,50 @@ const CommunityFeedPage: React.FC = () => {
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    opacity: story.viewed ? 0.7 : 1,
+                    opacity: anyViewed ? 0.7 : 1,
                     display: 'flex',
                     alignItems: 'flex-end',
                     padding: '8px',
-                    background:
-                      story.media && story.media.type === 'image'
-                        ? `url(${story.media.url}) center/cover no-repeat`
-                        : 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)',
+                    background: !imageStory && !videoStory
+                      ? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)'
+                      : (imageStory && !videoStory ? `url(${(imageStory.media as any)?.url || ''}) center/cover no-repeat` : 'transparent'),
                   }}
                 >
-                  {story.media && story.media.type === 'video' && (
+                  {imageStory && videoStory && (
+                    <>
+                      <div style={{ position: 'absolute', inset: 0, background: `url(${(imageStory.media as any)?.url || ''}) center/cover no-repeat` }} />
+                      <video
+                        src={(videoStory.media as any)?.url || '' }
+                        muted
+                        playsInline
+                        preload="metadata"
+                        style={{ position: 'absolute', right: 8, top: 8, width: '45%', height: '45%', objectFit: 'cover', borderRadius: 8, border: '2px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' }}
+                      />
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 12,
+                          top: 12,
+                          width: 24,
+                          height: 24,
+                          borderRadius: 9999,
+                          backgroundColor: 'rgba(0,0,0,0.6)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'white',
+                          fontSize: 12,
+                          fontWeight: 700,
+                        }}
+                      >
+                        ▶
+                      </div>
+                    </>
+                  )}
+                  {videoStory && !imageStory && (
                     <>
                       <video
-                        src={story.media.url}
+                        src={(videoStory.media as any)?.url || '' }
                         muted
                         playsInline
                         preload="metadata"
@@ -850,10 +973,10 @@ const CommunityFeedPage: React.FC = () => {
                             overflow: 'hidden',
                           }}
                         >
-                          {getUserProfilePicture(story.authorId, story.author) ? (
+                          {getUserProfilePicture(g.authorId, g.author) ? (
                             <img
-                              src={getUserProfilePicture(story.authorId, story.author) as string}
-                              alt={story.author}
+                              src={getUserProfilePicture(g.authorId, g.author) as string}
+                              alt={g.author}
                               style={{
                                 width: '100%',
                                 height: '100%',
@@ -869,12 +992,12 @@ const CommunityFeedPage: React.FC = () => {
                                 fontSize: 13,
                               }}
                             >
-                              {story.avatar}
+                              {avatarInitial}
                             </span>
                           )}
                         </div>
                         <span
-                          aria-label={isUserOnline(story.authorId, story.author) ? 'Online' : 'Offline'}
+                          aria-label={isUserOnline(g.authorId, g.author) ? 'Online' : 'Offline'}
                           style={{
                             position: 'absolute',
                             right: -2,
@@ -882,7 +1005,7 @@ const CommunityFeedPage: React.FC = () => {
                             width: 9,
                             height: 9,
                             borderRadius: 9999,
-                            backgroundColor: isUserOnline(story.authorId, story.author) ? '#10b981' : '#9ca3af',
+                            backgroundColor: isUserOnline(g.authorId, g.author) ? '#10b981' : '#9ca3af',
                             border: '2px solid rgba(255,255,255,0.9)',
                           }}
                         />
@@ -895,27 +1018,13 @@ const CommunityFeedPage: React.FC = () => {
                           textShadow: '0 1px 2px rgba(0,0,0,0.6)',
                         }}
                       >
-                        {story.author}
+                        {g.author}
                       </span>
                     </div>
-                    {story.content && (
-                      <p
-                        style={{
-                          margin: 0,
-                          fontSize: 11,
-                          color: 'white',
-                          maxHeight: 32,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                        }}
-                      >
-                        {story.content}
-                      </p>
-                    )}
                   </div>
                 </div>
               </div>
-            ))}
+              ); })}
           </div>
         </div>
 
