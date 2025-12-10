@@ -211,8 +211,8 @@ const SermonsPage: React.FC = () => {
       {/* Reels Container */}
       <div 
         ref={containerRef}
-        className="reel-container h-screen w-screen bg-black overflow-y-scroll snap-y snap-mandatory scrollbar-hide" 
-        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch', height: 'var(--app-vh, 100vh)', width: 'var(--app-vw, 100vw)' }}
+        className="reel-container fixed inset-0 bg-black overflow-y-auto overscroll-contain snap-y snap-mandatory scrollbar-hide" 
+        style={{ scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch' }}
         onPointerDown={handleUserInteraction}
         onTouchStart={handleUserInteraction}
       >

@@ -52,136 +52,105 @@ const BiblePage: React.FC = () => {
 
     const navigate = useNavigate();
 
-    // Initial data load
-    useEffect(() => {
-        // This effect runs once on component mount to load the default language Bible
-        fetch(`/bible/en.json`)
-            .then(res => res.json())
-            .then((data: BibleData) => {
-                setBible(data);
-                
-                if (isNewFormat(data)) {
-                    // New format (sw.json)
-                    const bookList = data.BIBLEBOOK.map((book, idx) => ({
-                        name: book.book_name,
-                        number: book.book_number || String(idx + 1)
+    const timedFetch = async (url: string, timeoutMs = 10000): Promise<Response> => {
+        const controller = new AbortController();
+        const t = window.setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const res = await fetch(url, { signal: controller.signal });
+            return res;
+        } finally {
+            window.clearTimeout(t);
+        }
+    };
+
+    const applyBibleData = (data: BibleData) => {
+        setBible(data);
+        if (isNewFormat(data)) {
+            const bookList = data.BIBLEBOOK.map((book, idx) => ({
+                name: book.book_name,
+                number: book.book_number || String(idx + 1)
+            }));
+            setBooks(bookList);
+            if (bookList.length > 0) {
+                setSelectedBook(bookList[0]);
+                const firstBook = data.BIBLEBOOK[0];
+                const chapterList = firstBook.CHAPTER.map(ch => ch.chapter_number);
+                setChapters(chapterList);
+                if (chapterList.length > 0) {
+                    setSelectedChapter(chapterList[0]);
+                    const verseList = firstBook.CHAPTER[0].VERSES.map(v => ({
+                        number: v.verse_number,
+                        text: v.verse_text
                     }));
-                    setBooks(bookList);
-                    if (bookList.length > 0) {
-                        setSelectedBook(bookList[0]);
-                        const firstBook = data.BIBLEBOOK[0];
-                        const chapterList = firstBook.CHAPTER.map(ch => ch.chapter_number);
-                        setChapters(chapterList);
-                        if (chapterList.length > 0) {
-                            setSelectedChapter(chapterList[0]);
-                            const verseList = firstBook.CHAPTER[0].VERSES.map(v => ({
-                                number: v.verse_number,
-                                text: v.verse_text
-                            }));
-                            setVerses(verseList);
-                        }
-                    }
-                } else {
-                    // Old format (en.json)
-                    const bookList = Object.keys(data).map((bookName, idx) => ({
-                        name: bookName,
-                        number: String(idx + 1)
+                    setVerses(verseList);
+                }
+            }
+        } else {
+            const bookList = Object.keys(data).map((bookName, idx) => ({
+                name: bookName,
+                number: String(idx + 1)
+            }));
+            setBooks(bookList);
+            if (bookList.length > 0) {
+                setSelectedBook(bookList[0]);
+                const firstBookName = bookList[0].name;
+                const chapterList = Object.keys((data as OldBibleData)[firstBookName]);
+                setChapters(chapterList);
+                if (chapterList.length > 0) {
+                    setSelectedChapter(chapterList[0]);
+                    const verseData = (data as OldBibleData)[firstBookName][chapterList[0]];
+                    const verseList = Object.entries(verseData).map(([num, text]) => ({
+                        number: num,
+                        text: text as string
                     }));
-                    setBooks(bookList);
-                    if (bookList.length > 0) {
-                        setSelectedBook(bookList[0]);
-                        const firstBookName = bookList[0].name;
-                        const chapterList = Object.keys(data[firstBookName]);
-                        setChapters(chapterList);
-                        if (chapterList.length > 0) {
-                            setSelectedChapter(chapterList[0]);
-                            const verseData = data[firstBookName][chapterList[0]];
-                            const verseList = Object.entries(verseData).map(([num, text]) => ({
-                                number: num,
-                                text: text
-                            }));
-                            setVerses(verseList);
-                        }
+                    setVerses(verseList);
+                }
+            }
+        }
+    };
+
+    const loadBible = async (lang: Language) => {
+        try {
+            setIsLoading(true);
+            setError(null);
+            let applied = false;
+            try {
+                const hasCaches = typeof caches !== 'undefined' && caches.open;
+                if (hasCaches) {
+                    const match = await caches.match(`/bible/${lang}.json`);
+                    if (match) {
+                        const data = await match.json();
+                        applyBibleData(data);
+                        applied = true;
+                        setIsLoading(false);
                     }
                 }
+            } catch {}
+            try {
+                const res = await timedFetch(`/bible/${lang}.json`, 10000);
+                if (!res.ok) throw new Error('Network');
+                const data = await res.json();
+                applyBibleData(data);
                 setIsLoading(false);
-            })
-            .catch(err => {
-                console.error("Initial load failed:", err);
-                setError("Failed to load Bible data.");
-                setIsLoading(false);
-            });
+                return;
+            } catch (e: any) {
+                if (!applied) {
+                    setError('Failed to load Bible data.');
+                    setBible(null);
+                    setBooks([]);
+                    setSelectedBook(null);
+                    setIsLoading(false);
+                }
+            }
+        } catch {}
+    };
+
+    useEffect(() => {
+        loadBible('en');
     }, []);
 
-    // Fetch Bible data when language changes
     useEffect(() => {
-        setIsLoading(true);
-        setError(null);
-        fetch(`/bible/${language}.json`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Could not load Bible text. Please make sure the file '/public/bible/${language}.json' exists and is correctly formatted.`);
-                }
-                return response.json();
-            })
-            .then((data: BibleData) => {
-                setBible(data);
-                
-                if (isNewFormat(data)) {
-                    // New format (sw.json)
-                    const bookList = data.BIBLEBOOK.map((book, idx) => ({
-                        name: book.book_name,
-                        number: book.book_number || String(idx + 1)
-                    }));
-                    setBooks(bookList);
-                    if (bookList.length > 0) {
-                        setSelectedBook(bookList[0]);
-                        const firstBook = data.BIBLEBOOK[0];
-                        const chapterList = firstBook.CHAPTER.map(ch => ch.chapter_number);
-                        setChapters(chapterList);
-                        if (chapterList.length > 0) {
-                            setSelectedChapter(chapterList[0]);
-                            const verseList = firstBook.CHAPTER[0].VERSES.map(v => ({
-                                number: v.verse_number,
-                                text: v.verse_text
-                            }));
-                            setVerses(verseList);
-                        }
-                    }
-                } else {
-                    // Old format (en.json)
-                    const bookList = Object.keys(data).map((bookName, idx) => ({
-                        name: bookName,
-                        number: String(idx + 1)
-                    }));
-                    setBooks(bookList);
-                    if (bookList.length > 0) {
-                        setSelectedBook(bookList[0]);
-                        const firstBookName = bookList[0].name;
-                        const chapterList = Object.keys(data[firstBookName]);
-                        setChapters(chapterList);
-                        if (chapterList.length > 0) {
-                            setSelectedChapter(chapterList[0]);
-                            const verseData = data[firstBookName][chapterList[0]];
-                            const verseList = Object.entries(verseData).map(([num, text]) => ({
-                                number: num,
-                                text: text
-                            }));
-                            setVerses(verseList);
-                        }
-                    }
-                }
-                return data;
-            })
-            .catch(err => {
-                console.error("Error loading bible data:", err);
-                setError(err.message);
-                setBible(null);
-                setBooks([]);
-                setSelectedBook(null);
-                return null; // Return null to prevent further .then() calls
-            })
-            .finally(() => setIsLoading(false));
+        loadBible(language);
     }, [language]);
 
     // Update chapters when selected book changes
