@@ -228,8 +228,6 @@ const CommunityFeedPage: React.FC = () => {
   const otherStories = user ? stories.filter((s) => (s.authorId ? s.authorId !== user.id : s.author !== user.name)) : stories;
   const hasMyStories = myStories.length > 0;
   const latestMyStory = hasMyStories ? myStories[0] : null;
-  const myImageStory = myStories.find(s => (s.media && s.media.type === 'image') || s.type === 'photo');
-  const myVideoStory = myStories.find(s => (s.media && s.media.type === 'video') || s.type === 'video');
 
   const otherGroups = React.useMemo(() => {
     const map = new Map<string, { author: string; authorId?: string; stories: Story[]; latestTs: number }>();
@@ -690,46 +688,17 @@ const CommunityFeedPage: React.FC = () => {
                   height: '70%',
                   position: 'relative',
                   background:
-                    !myImageStory && !myVideoStory
+                    !latestMyStory
                       ? 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)'
-                      : (myImageStory && !myVideoStory ? `url(${(myImageStory.media as any)?.url || ''}) center/cover no-repeat` : 'transparent'),
+                      : ((latestMyStory.media && latestMyStory.media.type === 'image') || latestMyStory.type === 'photo')
+                        ? `url(${(latestMyStory.media as any)?.url || ''}) center/cover no-repeat`
+                        : 'transparent',
                 }}
               >
-                {myImageStory && myVideoStory && (
-                  <>
-                    <div style={{ position: 'absolute', inset: 0, background: `url(${(myImageStory.media as any)?.url || ''}) center/cover no-repeat` }} />
-                    <video
-                      src={(myVideoStory.media as any)?.url || '' }
-                      muted
-                      playsInline
-                      preload="metadata"
-                      style={{ position: 'absolute', right: 6, top: 6, width: '45%', height: '45%', objectFit: 'cover', borderRadius: 8, border: '2px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' }}
-                    />
-                    <div
-                      style={{
-                        position: 'absolute',
-                        right: 10,
-                        top: 10,
-                        width: 22,
-                        height: 22,
-                        borderRadius: 9999,
-                        backgroundColor: 'rgba(0,0,0,0.6)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'white',
-                        fontSize: 12,
-                        fontWeight: 700,
-                      }}
-                    >
-                      ▶
-                    </div>
-                  </>
-                )}
-                {myVideoStory && !myImageStory && (
+                {latestMyStory && ((latestMyStory.media && latestMyStory.media.type === 'video') || latestMyStory.type === 'video') && (
                   <>
                     <video
-                      src={(myVideoStory.media as any)?.url || '' }
+                      src={(latestMyStory.media as any)?.url || '' }
                       muted
                       playsInline
                       preload="metadata"
@@ -848,8 +817,8 @@ const CommunityFeedPage: React.FC = () => {
 
             {otherGroups.map((g) => {
               const latest = g.stories[0];
-              const imageStory = g.stories.find(s => (s.media && s.media.type === 'image') || s.type === 'photo');
-              const videoStory = g.stories.find(s => (s.media && s.media.type === 'video') || s.type === 'video');
+              const isImage = !!(latest && (((latest as any).media && (latest as any).media.type === 'image') || latest.type === 'photo'));
+              const isVideo = !!(latest && (((latest as any).media && (latest as any).media.type === 'video') || latest.type === 'video'));
               const anyViewed = g.stories.some(s => s.viewed);
               const avatarInitial = (g.author || '').trim().charAt(0).toUpperCase() || '?';
               return (
@@ -875,46 +844,15 @@ const CommunityFeedPage: React.FC = () => {
                     display: 'flex',
                     alignItems: 'flex-end',
                     padding: '8px',
-                    background: !imageStory && !videoStory
+                    background: !latest
                       ? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)'
-                      : (imageStory && !videoStory ? `url(${(imageStory.media as any)?.url || ''}) center/cover no-repeat` : 'transparent'),
+                      : (isImage ? `url(${((latest as any).media as any)?.url || ''}) center/cover no-repeat` : 'transparent'),
                   }}
                 >
-                  {imageStory && videoStory && (
-                    <>
-                      <div style={{ position: 'absolute', inset: 0, background: `url(${(imageStory.media as any)?.url || ''}) center/cover no-repeat` }} />
-                      <video
-                        src={(videoStory.media as any)?.url || '' }
-                        muted
-                        playsInline
-                        preload="metadata"
-                        style={{ position: 'absolute', right: 8, top: 8, width: '45%', height: '45%', objectFit: 'cover', borderRadius: 8, border: '2px solid rgba(255,255,255,0.8)', boxShadow: '0 4px 8px rgba(0,0,0,0.3)' }}
-                      />
-                      <div
-                        style={{
-                          position: 'absolute',
-                          right: 12,
-                          top: 12,
-                          width: 24,
-                          height: 24,
-                          borderRadius: 9999,
-                          backgroundColor: 'rgba(0,0,0,0.6)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'white',
-                          fontSize: 12,
-                          fontWeight: 700,
-                        }}
-                      >
-                        ▶
-                      </div>
-                    </>
-                  )}
-                  {videoStory && !imageStory && (
+                  {isVideo && (
                     <>
                       <video
-                        src={(videoStory.media as any)?.url || '' }
+                        src={(((latest as any).media as any)?.url || '')}
                         muted
                         playsInline
                         preload="metadata"
