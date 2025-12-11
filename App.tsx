@@ -163,9 +163,13 @@ const ProtectedRoutes: React.FC = () => {
         <>
             <PageLayout>
                 <Suspense fallback={<LoadingFallback />}>
+                    {/* Keep Sermons page alive across route changes */}
+                    <div style={{ display: path === '/sermons' ? 'block' : 'none' }}>
+                        <SermonsPage />
+                    </div>
                     <Routes>
                         <Route path="/" element={<HomePage />} />
-                        <Route path="/sermons" element={<SermonsPage />} />
+                        <Route path="/sermons" element={<></>} />
                         <Route path="/announcements" element={<AnnouncementsPage />} />
                         <Route path="/events" element={<EventsPage />} />
                         <Route path="/bible" element={<BiblePage />} />

@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageList } from '../components/chat/MessageList';
 import { MessageInput } from '../components/chat/MessageInput';
@@ -7,6 +6,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
 import type { ChatMessage } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { websocketService } from '../services/websocketService';
 
 const CHAT_BG_PATTERN_LIGHT = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwBAMAAAClLOS0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAGUExURQAAAN3d3d+M5S8AAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAqSURBVDjLY2AYBaNgFIyCUTAKRsEooDMAUoKQTEBILAFITATimEA8AQCQ5QZt4QlHewAAAABJRU5ErkJggg==";
 const CHAT_BG_PATTERN_DARK = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwBAMAAAClLOS0AAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAGUExURQAAACQkJP///+CVXjgAAAAJcEhZcwAADsMAAA7DAcdvqGQAAAAqSURBVDjLY2AYBaNgFIyCUTAKRsEooDMAUoKQTEBILAFITATimEA8AQCQ5QZt4QlHewAAAABJRU5ErkJggg==";
@@ -27,12 +27,17 @@ const ReplyPreview: React.FC<{ message: ChatMessage, onCancel: () => void }> = (
 
 
 const ChatPage: React.FC = () => {
-    const { addChatMessage } = useAppContext();
+    const { addChatMessage, chatMessages } = useAppContext();
     const navigate = useNavigate();
     const { user, users } = useAuth();
+    const [typingMap, setTypingMap] = useState<Record<string, { name: string; ts: number }>>({});
+    const lastTypingEmitRef = useRef<number>(0);
+    const readSentRef = useRef<Set<string>>(new Set());
     
-    const onlineUsers = Array.isArray(users) ? users.filter(u => u.isOnline) : [];
-    const onlineCount = onlineUsers.length;
+    const onlineCount = Array.isArray(users)
+        ? users.filter(u => u.isOnline && (typeof u.lastSeen !== 'number' || (Date.now() - u.lastSeen) < 120000)).length
+        : 0;
+    // typingMap is used for per-bubble typing indicator only
 
     const [text, setText] = useState('');
     const [media, setMedia] = useState<{ file: File, previewUrl: string, type: 'image' | 'video' } | null>(null);
@@ -42,6 +47,63 @@ const ChatPage: React.FC = () => {
     const mediaRecorderRef = useRef<MediaRecorder | null>(null);
     const audioChunksRef = useRef<Blob[]>([]);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Listen for typing pings and prune stale entries
+    useEffect(() => {
+        const sock = websocketService.getSocket();
+        const handler = (data: any) => {
+            if (!data || !data.userId) return;
+            setTypingMap(prev => ({ ...prev, [data.userId]: { name: data.name || 'Member', ts: data.ts || Date.now() } }));
+        };
+        try { sock.on('chat:typing', handler); } catch {}
+        const prune = window.setInterval(() => {
+            setTypingMap(prev => {
+                const now = Date.now();
+                const next: Record<string, { name: string; ts: number }> = {};
+                for (const [k, v] of Object.entries(prev)) {
+                    const ts = (v as any)?.ts as number | undefined;
+                    if (typeof ts === 'number' && now - ts < 3000) next[k] = v as any;
+                }
+                return next;
+            });
+        }, 1500);
+        return () => { try { sock.off('chat:typing', handler); } catch {}; window.clearInterval(prune); };
+    }, []);
+
+    // Emit typing (throttled)
+    const handleTyping = () => {
+        try {
+            const now = Date.now();
+            if (now - (lastTypingEmitRef.current || 0) < 1500) return;
+            lastTypingEmitRef.current = now;
+            const token = localStorage.getItem('authToken');
+            if (!token) return;
+            const sock = websocketService.getSocket();
+            if ((sock as any).connected) sock.emit('chat:typing', { token });
+        } catch {}
+    };
+
+    // Read receipts on visibility
+    useEffect(() => {
+        if (!user) return;
+        const observer = new IntersectionObserver((entries) => {
+            const token = localStorage.getItem('authToken');
+            if (!token) return;
+            const sock = websocketService.getSocket();
+            for (const entry of entries) {
+                if (entry.isIntersecting) {
+                    const id = (entry.target as HTMLElement).dataset.msgId;
+                    if (!id || readSentRef.current.has(id)) continue;
+                    const msg = (chatMessages || []).find(m => String(m.id) === String(id));
+                    if (!msg || msg.userId === user.id) continue; // don't mark own messages as read
+                    try { sock.emit('chat:read', { token, id }); readSentRef.current.add(id); } catch {}
+                }
+            }
+        }, { threshold: 0.6 });
+        const nodes = Array.from(document.querySelectorAll('[data-msg-id]'));
+        nodes.forEach(n => observer.observe(n));
+        return () => { try { observer.disconnect(); } catch {} };
+    }, [chatMessages, user]);
 
     const resetComposition = () => {
         setText('');
@@ -146,9 +208,7 @@ const ChatPage: React.FC = () => {
                     <ChatBubbleIcon className="h-8 w-8 text-secondary" />
                     <div>
                         <h1 className="text-xl font-bold font-serif">Community Chat</h1>
-                        <p className="text-sm text-gray-300">
-                            {onlineCount > 0 ? `${onlineCount} online now` : 'No one online right now'}
-                        </p>
+                        <p className="text-sm text-gray-300">{onlineCount > 0 ? `${onlineCount} online now` : 'No one online right now'}</p>
                     </div>
                 </div>
                 <button 
@@ -162,7 +222,7 @@ const ChatPage: React.FC = () => {
                 </button>
             </header>
 
-            <MessageList onReply={setReplyingTo} />
+            <MessageList onReply={setReplyingTo} typingMap={typingMap} />
 
             <div className="flex-shrink-0 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700">
                 {replyingTo && <ReplyPreview message={replyingTo} onCancel={() => setReplyingTo(null)} />}
@@ -189,6 +249,7 @@ const ChatPage: React.FC = () => {
                     isRecording={isRecording}
                     onStartRecording={handleStartRecording}
                     onStopRecording={handleStopRecording}
+                    onTyping={handleTyping}
                 />
                 <input 
                     type="file" 

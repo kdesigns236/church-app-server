@@ -11,9 +11,10 @@ interface MessageInputProps {
   onAttach: () => void;
   onStartRecording: () => void;
   onStopRecording: () => void;
+  onTyping?: () => void;
 }
 
-export const MessageInput: React.FC<MessageInputProps> = ({ text, media, isRecording, setText, onSend, onAttach, onStartRecording, onStopRecording }) => {
+export const MessageInput: React.FC<MessageInputProps> = ({ text, media, isRecording, setText, onSend, onAttach, onStartRecording, onStopRecording, onTyping }) => {
     const hasContent = text.trim() !== '' || media !== null;
 
     const handleFormSubmit = (e: React.FormEvent) => {
@@ -45,7 +46,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({ text, media, isRecor
                 </button>
                 <textarea
                     value={text}
-                    onChange={(e) => setText(e.target.value)}
+                    onChange={(e) => { setText(e.target.value); onTyping?.(); }}
                     onKeyPress={handleKeyPress}
                     placeholder={isRecording ? "Recording..." : "Type a message..."}
                     className="flex-1 px-4 py-2.5 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-2xl focus:outline-none focus:ring-2 focus:ring-secondary resize-none"

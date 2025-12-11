@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { ChatMessage } from '../../types';
 import { useAuth } from '../../hooks/useAuth';
-import { ReplyIcon, CloseIcon } from '../../constants/icons';
+import { ReplyIcon, CloseIcon, CheckIcon } from '../../constants/icons';
+import { useAppContext } from '../../context/AppContext';
 import { AudioPlayer } from './AudioPlayer';
 import { linkifyWithLineBreaks } from '../../utils/linkify';
 
@@ -10,6 +11,7 @@ interface MessageBubbleProps {
     message: ChatMessage;
     onReply: (message: ChatMessage) => void;
     onDelete: (messageId: string) => void;
+    showTyping?: boolean;
 }
 
 const QuotedMessage: React.FC<{ message: ChatMessage }> = ({ message }) => (
@@ -22,17 +24,40 @@ const QuotedMessage: React.FC<{ message: ChatMessage }> = ({ message }) => (
 );
 
 
-export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, onDelete }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, onDelete, showTyping }) => {
     const { user, users } = useAuth();
+    const { addChatMessage } = useAppContext();
     const [isHovered, setIsHovered] = useState(false);
     const [showMenu, setShowMenu] = useState(false);
     const isCurrentUser = user ? message.userId === user.id : false;
 
-    const isSenderOnline = (() => {
+    const senderUser = (() => {
         const list = Array.isArray(users) ? users : [];
         let found = list.find(u => u.id === message.userId);
         if (!found) found = list.find(u => u.name === message.senderName);
-        return !!found?.isOnline;
+        return found;
+    })();
+
+    const isSenderOnline = (() => {
+        const now = Date.now();
+        const online = !!senderUser?.isOnline;
+        const fresh = typeof senderUser?.lastSeen === 'number' ? (now - (senderUser.lastSeen as number) < 120000) : true;
+        return online && fresh;
+    })();
+
+    const formatAgo = (ts: number): string => {
+        const d = Date.now() - ts;
+        if (d < 60000) return 'just now';
+        if (d < 3600000) return `${Math.floor(d / 60000)}m ago`;
+        if (d < 86400000) return `${Math.floor(d / 3600000)}h ago`;
+        return `${Math.floor(d / 86400000)}d ago`;
+    };
+
+    const lastSeenText = (() => {
+        if (isSenderOnline) return 'Online now';
+        const ts = typeof senderUser?.lastSeen === 'number' ? senderUser!.lastSeen : undefined;
+        if (typeof ts === 'number') return `last seen ${formatAgo(ts)}`;
+        return undefined;
     })();
 
     return (
@@ -40,6 +65,7 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, 
             className={`flex items-end gap-2 group animate-fade-in ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
+            data-msg-id={message.id}
         >
              {!isCurrentUser && (
                 <button
@@ -62,6 +88,9 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, 
                         <span className={`inline-block w-2.5 h-2.5 rounded-full ${isSenderOnline ? 'bg-green-500' : 'bg-gray-400'}`} aria-label={isSenderOnline ? 'Online' : 'Offline'} />
                         {message.senderName}
                     </p>
+                )}
+                {!isCurrentUser && lastSeenText && (
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 px-3 pt-0.5">{lastSeenText}</p>
                 )}
 
                 {message.replyTo && (
@@ -91,8 +120,46 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, 
                         {linkifyWithLineBreaks(message.content)}
                     </p>
                 )}
+                {showTyping && !isCurrentUser && (
+                    <div className="px-3 pt-1 pb-1 text-xs italic text-gray-500 dark:text-gray-300">typing…</div>
+                )}
                 
-                <p className="text-xs text-right text-gray-500 dark:text-gray-400/80 mt-auto px-3 pb-2">{message.timestamp}</p>
+                <div className="flex items-center justify-end gap-1 text-xs text-gray-500 dark:text-gray-400/80 mt-auto px-3 pb-2">
+                  {isCurrentUser && (
+                    <>
+                      {message.status === 'sending' && (
+                        <span className="inline-block align-middle opacity-70">sending…</span>
+                      )}
+                      {message.status === 'failed' && (
+                        <button
+                          className="text-red-500 font-semibold hover:underline"
+                          onClick={() => {
+                            try {
+                              onDelete(message.id);
+                              addChatMessage({ content: message.content, media: message.media, replyTo: message.replyTo }, user!);
+                            } catch {}
+                          }}
+                        >Failed · Retry</button>
+                      )}
+                      {(!message.status || message.status === 'sent') && (
+                        <CheckIcon className="w-3.5 h-3.5 opacity-70" />
+                      )}
+                      {message.status === 'delivered' && (
+                        <span className="inline-flex -space-x-1">
+                          <CheckIcon className="w-3.5 h-3.5 opacity-70" />
+                          <CheckIcon className="w-3.5 h-3.5 opacity-70" />
+                        </span>
+                      )}
+                      {message.status === 'read' && (
+                        <span className="inline-flex -space-x-1">
+                          <CheckIcon className="w-3.5 h-3.5 text-blue-500" />
+                          <CheckIcon className="w-3.5 h-3.5 text-blue-500" />
+                        </span>
+                      )}
+                    </>
+                  )}
+                  <span>{message.timestamp}</span>
+                </div>
             </div>
 
             {isCurrentUser && (

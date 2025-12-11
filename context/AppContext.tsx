@@ -38,6 +38,7 @@ interface AppContextType {
     addChatMessage: (messageData: { content?: string; media?: { url: string; type: 'image' | 'video' | 'audio'; }; replyTo?: ChatMessage; }, user: User) => void;
     deleteChatMessage: (messageId: string) => void;
     createPost: (content: string, user: User, media?: { url: string; type: 'image' | 'video' }) => void;
+    updatePost: (post: Post) => void;
     handlePostInteraction: (postId: number, type: 'like' | 'share') => void;
     addPostComment: (postId: number, commentText: string, user: User) => void;
     deletePost: (postId: number) => void;
@@ -219,6 +220,56 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           return !isDemo;
         });
 
+      // Direct socket handlers for low-latency chat
+      try {
+        const sock = websocketService.getSocket();
+        // simple beep on incoming
+        const playBeep = () => {
+          try {
+            const Ctx: any = (window as any).AudioContext || (window as any).webkitAudioContext;
+            if (!Ctx) return;
+            const ctx = new Ctx();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'sine'; o.frequency.value = 880; g.gain.value = 0.03;
+            o.connect(g); g.connect(ctx.destination); o.start();
+            setTimeout(() => { try { o.stop(); ctx.close(); } catch {} }, 90);
+          } catch {}
+        };
+
+        sock.on('chat:new', (msg: any) => {
+          if (!msg || !msg.id) return;
+          setChatMessages(prev => {
+            const exists = (prev || []).some((m) => String(m.id) === String(msg.id));
+            if (exists) return prev;
+            const updated = [...(prev || []), msg];
+            try {
+              let shouldNotify = true;
+              const auRaw = localStorage.getItem('authUser');
+              if (auRaw) { const au = JSON.parse(auRaw); if (au && au.id === msg.userId) shouldNotify = false; }
+              if (window.location.hash.includes('/chat')) shouldNotify = false;
+              if (shouldNotify) localNotificationService.showChatNotification(msg.senderName, msg.content || '📷 Sent a photo');
+            } catch {}
+            playBeep();
+            return updated;
+          });
+          // delivery ack back to sender
+          try { const token = localStorage.getItem('authToken'); if (token) sock.emit('chat:delivered', { token, id: msg.id }); } catch {}
+        });
+
+        sock.on('chat:ack', ({ id }: any) => {
+          if (!id) return;
+          const t = pendingChatTimersRef.current.get(String(id));
+          if (typeof t === 'number') { try { window.clearTimeout(t); } catch {} pendingChatTimersRef.current.delete(String(id)); }
+          setChatMessages(prev => (prev || []).map(m => String(m.id) === String(id) ? { ...m, status: 'sent' } : m));
+        });
+
+        sock.on('chat:status', ({ id, status }: any) => {
+          if (!id || !status) return;
+          setChatMessages(prev => (prev || []).map(m => String(m.id) === String(id) ? { ...m, status } : m));
+        });
+      } catch {}
+
         if (filtered.length !== prev.length) {
           localStorage.setItem('communityPosts', JSON.stringify(filtered));
           console.log('[AppContext] Removed legacy community demo posts from localStorage');
@@ -322,6 +373,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const prefetchInFlightRef = useRef<Set<string>>(new Set());
+    const pendingChatTimersRef = useRef<Map<string, number>>(new Map());
 
     // Background prefetch: automatically download sermon videos into IndexedDB
     const prefetchSermonVideos = async (sermonsToPrefetch: Sermon[]) => {
@@ -1018,6 +1070,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
     };
 
+    const updatePost = (post: Post) => {
+      setPosts(prev => {
+        const updated = prev.map(p => (p.id === post.id ? post : p));
+        localStorage.setItem('communityPosts', JSON.stringify(updated));
+        return updated;
+      });
+      websocketService.pushUpdate({ type: 'posts', action: 'update', data: post });
+    };
+
     const handlePostInteraction = (postId: number, type: 'like' | 'share') => {
       let updatedPost: Post | null = null;
 
@@ -1388,6 +1449,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             media: messageData.media,
             timestamp: new Date().toISOString(),
             replyTo: messageData.replyTo,
+            status: 'sending',
         };
         // Optimistic update
         setChatMessages(prev => [...prev, newMessage]);
@@ -1396,6 +1458,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const sock = websocketService.getSocket();
           if (token && sock && (sock as any).connected) {
             sock.emit('chat:send', { token, content: newMessage.content, media: newMessage.media, replyTo: newMessage.replyTo, clientId });
+            // Fallback: if no ack in 2s, push via REST; mark failed after 8s
+            try {
+              const restTimer = window.setTimeout(() => {
+                try { websocketService.pushUpdate({ type: 'chatMessages', action: 'add', data: newMessage }); } catch {}
+              }, 2000);
+              const failTimer = window.setTimeout(() => {
+                setChatMessages(prev => (prev || []).map(m => String(m.id) === String(clientId) ? { ...m, status: 'failed' } : m));
+              }, 8000);
+              pendingChatTimersRef.current.set(clientId, failTimer);
+              // clear restTimer on ack via socket handler does not know restTimer; acceptable to let it fire safely (idempotent)
+            } catch {}
             return;
           }
         } catch {}
@@ -1445,6 +1518,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addChatMessage,
         deleteChatMessage,
         createPost,
+        updatePost,
         handlePostInteraction,
         addPostComment,
         deletePost,

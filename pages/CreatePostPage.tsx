@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
@@ -10,13 +10,17 @@ const CreatePostPage: React.FC = () => {
   const { user } = useAuth();
   const { theme } = useTheme();
   const isDark = theme === 'dark';
-  const { createPost } = useAppContext();
+  const { createPost, updatePost, posts } = useAppContext();
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
   const isStoryMode = searchParams.get('mode') === 'story';
+  const editIdStr = searchParams.get('edit');
+  const editPostId = editIdStr ? parseInt(editIdStr, 10) : null;
+  const isEditing = !!editPostId;
   const [postContent, setPostContent] = useState('');
   const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [removedExistingMedia, setRemovedExistingMedia] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -30,6 +34,7 @@ const CreatePostPage: React.FC = () => {
       const result = reader.result;
       if (typeof result === 'string') {
         setSelectedMedia({ url: result, type });
+        setRemovedExistingMedia(false);
       }
     };
     reader.readAsDataURL(file);
@@ -42,6 +47,19 @@ const CreatePostPage: React.FC = () => {
   const handleVideoClick = () => {
     videoInputRef.current?.click();
   };
+
+  useEffect(() => {
+    // Prefill when editing
+    if (!isEditing || !editPostId) return;
+    try {
+      const original = (Array.isArray(posts) ? posts : []).find(p => p.id === editPostId);
+      if (original) {
+        setPostContent(original.content || '');
+        setSelectedMedia(original.media || null);
+        setRemovedExistingMedia(false);
+      }
+    } catch {}
+  }, [isEditing, editPostId, posts]);
 
   const handlePost = () => {
     if (!user) return;
@@ -78,12 +96,27 @@ const CreatePostPage: React.FC = () => {
       } catch (error) {
         console.error('Error saving story to localStorage', error);
       }
+    } else if (isEditing && editPostId) {
+      // Permission check: only admin or author can edit
+      try {
+        const original = (Array.isArray(posts) ? posts : []).find(p => p.id === editPostId);
+        if (!original) return;
+        const canEdit = (user.role === 'admin') || (original.author === user.name);
+        if (!canEdit) return;
+        const updated = {
+          ...original,
+          content: trimmed,
+          media: removedExistingMedia ? undefined : (selectedMedia ? selectedMedia : original.media),
+        };
+        updatePost(updated as any);
+      } catch {}
     } else {
       createPost(trimmed, user, selectedMedia || undefined);
     }
 
     setPostContent('');
     setSelectedMedia(null);
+    setRemovedExistingMedia(false);
     navigate('/chat');
   };
 
@@ -124,7 +157,7 @@ const CreatePostPage: React.FC = () => {
               margin: 0,
             }}
           >
-            {isStoryMode ? 'Create Story' : 'Create Post'}
+            {isStoryMode ? 'Create Story' : (isEditing ? 'Edit Post' : 'Create Post')}
           </h1>
           <button
             onClick={() => navigate('/chat')}
@@ -331,7 +364,7 @@ const CreatePostPage: React.FC = () => {
               )}
               <button
                 type="button"
-                onClick={() => setSelectedMedia(null)}
+                onClick={() => { setSelectedMedia(null); setRemovedExistingMedia(true); }}
                 style={{
                   marginTop: '8px',
                   fontSize: '12px',
@@ -362,7 +395,7 @@ const CreatePostPage: React.FC = () => {
               marginTop: '16px',
             }}
           >
-            Post
+            {isEditing ? 'Save changes' : 'Post'}
           </button>
         </div>
       </div>

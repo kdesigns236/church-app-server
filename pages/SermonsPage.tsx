@@ -5,13 +5,14 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
 import { Sermon } from '../types';
 import { safeBackgroundFetchService } from '../services/safeBackgroundFetchService';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeftIcon } from '../constants/icons';
 
 const SermonsPage: React.FC = () => {
   const { sermons, handleSermonInteraction, addSermonComment } = useAppContext();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [activeSermonId, setActiveSermonId] = useState<string | null>(null);
   // Videos should always play with sound as requested
@@ -177,6 +178,17 @@ const SermonsPage: React.FC = () => {
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
   }, [sortedSermons.length]); // Global mute state for all videos
+
+  // When page is kept-alive but hidden (not on /sermons), pause/mute all videos to prevent background audio
+  useEffect(() => {
+    const onPage = location.pathname === '/sermons';
+    const container = containerRef.current;
+    if (!container) return;
+    if (!onPage) {
+      const vids = Array.from(container.querySelectorAll('video')) as HTMLVideoElement[];
+      vids.forEach(v => { try { v.pause(); v.muted = true; } catch {} });
+    }
+  }, [location.pathname]);
 
   const handleUserInteraction = () => {
     if (!isLandscape) return;

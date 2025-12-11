@@ -20,6 +20,7 @@ export interface ChatMessage {
   };
   timestamp: string;
   replyTo?: ChatMessage;
+  status?: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 }
 
 export interface User {

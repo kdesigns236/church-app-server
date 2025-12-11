@@ -35,7 +35,7 @@ const CommunityFeedPage: React.FC = () => {
   const { user, users } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { posts, handlePostInteraction, addPostComment, deletePost } = useAppContext();
+  const { posts, handlePostInteraction, addPostComment, deletePost, updatePost } = useAppContext();
   // force periodic refresh for relative time labels
   const [nowTick, setNowTick] = useState(0);
   useEffect(() => {
@@ -113,10 +113,16 @@ const CommunityFeedPage: React.FC = () => {
   const [currentStoryAuthor, setCurrentStoryAuthor] = useState<string | null>(null);
   const [currentStoryAuthorId, setCurrentStoryAuthorId] = useState<string | undefined>(undefined);
   const [activePostMenuId, setActivePostMenuId] = useState<number | null>(null);
+  const [editingPostId, setEditingPostId] = useState<number | null>(null);
+  const [editContent, setEditContent] = useState<string>('');
+  const [editMedia, setEditMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [removeInlineMedia, setRemoveInlineMedia] = useState<boolean>(false);
   const [showSyncHint, setShowSyncHint] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
   const storyVideoRef = useRef<HTMLVideoElement | null>(null);
   const [currentVideoDurationMs, setCurrentVideoDurationMs] = useState<number | null>(null);
+  const editImageInputRef = useRef<HTMLInputElement | null>(null);
+  const editVideoInputRef = useRef<HTMLInputElement | null>(null);
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
@@ -163,6 +169,7 @@ const CommunityFeedPage: React.FC = () => {
     if (user.role === 'admin') return true;
     return post.author === user.name;
   };
+  const canEditPost = (post: Post): boolean => canDeletePost(post);
 
   const handleDeletePost = (post: Post) => {
     if (!canDeletePost(post)) {
@@ -1264,6 +1271,51 @@ const CommunityFeedPage: React.FC = () => {
                 >
                   View details
                 </button>
+                {canEditPost(post) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingPostId(post.id);
+                      setEditContent(post.content || '');
+                      setEditMedia(null);
+                      setRemoveInlineMedia(false);
+                      setActivePostMenuId(null);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      color: isDark ? '#e5e7eb' : '#111827',
+                    }}
+                  >
+                    Edit post
+                  </button>
+                )}
+                {canEditPost(post) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePostMenuId(null);
+                      navigate(`/create-post?edit=${post.id}`);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      color: isDark ? '#e5e7eb' : '#111827',
+                    }}
+                  >
+                    Edit in full editor
+                  </button>
+                )}
                 {canDeletePost(post) && (
                   <button
                     type="button"
@@ -1285,21 +1337,167 @@ const CommunityFeedPage: React.FC = () => {
               </div>
             )}
 
-            {/* Post Content */}
+            {/* Post Content / Inline Editor */}
             <div style={{ padding: '0 16px 12px' }}>
-              <p
-                style={{
-                  margin: 0,
-                  color: isDark ? '#e5e7eb' : '#1f2937',
-                  fontSize: '15px',
-                  lineHeight: 1.5,
-                }}
-              >
-                {post.content}
-              </p>
+              {editingPostId === post.id ? (
+                <div>
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    style={{
+                      width: '100%',
+                      minHeight: '100px',
+                      border: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
+                      borderRadius: 8,
+                      padding: 10,
+                      background: isDark ? '#0b1220' : 'white',
+                      color: isDark ? '#e5e7eb' : '#111827',
+                      resize: 'vertical',
+                    }}
+                  />
+                  {(!removeInlineMedia && (editMedia || post.media)) && (
+                    <div style={{ marginTop: 8 }}>
+                      {(editMedia || post.media)!.type === 'image' ? (
+                        <img
+                          src={(editMedia || post.media)!.url}
+                          alt="Post media"
+                          style={{ width: '100%', borderRadius: 8, maxHeight: 320, objectFit: 'cover' }}
+                        />
+                      ) : (
+                        <video
+                          controls
+                          src={(editMedia || post.media)!.url}
+                          style={{ width: '100%', borderRadius: 8, maxHeight: 320, background: '#000' }}
+                        />
+                      )}
+                      <div style={{ marginTop: 8 }}>
+                        <button
+                          type="button"
+                          onClick={() => { setEditMedia(null); setRemoveInlineMedia(true); }}
+                          style={{ fontSize: 12, color: '#ef4444', border: 'none', background: 'transparent', cursor: 'pointer' }}
+                        >
+                          Remove media
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => editVideoInputRef.current?.click()}
+                      style={{ padding: '8px 12px', background: 'transparent', color: '#ef4444', border: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`, borderRadius: 6, cursor: 'pointer', fontSize: 14 }}
+                    >
+                      <FiVideo size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} /> Change video
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => editImageInputRef.current?.click()}
+                      style={{ padding: '8px 12px', background: 'transparent', color: '#22c55e', border: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`, borderRadius: 6, cursor: 'pointer', fontSize: 14 }}
+                    >
+                      <FiImage size={16} style={{ marginRight: 6, verticalAlign: '-2px' }} /> Change photo
+                    </button>
+                    <input
+                      ref={editVideoInputRef}
+                      type="file"
+                      accept="video/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const result = reader.result;
+                            if (typeof result === 'string') {
+                              setEditMedia({ url: result, type: 'video' });
+                              setRemoveInlineMedia(false);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                    />
+                    <input
+                      ref={editImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            const result = reader.result;
+                            if (typeof result === 'string') {
+                              setEditMedia({ url: result, type: 'image' });
+                              setRemoveInlineMedia(false);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                          e.currentTarget.value = '';
+                        }
+                      }}
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const trimmed = (editContent || '').trim();
+                        if (!trimmed) return;
+                        // Permission guard
+                        if (!canEditPost(post)) return;
+                        const finalMedia = removeInlineMedia ? undefined : (editMedia ? editMedia : post.media);
+                        const updated: Post = { ...post, content: trimmed, media: finalMedia as any };
+                        updatePost(updated);
+                        setEditingPostId(null);
+                        setEditMedia(null);
+                        setRemoveInlineMedia(false);
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        background: '#1877f2',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        fontSize: 14,
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingPostId(null); setEditContent(''); setEditMedia(null); setRemoveInlineMedia(false); }}
+                      style={{
+                        padding: '8px 12px',
+                        background: 'transparent',
+                        color: isDark ? '#e5e7eb' : '#111827',
+                        border: `1px solid ${isDark ? '#1f2937' : '#e5e7eb'}`,
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        fontSize: 14,
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p
+                  style={{
+                    margin: 0,
+                    color: isDark ? '#e5e7eb' : '#1f2937',
+                    fontSize: '15px',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {post.content}
+                </p>
+              )}
             </div>
 
-            {post.media && (
+            {editingPostId !== post.id && post.media && (
               <div style={{ padding: '0 16px 12px' }}>
                 {post.media.type === 'image' ? (
                   <img

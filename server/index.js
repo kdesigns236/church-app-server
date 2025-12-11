@@ -494,6 +494,57 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Delivered/read receipts
+  socket.on('chat:delivered', ({ token, id }) => {
+    try {
+      if (!token || !id) return;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const users = dataStore.users || [];
+      const msg = (dataStore.chatMessages || []).find(m => String(m.id) === String(id));
+      if (!msg) return;
+      const senderId = msg.userId;
+      // notify sender sockets
+      for (const [sid, uid] of presenceUserMap.entries()) {
+        if (uid === senderId) {
+          try { io.to(sid).emit('chat:status', { id, status: 'delivered' }); } catch {}
+        }
+      }
+    } catch (err) {
+      console.error('[Chat] delivered error:', err?.message || err);
+    }
+  });
+
+  socket.on('chat:read', ({ token, id }) => {
+    try {
+      if (!token || !id) return;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const msg = (dataStore.chatMessages || []).find(m => String(m.id) === String(id));
+      if (!msg) return;
+      const senderId = msg.userId;
+      for (const [sid, uid] of presenceUserMap.entries()) {
+        if (uid === senderId) {
+          try { io.to(sid).emit('chat:status', { id, status: 'read' }); } catch {}
+        }
+      }
+    } catch (err) {
+      console.error('[Chat] read error:', err?.message || err);
+    }
+  });
+
+  // Typing indicator broadcast to others
+  socket.on('chat:typing', ({ token }) => {
+    try {
+      if (!token) return;
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key-change-in-production');
+      const userId = decoded.id;
+      if (!userId) return;
+      const users = dataStore.users || [];
+      const u = users.find(x => x.id === userId);
+      const name = (u && u.name) || 'Member';
+      socket.broadcast.emit('chat:typing', { userId, name, ts: Date.now() });
+    } catch {}
+  });
+
   // Fast chat: receive message via socket and broadcast immediately
   socket.on('chat:send', (payload) => {
     try {
@@ -527,6 +578,8 @@ io.on('connection', (socket) => {
         }
       } catch {}
 
+      // Ack back to sender so UI can mark as 'sent'
+      try { socket.emit('chat:ack', { id: msg.id }); } catch {}
       // Send to others immediately (exclude sender)
       socket.broadcast.emit('chat:new', msg);
       // Also emit sync_update for clients relying on generic handler

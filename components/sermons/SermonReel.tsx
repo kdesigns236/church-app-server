@@ -45,6 +45,19 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  // Sync fullscreen state with document and persist to localStorage
+  useEffect(() => {
+    const onFsChange = () => {
+      const fs = !!document.fullscreenElement;
+      setIsFullscreen(fs);
+      try { localStorage.setItem('sermonFS', fs ? '1' : '0'); } catch {}
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    // Initialize from localStorage (state only; actual re-entry may be blocked without user gesture)
+    try { const ls = localStorage.getItem('sermonFS'); if (ls === '1') setIsFullscreen(true); } catch {}
+    return () => { document.removeEventListener('fullscreenchange', onFsChange); };
+  }, []);
+
   const parseYouTubeId = (url: string): string | null => {
     try {
       if (url.includes('youtube.com/watch')) {
@@ -314,7 +327,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     let cancelled = false;
     const cleanup = () => {
       try { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } } catch {}
-      try { if (scriptEl && scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl); } catch {}
+      // Keep the HLS script loaded once to avoid reloading on subsequent visits
     };
     if (!isHls) { cleanup(); return; }
     if (canNative) {
@@ -332,6 +345,16 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             if (cancelled) return;
             try { hls.loadSource(src); } catch {}
           });
+          // Capture duration from manifest/level for progress bar
+          try {
+            hls.on(HlsCtor.Events.MANIFEST_PARSED, () => {
+              try { if (isFinite(v.duration)) setDurationSec(v.duration); } catch {}
+            });
+            hls.on(HlsCtor.Events.LEVEL_LOADED, (_e: any, data: any) => {
+              const total = data && data.details && data.details.totalduration;
+              if (typeof total === 'number' && isFinite(total)) setDurationSec(total);
+            });
+          } catch {}
           return true;
         }
       } catch {}
@@ -527,11 +550,50 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (isActive) {
         tryAutoplay(videoRef.current);
       } else {
-        try { videoRef.current.pause(); } catch {}
+        try { videoRef.current.pause(); videoRef.current.muted = true; } catch {}
       }
     }, 120);
     return () => { if (playPauseTimer.current) window.clearTimeout(playPauseTimer.current); };
   }, [isActive, videoSrc]);
+
+  // Enforce mute/pause when not active
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!isActive) {
+      try { v.pause(); v.muted = true; } catch {}
+    }
+  }, [isActive]);
+
+  // Best-effort: if user had fullscreen enabled and we rotate or activate a new reel, try to re-enter
+  useEffect(() => {
+    const tryReenter = () => {
+      try {
+        const wantFs = localStorage.getItem('sermonFS') === '1';
+        const el: any = wrapperRef.current;
+        if (wantFs && el && !document.fullscreenElement && el.requestFullscreen) {
+          el.requestFullscreen().catch(() => {});
+        }
+      } catch {}
+    };
+    const onResize = () => { setTimeout(tryReenter, 200); };
+    window.addEventListener('orientationchange', onResize);
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('orientationchange', onResize); window.removeEventListener('resize', onResize); };
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (!isActive) return;
+      const wantFs = localStorage.getItem('sermonFS') === '1';
+      const el: any = wrapperRef.current;
+      if (wantFs && el && !document.fullscreenElement && el.requestFullscreen) {
+        // Attempt when this reel becomes active
+        setTimeout(() => { try { el.requestFullscreen().catch(() => {}); } catch {} }, 60);
+      }
+      revealProgress(1600);
+    } catch {}
+  }, [isActive]);
 
   useEffect(() => {
     updateObjectFitFromVideo();
@@ -543,9 +605,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     if (muted) { setMuted(false); try { v.muted = false; v.play(); } catch {}; try { localStorage.setItem('sermonMuted', '0'); } catch {}; try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: false } })); } catch {} }
     else { if (isPlaying) v.pause(); else v.play(); }
     if (onUserInteraction) onUserInteraction();
+    revealProgress(3000);
   };
 
-  const handlePointerDown = () => { if (onUserInteraction) onUserInteraction(); };
+  const handlePointerDown = () => { if (onUserInteraction) onUserInteraction(); revealProgress(3000); };
 
   
 
@@ -591,26 +654,34 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       {embedType ? (
         <div className="relative w-full h-full flex items-center justify-center">
           {embedType === 'youtube' && (
-            <iframe
-              title={sermon.title}
-              width="100%"
-              height="100%"
-              src={`https://www.youtube.com/embed/${embedId}?playsinline=1`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              style={{ border: '0' }}
-            />
+            isActive ? (
+              <iframe
+                title={sermon.title}
+                width="100%"
+                height="100%"
+                src={`https://www.youtube.com/embed/${embedId}?playsinline=1`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                allowFullScreen
+                style={{ border: '0' }}
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%' }} />
+            )
           )}
           {embedType === 'vimeo' && (
-            <iframe
-              title={sermon.title}
-              width="100%"
-              height="100%"
-              src={`https://player.vimeo.com/video/${embedId}`}
-              allow="autoplay; fullscreen; picture-in-picture"
-              allowFullScreen
-              style={{ border: '0' }}
-            />
+            isActive ? (
+              <iframe
+                title={sermon.title}
+                width="100%"
+                height="100%"
+                src={`https://player.vimeo.com/video/${embedId}`}
+                allow="autoplay; fullscreen; picture-in-picture"
+                allowFullScreen
+                style={{ border: '0' }}
+              />
+            ) : (
+              <div style={{ width: '100%', height: '100%' }} />
+            )
           )}
           <div className="absolute left-3 right-auto max-w-[80%] text-white bg-black/40 backdrop-blur-sm rounded-md p-3 pointer-events-none" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 3.5rem)' }}>
             <div className="text-sm font-semibold truncate">{sermon.title}</div>
@@ -632,7 +703,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             onPointerDown={handlePointerDown}
             className={`absolute inset-0 transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
             style={{ touchAction: 'manipulation', objectPosition: 'center' as any }}
-            autoPlay
+            autoPlay={isActive}
             loop
             playsInline
             crossOrigin="anonymous"
@@ -664,24 +735,26 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             }}
           />
           </div>
-          {(!isReady || isBuffering) && (
+          {isActive && (!isReady || isBuffering) && (
             <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
               <div className="h-10 w-10 rounded-full border-2 border-white/40 border-t-white animate-spin" />
             </div>
           )}
-          {durationSec > 0 && showProgress && (
+          {showProgress && (
             <div
               id={`sermon-progress-${sermon.id}`}
-              className="absolute left-0 right-0 bottom-0 h-2 bg-white/20 cursor-pointer"
+              className="absolute left-0 right-0 z-30 h-2 bg-white/20 cursor-pointer"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0px)' }}
               onPointerDown={onBarPointerDown}
               onClick={onBarClick}
             >
               <div className="h-full bg-white" style={{ width: `${Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0))}%` }} />
             </div>
           )}
-          {durationSec > 0 && !showProgress && (
+          {!showProgress && (
             <div
-              className="absolute left-0 right-0 bottom-0 h-0.5 bg-white/10 cursor-pointer"
+              className="absolute left-0 right-0 z-30 h-0.5 bg-white/20 cursor-pointer"
+              style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0px)' }}
               onPointerDown={() => revealProgress(3500)}
               onClick={() => revealProgress(3500)}
             />
@@ -707,8 +780,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           <FaSyncAlt className="w-5 h-5 text-white" />
         </button>
       </div>
-      {/* Fullscreen toggle (landscape only) */}
-      {isLandscape && !embedType && videoSrc && (
+      {/* Fullscreen toggle (always available when video) */}
+      {!embedType && videoSrc && (
         <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 2.75rem)' }}>
           <button
             onClick={async () => {
@@ -718,9 +791,11 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   if (el?.requestFullscreen) await el.requestFullscreen();
                   else if (videoRef.current && (videoRef.current as any).webkitEnterFullscreen) (videoRef.current as any).webkitEnterFullscreen();
                   setIsFullscreen(true);
+                  try { localStorage.setItem('sermonFS', '1'); } catch {}
                 } else {
                   if (document.exitFullscreen) await document.exitFullscreen();
                   setIsFullscreen(false);
+                  try { localStorage.setItem('sermonFS', '0'); } catch {}
                 }
               } catch {}
             }}
