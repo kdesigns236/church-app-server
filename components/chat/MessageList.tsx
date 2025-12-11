@@ -21,26 +21,39 @@ export const MessageList: React.FC<MessageListProps> = ({ onReply, typingMap }) 
         scrollToBottom();
     }, [chatMessages]);
 
-    const tsToComparable = (timestamp: string | undefined): number => {
-        if (!timestamp) return 0;
-        if (timestamp.includes('T')) {
-            const t = Date.parse(timestamp);
-            return isNaN(t) ? 0 : t;
+    const getEpoch = (m: ChatMessage): number => {
+        const ts = m?.timestamp;
+        if (ts && ts.includes('T')) {
+            const t = Date.parse(ts);
+            if (!isNaN(t)) return t;
         }
-        const match = timestamp.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
-        if (!match) return 0;
-        let hour = parseInt(match[1], 10);
-        const minute = parseInt(match[2], 10);
-        const ampm = match[3]?.toUpperCase();
-        if (ampm === 'PM' && hour < 12) hour += 12;
-        if (ampm === 'AM' && hour === 12) hour = 0;
-        return hour * 60 + minute;
+        // Time-only fallback: use numeric id if it looks like a timestamp
+        const idNum = Number(m?.id);
+        if (!Number.isNaN(idNum)) {
+            // Heuristics: 13 digits -> ms, 10 digits -> seconds
+            const len = String(Math.floor(Math.abs(idNum))).length;
+            if (len >= 13) return idNum;
+            if (len === 10) return idNum * 1000;
+        }
+        // Last resort: convert HH:MM to minutes-of-day but this won't sort across days
+        if (ts) {
+            const match = ts.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+            if (match) {
+                let hour = parseInt(match[1], 10);
+                const minute = parseInt(match[2], 10);
+                const ampm = match[3]?.toUpperCase();
+                if (ampm === 'PM' && hour < 12) hour += 12;
+                if (ampm === 'AM' && hour === 12) hour = 0;
+                return hour * 60 * 60 * 1000 + minute * 60 * 1000;
+            }
+        }
+        return 0;
     };
 
     const sortedMessages: ChatMessage[] = Array.isArray(chatMessages)
         ? [...chatMessages].sort((a, b) => {
-              const ta = tsToComparable(a.timestamp);
-              const tb = tsToComparable(b.timestamp);
+              const ta = getEpoch(a);
+              const tb = getEpoch(b);
               if (ta !== tb) return ta - tb;
               const aId = Number(a.id);
               const bId = Number(b.id);

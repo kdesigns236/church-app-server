@@ -44,6 +44,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const draggingRef = useRef(false);
+  const bufferingTimerRef = useRef<number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Sync fullscreen state with document and persist to localStorage
   useEffect(() => {
@@ -338,7 +340,15 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       try {
         if ((window as any).Hls && (window as any).Hls.isSupported()) {
           const HlsCtor = (window as any).Hls;
-          const hls = new HlsCtor({ enableWorker: true, lowLatencyMode: true });
+          const hls = new HlsCtor({
+            enableWorker: true,
+            lowLatencyMode: false,
+            maxBufferLength: 120,
+            backBufferLength: 60,
+            liveSyncDuration: 3,
+            fragLoadingTimeOut: 20000,
+            manifestLoadingTimeOut: 20000,
+          });
           hlsRef.current = hls;
           hls.attachMedia(v);
           hls.on((window as any).Hls.Events.MEDIA_ATTACHED, () => {
@@ -349,7 +359,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           try {
             hls.on(HlsCtor.Events.MANIFEST_PARSED, () => {
               try { if (isFinite(v.duration)) setDurationSec(v.duration); } catch {}
-              try { v.muted = true; v.play().catch(() => {}); } catch {}
+              try { v.play().catch(() => {}); } catch {}
               setIsReady(true); setIsBuffering(false);
             });
             hls.on(HlsCtor.Events.LEVEL_LOADED, (_e: any, data: any) => {
@@ -391,13 +401,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     return () => { cancelled = true; cleanup(); };
   }, [videoSrc]);
 
-  // Load persisted mute preference (per device)
-  useEffect(() => {
-    try {
-      const m = localStorage.getItem('sermonMuted');
-      if (m === '0') setMuted(false);
-    } catch {}
-  }, []);
+  // Start muted by default; unmute only after a user gesture
+  useEffect(() => { /* no-op: required for autoplay policies */ }, []);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -532,8 +537,25 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         if (v && isActive) tryAutoplay(v);
       } catch {}
     };
-    const handleWaiting = () => { setIsBuffering(true); };
-    const handlePlaying = () => { setIsReady(true); setIsBuffering(false); };
+    const handleWaiting = () => {
+      const v = videoRef.current as HTMLVideoElement | null;
+      if (draggingRef.current || (v && (v.seeking || v.readyState >= 2))) return;
+      if (bufferingTimerRef.current) window.clearTimeout(bufferingTimerRef.current);
+      bufferingTimerRef.current = window.setTimeout(() => setIsBuffering(true), 160);
+    };
+    const handlePlaying = () => {
+      if (bufferingTimerRef.current) { window.clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
+      setIsReady(true);
+      setIsBuffering(false);
+    };
+    const handleSeeking = () => {
+      if (bufferingTimerRef.current) { window.clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
+      setIsBuffering(false);
+    };
+    const handleSeeked = () => {
+      if (bufferingTimerRef.current) { window.clearTimeout(bufferingTimerRef.current); bufferingTimerRef.current = null; }
+      setIsBuffering(false);
+    };
     const handleTimeUpdate = () => {
       try {
         const v = videoRef.current;
@@ -550,6 +572,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     video.addEventListener('waiting', handleWaiting);
     video.addEventListener('playing', handlePlaying);
     video.addEventListener('timeupdate', handleTimeUpdate);
+    video.addEventListener('seeking', handleSeeking);
+    video.addEventListener('seeked', handleSeeked);
 
     return () => {
       video.removeEventListener('play', handlePlay);
@@ -559,6 +583,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       video.removeEventListener('waiting', handleWaiting);
       video.removeEventListener('playing', handlePlaying);
       video.removeEventListener('timeupdate', handleTimeUpdate);
+      video.removeEventListener('seeking', handleSeeking);
+      video.removeEventListener('seeked', handleSeeked);
+      if (bufferingTimerRef.current) window.clearTimeout(bufferingTimerRef.current);
     };
   }, [videoSrc, durationSec]);
 
@@ -680,11 +707,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     if (!draggingRef.current) return;
     seekFromClientX(e.clientX);
     draggingRef.current = false;
+    setIsDragging(false);
     removeDragListeners();
   };
   const onBarPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     try { e.preventDefault(); e.stopPropagation(); } catch {}
     draggingRef.current = true;
+    setIsDragging(true);
     seekFromClientX(e.clientX);
     window.addEventListener('pointermove', onDragMove as any, true);
     window.addEventListener('pointerup', onDragEnd as any, true);
@@ -795,7 +824,20 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               onPointerDown={onBarPointerDown}
               onClick={onBarClick}
             >
-              <div className="h-full bg-white" style={{ width: `${Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0))}%`, transition: 'width 120ms linear' }} />
+              {(() => {
+                const pct = Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0));
+                return (
+                  <div
+                    className="h-full bg-white"
+                    style={{
+                      transform: `scaleX(${pct / 100})`,
+                      transformOrigin: 'left center',
+                      transition: isDragging ? 'none' : 'transform 100ms linear',
+                      width: '100%',
+                    }}
+                  />
+                );
+              })()}
             </div>
           )}
           {!showProgress && (
