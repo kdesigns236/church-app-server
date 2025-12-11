@@ -46,6 +46,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const draggingRef = useRef(false);
   const bufferingTimerRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const cachedOnceRef = useRef(false);
 
   // Sync fullscreen state with document and persist to localStorage
   useEffect(() => {
@@ -404,25 +405,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   // Start muted by default; unmute only after a user gesture
   useEffect(() => { /* no-op: required for autoplay policies */ }, []);
 
-  useEffect(() => {
-    const handler = (e: any) => {
-      try {
-        const next = !!(e?.detail?.muted);
-        setMuted(next);
-        const v = videoRef.current;
-        if (v) {
-          v.muted = next;
-          if (!next) {
-            if (isActive) v.play().catch(() => {});
-            else { try { v.pause(); } catch {} }
-          }
-        }
-      } catch {}
-    };
-    window.addEventListener('sermon-mute-changed', handler as any);
-    return () => window.removeEventListener('sermon-mute-changed', handler as any);
-  }, [isActive]);
-
   // First-visit scroll hint (one-time)
   useEffect(() => {
     try {
@@ -505,7 +487,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const getAspectLabel = (w: number, h: number): string => '';
 
   const tryAutoplay = async (v: HTMLVideoElement) => {
-    try { v.muted = true; await v.play(); } catch (e: any) { if (!e || e.name !== 'AbortError') { console.warn('[SermonReel] Autoplay failed:', e); } }
+    try { await v.play(); } catch (e: any) { if (!e || e.name !== 'AbortError') { console.warn('[SermonReel] Autoplay failed:', e); } }
   };
 
   const updateObjectFitFromVideo = () => {
@@ -535,6 +517,23 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       try {
         const v = videoRef.current;
         if (v && isActive) tryAutoplay(v);
+      } catch {}
+      // Opportunistic caching for non-HLS MP4/WebM on web: save to IndexedDB once
+      try {
+        if (!cachedOnceRef.current && typeof videoSrc === 'string' && !/\.m3u8(\?.*)?$/i.test(videoSrc)) {
+          cachedOnceRef.current = true;
+          (async () => {
+            try {
+              const already = await videoStorageService.hasVideo(String(sermon.id));
+              if (already) return;
+              const res = await fetch(videoSrc, { cache: 'force-cache' });
+              const blob = await res.blob();
+              const ext = blob.type.includes('webm') ? 'webm' : blob.type.includes('mp4') ? 'mp4' : 'mp4';
+              const file = new File([blob], `${(sermon.title || 'sermon').replace(/[^a-z0-9\-]+/gi,'_')}.${ext}`, { type: blob.type || 'video/mp4' });
+              await videoStorageService.saveVideo(String(sermon.id), file);
+            } catch {}
+          })();
+        }
       } catch {}
     };
     const handleWaiting = () => {
@@ -604,14 +603,19 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     return () => { if (playPauseTimer.current) window.clearTimeout(playPauseTimer.current); };
   }, [isActive, videoSrc]);
 
-  // Enforce mute/pause when not active
+  // Apply mute state whenever active changes or user toggles mute
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    if (!isActive) {
+    if (isActive) {
+      try {
+        v.muted = muted;
+        if (!muted) v.play().catch(() => {});
+      } catch {}
+    } else {
       try { v.pause(); v.muted = true; } catch {}
     }
-  }, [isActive]);
+  }, [isActive, muted]);
 
   // Best-effort: if user had fullscreen enabled and we rotate or activate a new reel, try to re-enter
   useEffect(() => {
@@ -862,7 +866,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       {/* No manual rotate; orientation handled automatically */}
       {/* Fullscreen toggle (always available when video) */}
       {!embedType && videoSrc && (
-        <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 2.75rem)' }}>
+        <div className="absolute right-4 z-30 flex flex-col items-end gap-3" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1.5rem)' }}>
           <button
             onClick={async () => {
               try {
@@ -884,18 +888,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           >
             {isFullscreen ? <FaCompress className="w-5 h-5 text-white" /> : <FaExpand className="w-5 h-5 text-white" />}
           </button>
-        </div>
-      )}
-      {!embedType && videoSrc && (
-        <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 4.25rem)' }}>
           <button
             onClick={() => {
               const v = videoRef.current;
               const next = !muted;
               setMuted(next);
-              try { if (v) { v.muted = next; if (!next) v.play().catch(() => {}); } } catch {}
+              try { if (v) { v.muted = next; if (!next) { v.volume = 1; v.play().catch(() => {}); } } } catch {}
               try { localStorage.setItem('sermonMuted', next ? '1' : '0'); } catch {}
-              try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: next } })); } catch {}
             }}
             className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
             aria-label={muted ? 'Unmute' : 'Mute'}
