@@ -1,7 +1,7 @@
 
 import React, { useRef, useEffect, useState } from 'react';
 import { Sermon } from '../../types';
-import { FaSyncAlt, FaVolumeMute, FaVolumeUp, FaArrowDown, FaExpand, FaCompress } from 'react-icons/fa';
+import { FaVolumeMute, FaVolumeUp, FaArrowDown, FaExpand, FaCompress } from 'react-icons/fa';
 import { videoStorageService } from '../../services/videoStorageService';
 import { backgroundDownloadService } from '../../services/backgroundDownloadService';
 import { auth, storage } from '../../config/firebase';
@@ -26,7 +26,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoSrc, setVideoSrc] = useState('');
-  const [rotation, setRotation] = useState(0);
   const [isLandscape, setIsLandscape] = useState(false);
   const [objectFit, setObjectFit] = useState<'cover' | 'contain'>('cover');
   const [isReady, setIsReady] = useState(false);
@@ -44,6 +43,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const progressHideRef = useRef<number | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const draggingRef = useRef(false);
 
   // Sync fullscreen state with document and persist to localStorage
   useEffect(() => {
@@ -349,10 +349,31 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           try {
             hls.on(HlsCtor.Events.MANIFEST_PARSED, () => {
               try { if (isFinite(v.duration)) setDurationSec(v.duration); } catch {}
+              try { v.muted = true; v.play().catch(() => {}); } catch {}
+              setIsReady(true); setIsBuffering(false);
             });
             hls.on(HlsCtor.Events.LEVEL_LOADED, (_e: any, data: any) => {
               const total = data && data.details && data.details.totalduration;
               if (typeof total === 'number' && isFinite(total)) setDurationSec(total);
+            });
+            hls.on(HlsCtor.Events.ERROR, (_event: any, data: any) => {
+              if (!data) return;
+              if (data.fatal) {
+                switch (data.type) {
+                  case 'mediaError':
+                    try { hls.recoverMediaError(); } catch {}
+                    break;
+                  case 'networkError':
+                    try { hls.startLoad(); } catch {}
+                    break;
+                  default:
+                    try { hls.destroy(); } catch {}
+                    hlsRef.current = null;
+                    setIsBuffering(false);
+                    setIsReady(false);
+                    break;
+                }
+              }
             });
           } catch {}
           return true;
@@ -597,26 +618,33 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
   useEffect(() => {
     updateObjectFitFromVideo();
-  }, [rotation, isLandscape]);
+  }, [isLandscape]);
 
   const handleVideoPress = () => {
     const v = videoRef.current;
     if (!v) return;
-    if (muted) { setMuted(false); try { v.muted = false; v.play(); } catch {}; try { localStorage.setItem('sermonMuted', '0'); } catch {}; try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: false } })); } catch {} }
-    else { if (isPlaying) v.pause(); else v.play(); }
-    if (onUserInteraction) onUserInteraction();
-    revealProgress(3000);
+    if (muted) {
+      setMuted(false);
+      try { v.muted = false; v.play().catch(() => {}); } catch {}
+      try { localStorage.setItem('sermonMuted', '0'); } catch {}
+      try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: false } })); } catch {}
+      if (onUserInteraction) onUserInteraction();
+      revealProgress(3000);
+      return;
+    }
+    // If controls are hidden, just reveal them on first tap
+    if (!showProgress) {
+      if (onUserInteraction) onUserInteraction();
+      revealProgress(3000);
+      return;
+    }
+    // Controls visible: toggle play/pause
+    if (isPlaying) v.pause(); else v.play().catch(() => {});
   };
 
   const handlePointerDown = () => { if (onUserInteraction) onUserInteraction(); revealProgress(3000); };
 
   
-
-  const handleRotate = () => {
-    setRotation((prev) => (prev + 90) % 360);
-  };
-
-  const isFullScreenMode = isLandscape || rotation % 180 !== 0;
 
   const revealProgress = (ms: number = 2800) => {
     setShowProgress(true);
@@ -636,8 +664,31 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     try { v.currentTime = t; setCurrentSec(t); } catch {}
   };
 
-  const onBarPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+  const removeDragListeners = () => {
+    try {
+      window.removeEventListener('pointermove', onDragMove as any, true);
+      window.removeEventListener('pointerup', onDragEnd as any, true);
+      window.removeEventListener('pointercancel', onDragEnd as any, true);
+    } catch {}
+  };
+
+  const onDragMove = (e: PointerEvent) => {
+    if (!draggingRef.current) return;
     seekFromClientX(e.clientX);
+  };
+  const onDragEnd = (e: PointerEvent) => {
+    if (!draggingRef.current) return;
+    seekFromClientX(e.clientX);
+    draggingRef.current = false;
+    removeDragListeners();
+  };
+  const onBarPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    try { e.preventDefault(); e.stopPropagation(); } catch {}
+    draggingRef.current = true;
+    seekFromClientX(e.clientX);
+    window.addEventListener('pointermove', onDragMove as any, true);
+    window.addEventListener('pointerup', onDragEnd as any, true);
+    window.addEventListener('pointercancel', onDragEnd as any, true);
     revealProgress(3500);
   };
   const onBarClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -693,13 +744,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         </div>
       ) : videoSrc ? (
         <div className="relative w-full h-full flex items-center justify-center">
-          <div className="absolute inset-0" style={{ transform: `rotate(${rotation}deg)`, transformOrigin: 'center center' }}>
           <video
             key={sermon.id}
             ref={videoRef}
-            onClick={handleVideoPress}
-            onTouchEnd={handleVideoPress}
-            onTouchStart={handlePointerDown}
+            onPointerUp={handleVideoPress}
             onPointerDown={handlePointerDown}
             className={`absolute inset-0 transition-all duration-500 cursor-pointer w-full h-full ${objectFit === 'cover' ? 'object-cover' : 'object-contain'}`}
             style={{ touchAction: 'manipulation', objectPosition: 'center' as any }}
@@ -734,7 +782,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               }
             }}
           />
-          </div>
           {isActive && (!isReady || isBuffering) && (
             <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
               <div className="h-10 w-10 rounded-full border-2 border-white/40 border-t-white animate-spin" />
@@ -748,7 +795,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               onPointerDown={onBarPointerDown}
               onClick={onBarClick}
             >
-              <div className="h-full bg-white" style={{ width: `${Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0))}%` }} />
+              <div className="h-full bg-white" style={{ width: `${Math.max(0, Math.min(100, durationSec ? (Math.min(currentSec, durationSec) / durationSec) * 100 : 0))}%`, transition: 'width 120ms linear' }} />
             </div>
           )}
           {!showProgress && (
@@ -770,16 +817,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       ) : (
         <div className="text-white text-center p-6">No video for this sermon.</div>
       )}
-      {/* Rotate button (top-right) */}
-      <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 1.25rem)' }}>
-        <button 
-          onClick={handleRotate}
-          className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
-          aria-label="Rotate video"
-        >
-          <FaSyncAlt className="w-5 h-5 text-white" />
-        </button>
-      </div>
+      {/* No manual rotate; orientation handled automatically */}
       {/* Fullscreen toggle (always available when video) */}
       {!embedType && videoSrc && (
         <div className="absolute top-5 right-4 z-30" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 2.75rem)' }}>

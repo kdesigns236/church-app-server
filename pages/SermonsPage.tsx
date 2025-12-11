@@ -191,6 +191,9 @@ const SermonsPage: React.FC = () => {
   }, [location.pathname]);
 
   const handleUserInteraction = () => {
+    // Unmute globally on any interaction; inactive reels will remain paused
+    try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: false } })); } catch {}
+
     if (!isLandscape) return;
 
     setShowChrome(true);
