@@ -1,6 +1,7 @@
 const functions = require('firebase-functions');
 const { onObjectFinalized } = require('firebase-functions/v2/storage');
-const { logger } = functions;
+const { onRequest } = require('firebase-functions/v2/https');
+const logger = require('firebase-functions/logger');
 const os = require('os');
 const path = require('path');
 const fs = require('fs').promises;
@@ -42,8 +43,8 @@ async function listFilesRecursive(dir) {
   return out;
 }
 
-// Minimal HTTP ping for analyzer and health checks
-exports.ping = functions.https.onRequest((req, res) => {
+// Minimal HTTP ping for analyzer and health checks (Gen2)
+exports.ping = onRequest((req, res) => {
   res.status(200).send('ok');
 });
 
