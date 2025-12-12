@@ -168,7 +168,6 @@ const AdminModal: React.FC<AdminModalProps> = ({ config, onClose, onSave }) => {
                             <FormInput label="Title" name="title" value={formData.title || ''} onChange={handleChange} required />
                             <FormInput label="Pastor" name="pastor" value={formData.pastor || ''} onChange={handleChange} required />
                             <FormInput label="Scripture" name="scripture" value={formData.scripture || ''} onChange={handleChange} />
-                            <FormInput label="Full Sermon URL (Optional)" name="fullSermonUrl" value={formData.fullSermonUrl || ''} onChange={handleChange} placeholder="https://youtube.com/watch?v=..." />
                             <FormFileInput label="Sermon Video" name="videoUrl" onChange={handleChange} accept="video/*" required={!isEditing} />
                             {(videoPreview || (isEditing && typeof formData.videoUrl === 'string')) && (
                                 <div className="mt-2">

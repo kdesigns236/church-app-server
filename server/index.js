@@ -1019,7 +1019,7 @@ app.post('/api/sermons', verifyAdmin, async (req, res) => {
   try {
     console.log('[Server] Creating sermon:', req.body);
     
-    const { title, pastor, scripture, videoUrl } = req.body;
+    const { title, pastor, scripture, videoUrl, firebaseStoragePath, firebaseBucket, hlsUrl } = req.body;
     
     // Create new sermon
     const newSermon = {
@@ -1029,6 +1029,9 @@ app.post('/api/sermons', verifyAdmin, async (req, res) => {
       scripture: scripture || '',
       date: new Date().toISOString().split('T')[0],
       videoUrl,
+      hlsUrl: hlsUrl || undefined,
+      firebaseStoragePath: firebaseStoragePath || undefined,
+      firebaseBucket: firebaseBucket || undefined,
       likes: 0,
       comments: [],
       isLiked: false,
@@ -1050,6 +1053,63 @@ app.post('/api/sermons', verifyAdmin, async (req, res) => {
   } catch (error) {
     console.error('[Server] Error creating sermon:', error);
     res.status(500).json({ error: 'Failed to create sermon', details: error.message });
+  }
+});
+
+// Update sermon (admin)
+app.put('/api/sermons/:id', verifyAdmin, async (req, res) => {
+  try {
+    const id = String(req.params.id);
+    const list = Array.isArray(dataStore.sermons) ? dataStore.sermons : [];
+    const idx = list.findIndex((s) => String(s.id) === id);
+    if (idx === -1) return res.status(404).json({ error: 'Sermon not found' });
+
+    const allowed = [
+      'title', 'pastor', 'scripture', 'date', 'videoUrl', 'hlsUrl',
+      'firebaseStoragePath', 'firebaseBucket', 'durationSec', 'thumbnails'
+    ];
+    const updates = {};
+    for (const k of allowed) {
+      if (Object.prototype.hasOwnProperty.call(req.body, k)) updates[k] = req.body[k];
+    }
+
+    const updated = { ...list[idx], ...updates };
+    dataStore.sermons[idx] = updated;
+    await saveData();
+    broadcastUpdate({ type: 'sermons', action: 'update', data: updated });
+    res.json({ success: true, sermon: updated });
+  } catch (error) {
+    console.error('[Server] Error updating sermon:', error);
+    res.status(500).json({ error: 'Failed to update sermon' });
+  }
+});
+
+// Callback endpoint for HLS pipeline (no JWT; uses shared secret)
+app.post('/api/sermons/:id/hls-callback', async (req, res) => {
+  try {
+    const secret = req.headers['x-hls-secret'] || req.query.secret;
+    if (!process.env.HLS_CALLBACK_SECRET || secret !== process.env.HLS_CALLBACK_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    const id = String(req.params.id);
+    const list = Array.isArray(dataStore.sermons) ? dataStore.sermons : [];
+    const idx = list.findIndex((s) => String(s.id) === id);
+    if (idx === -1) return res.status(404).json({ error: 'Sermon not found' });
+
+    const { hlsUrl, durationSec, thumbnails } = req.body || {};
+    const updated = {
+      ...list[idx],
+      ...(hlsUrl ? { hlsUrl } : {}),
+      ...(typeof durationSec === 'number' ? { durationSec } : {}),
+      ...(thumbnails ? { thumbnails } : {}),
+    };
+    dataStore.sermons[idx] = updated;
+    await saveData();
+    broadcastUpdate({ type: 'sermons', action: 'update', data: updated });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('[Server] HLS callback error:', error);
+    res.status(500).json({ error: 'Failed to apply HLS update' });
   }
 });
 

@@ -344,6 +344,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           const hls = new HlsCtor({
             enableWorker: true,
             lowLatencyMode: false,
+            startLevel: 0,
+            capLevelToPlayerSize: true,
             maxBufferLength: 120,
             backBufferLength: 60,
             liveSyncDuration: 3,
@@ -790,7 +792,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             crossOrigin="anonymous"
             muted={muted}
             src={/\.m3u8(\?.*)?$/i.test(videoSrc) && !(videoRef.current && videoRef.current.canPlayType && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) ? undefined : videoSrc}
-            preload={preloadHint}
+            preload={isActive ? 'auto' : preloadHint}
             onLoadedMetadata={handleLoadedMetadata}
             aria-label={`Sermon titled ${sermon.title}`}
             onError={async (e) => {

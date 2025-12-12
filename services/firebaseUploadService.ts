@@ -16,6 +16,8 @@ interface UploadProgress {
 interface UploadResult {
   success: boolean;
   videoUrl?: string;
+  storagePath?: string;
+  bucket?: string;
   error?: string;
 }
 
@@ -119,7 +121,9 @@ export async function uploadVideoToFirebase(
             
             resolve({
               success: true,
-              videoUrl: downloadURL
+              videoUrl: downloadURL,
+              storagePath: uploadTask.snapshot.ref.fullPath,
+              bucket: (uploadTask.snapshot.ref as any).bucket || (storage as any)?.app?.options?.storageBucket
             });
           } catch (error: any) {
             console.error('[Firebase] Error getting download URL:', error);
@@ -203,6 +207,8 @@ export async function uploadSermonWithVideo(
         scripture: sermonData.scripture,
         date: sermonData.date || new Date().toISOString(),
         videoUrl: uploadResult.videoUrl, // Firebase URL!
+        firebaseStoragePath: uploadResult.storagePath,
+        firebaseBucket: uploadResult.bucket,
         uploadedAt: new Date().toISOString()
       })
     });
