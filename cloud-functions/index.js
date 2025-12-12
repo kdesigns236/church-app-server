@@ -44,7 +44,8 @@ async function listFilesRecursive(dir) {
 }
 
 // Minimal HTTP ping for analyzer and health checks (Gen2)
-exports.ping = onRequest((req, res) => {
+// Renamed to avoid 1st-gen name collision with existing 'ping'
+exports.pingV2 = onRequest((req, res) => {
   res.status(200).send('ok');
 });
 
