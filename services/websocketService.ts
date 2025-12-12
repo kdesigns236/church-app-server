@@ -133,6 +133,20 @@ class WebSocketService {
     // - posts           -> communityPosts (community feed posts)
     // - comments        -> communityComments (community post comments)
     // - communityStories-> communityStories (already matches)
+    if (syncData.type === 'siteContent') {
+      try {
+        if (syncData.action === 'clear' || syncData.action === 'delete') {
+          localStorage.removeItem('siteContent');
+        } else {
+          const obj = (syncData && (syncData as any).data && typeof (syncData as any).data === 'object') ? (syncData as any).data : {};
+          localStorage.setItem('siteContent', JSON.stringify(obj));
+        }
+        console.log('[WebSocket] Updated siteContent in localStorage');
+      } catch (error) {
+        console.error('[WebSocket] Error updating siteContent in localStorage:', error);
+      }
+      return;
+    }
     let storageKey: string;
 
     switch (syncData.type) {

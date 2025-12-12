@@ -964,21 +964,30 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
     // Process based on action
     if (action === 'add') {
       // Add new item
-      if (!Array.isArray(dataStore[type])) {
-        return res.status(400).json({ error: `${type} is not an array` });
+      if (Array.isArray(dataStore[type])) {
+        dataStore[type].unshift(data);
+        console.log(`[Server] ✅ Added ${type}: ${data && data.id ? data.id : ''}`);
+      } else {
+        // For object types (e.g., siteContent), merge-in fields
+        const current = dataStore[type] && typeof dataStore[type] === 'object' ? dataStore[type] : {};
+        const next = data && typeof data === 'object' ? { ...current, ...data } : current;
+        dataStore[type] = next;
+        console.log(`[Server] ✅ Merged object ${type}`);
       }
-      dataStore[type].unshift(data);
-      console.log(`[Server] âœ… Added ${type}: ${data.id}`);
     } else if (action === 'update') {
       // Update existing item
       if (Array.isArray(dataStore[type])) {
         const index = dataStore[type].findIndex(item => item.id === data.id);
         if (index !== -1) {
           dataStore[type][index] = data;
-          console.log(`[Server] âœ… Updated ${type}: ${data.id}`);
+          console.log(`[Server] ✅ Updated ${type}: ${data && data.id ? data.id : ''}`);
         } else {
-          console.warn(`[Server] Item not found for update: ${type} ${data.id}`);
+          console.warn(`[Server] Item not found for update: ${type} ${data && data.id ? data.id : ''}`);
         }
+      } else {
+        // For object types (e.g., siteContent), replace the object
+        dataStore[type] = data;
+        console.log(`[Server] ✅ Updated object ${type}`);
       }
     } else if (action === 'delete') {
       // Delete item
@@ -986,8 +995,12 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
         const index = dataStore[type].findIndex(item => item.id === data.id);
         if (index !== -1) {
           dataStore[type].splice(index, 1);
-          console.log(`[Server] âœ… Deleted ${type}: ${data.id}`);
+          console.log(`[Server] ✅ Deleted ${type}: ${data && data.id ? data.id : ''}`);
         }
+      } else {
+        // For object types, clear the object
+        dataStore[type] = {};
+        console.log(`[Server] ✅ Cleared object ${type}`);
       }
     }
 
