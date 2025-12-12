@@ -57,7 +57,10 @@ exports.hlsOnUploadV2 = onObjectFinalized({ region: REGION, timeoutSeconds: 540,
   const { Storage } = require('@google-cloud/storage');
   const storage = new Storage();
   const cfg = (() => { try { return functions.config(); } catch { return {}; } })();
-  const SERVER_API_URL = process.env.SERVER_API_URL || (cfg && cfg.app && cfg.app.server_api_url);
+  const RAW_SERVER_API = ((process.env.SERVER_API_URL || (cfg && cfg.app && cfg.app.server_api_url)) || '').trim();
+  const SERVER_API_URL = RAW_SERVER_API
+    ? (RAW_SERVER_API.endsWith('/api') ? RAW_SERVER_API : (RAW_SERVER_API.endsWith('/') ? (RAW_SERVER_API + 'api') : (RAW_SERVER_API + '/api')))
+    : '';
   const HLS_CALLBACK_SECRET = process.env.HLS_CALLBACK_SECRET || (cfg && cfg.app && cfg.app.hls_secret);
   const ENV_CRF = process.env.HLS_CRF || (cfg && cfg.app && cfg.app.crf) || '22';
   const ENV_PRESET = process.env.HLS_PRESET || (cfg && cfg.app && cfg.app.preset) || 'veryfast';

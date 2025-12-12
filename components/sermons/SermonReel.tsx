@@ -309,14 +309,57 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
       preloadEl = document.createElement('link');
       preloadEl.rel = 'preload';
-      (preloadEl as any).as = 'video';
-      preloadEl.href = videoSrc;
+      const isHls = /\.m3u8(\?.*)?$/i.test(videoSrc);
+      if (isHls) {
+        // For HLS manifests, preload as fetch so the manifest is available instantly for hls.js
+        (preloadEl as any).as = 'fetch';
+        (preloadEl as any).crossOrigin = 'anonymous';
+        (preloadEl as any).type = 'application/x-mpegURL';
+        preloadEl.href = videoSrc;
+      } else {
+        (preloadEl as any).as = 'video';
+        preloadEl.href = videoSrc;
+      }
       document.head.appendChild(preloadEl);
     } catch {}
     return () => {
       try { if (preconnectEl && preconnectEl.parentNode) preconnectEl.parentNode.removeChild(preconnectEl); } catch {}
       try { if (preloadEl && preloadEl.parentNode) preloadEl.parentNode.removeChild(preloadEl); } catch {}
     };
+  }, [videoSrc]);
+
+  // Opportunistically pre-warm HLS manifest and first segment to reduce startup latency
+  useEffect(() => {
+    let aborted = false;
+    const controller = new AbortController();
+    const warm = async () => {
+      try {
+        const src = videoSrc;
+        if (!src || !/\.m3u8(\?.*)?$/i.test(src)) return;
+        // Fetch master playlist
+        const masterRes = await fetch(src, { cache: 'force-cache', mode: 'cors', signal: controller.signal });
+        if (!masterRes.ok) return;
+        const master = await masterRes.text();
+        if (aborted) return;
+        // Find first variant URL (non-comment line)
+        const vLine = (master.split(/\r?\n/).find(l => l && !l.trim().startsWith('#')) || '').trim();
+        if (!vLine) return;
+        const variantUrl = new URL(vLine, src).toString();
+        // Fetch variant playlist
+        const varRes = await fetch(variantUrl, { cache: 'force-cache', mode: 'cors', signal: controller.signal });
+        if (!varRes.ok) return;
+        const variant = await varRes.text();
+        if (aborted) return;
+        // Warm the first media segment (first non-comment line)
+        const segLine = (variant.split(/\r?\n/).find(l => l && !l.trim().startsWith('#')) || '').trim();
+        if (!segLine) return;
+        const segUrl = new URL(segLine, variantUrl).toString();
+        // Fire and forget; do not block UI
+        fetch(segUrl, { cache: 'force-cache', mode: 'cors' }).catch(() => {});
+      } catch {}
+    };
+    warm();
+    return () => { aborted = true; try { controller.abort(); } catch {} };
   }, [videoSrc]);
 
   // HLS (.m3u8) fallback using hls.js with dynamic CDN load
@@ -344,11 +387,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           const hls = new HlsCtor({
             enableWorker: true,
             lowLatencyMode: false,
-            startLevel: 0,
+            startLevel: 0, // start at lowest for fastest startup, ABR will ramp
             capLevelToPlayerSize: true,
-            maxBufferLength: 120,
-            backBufferLength: 60,
+            maxBufferLength: 30,
+            backBufferLength: 30,
             liveSyncDuration: 3,
+            startFragPrefetch: true,
+            abrEwmaDefaultEstimate: 800000, // bias initial bitrate estimate to ~800kbps for quicker start
             fragLoadingTimeOut: 20000,
             manifestLoadingTimeOut: 20000,
           });
