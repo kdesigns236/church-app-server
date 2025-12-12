@@ -19,8 +19,16 @@ function isVideoObject(object) {
   return true;
 }
 
+function toAppspotBucketName(b) {
+  try {
+    if (!b) return b;
+    if (typeof b !== 'string') return b;
+    return b.replace('.firebasestorage.app', '.appspot.com');
+  } catch { return b; }
+}
 function buildDownloadUrl(bucket, filePath, token) {
-  const base = `https://firebasestorage.googleapis.com/v0/b/${bucket}/o/${encodeURIComponent(filePath)}`;
+  const b = toAppspotBucketName(bucket);
+  const base = `https://firebasestorage.googleapis.com/v0/b/${b}/o/${encodeURIComponent(filePath)}`;
   const qp = token ? `?alt=media&token=${token}` : '?alt=media';
   return base + qp;
 }
@@ -153,9 +161,169 @@ exports.hlsOnUploadV2 = onObjectFinalized({ region: REGION, timeoutSeconds: 540,
     { name: '720p', size: '?x720', vbr: VBR_720,  abr: '128k', resolution: '1280x720' },
     { name: '1080p', size: '?x1080', vbr: VBR_1080, abr: '160k', resolution: '1920x1080' },
   ].map(r => ({ ...r, bandwidth: toBps(r.vbr) + toBps(r.abr) + 100000 }));
-
   logger.log('[HLS] Starting multi-bitrate ffmpeg jobs');
-  for (const r of renditions) {
+  const firstRendition = renditions[0];
+  const restRenditions = renditions.slice(1);
+  {
+    const r = firstRendition;
+    const varDir = path.join(outDir, r.name);
+    await ensureDir(varDir);
+    await new Promise((resolve, reject) => {
+      ffmpeg(srcFileLocal)
+        .videoCodec('libx264')
+        .audioCodec('aac')
+        .outputOptions([
+          '-profile:v', 'main',
+          '-crf', String(ENV_CRF),
+          '-preset', String(ENV_PRESET),
+          '-ac', '2',
+          '-ar', '48000',
+          '-b:a', r.abr,
+          '-maxrate', r.vbr,
+          '-bufsize', r.vbr,
+          '-sc_threshold', '0',
+          '-hls_flags', 'independent_segments',
+          '-force_key_frames', `expr:gte(t,n_forced*${String(ENV_SEG)})`,
+          '-hls_time', String(ENV_SEG),
+          '-hls_playlist_type', 'vod',
+          '-hls_segment_filename', path.join(varDir, 'segment_%03d.ts'),
+        ])
+        .size(r.size)
+        .output(path.join(varDir, 'index.m3u8'))
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+    logger.log(`[HLS] Rendition ${r.name} complete`);
+  }
+
+  const variantPlaylistUrls = new Map();
+  let thumbUrl = undefined;
+  const masterToken = crypto.randomUUID();
+  const m3u8Dest = `${dstPrefix}master.m3u8`;
+
+  {
+    const r = firstRendition;
+    const varDir = path.join(outDir, r.name);
+    const files = await listFilesRecursive(varDir);
+    const segmentUrlMap = new Map();
+
+    for (const localPath of files) {
+      const fname = path.basename(localPath);
+      if (fname === 'index.m3u8') continue;
+      const destPath = `${dstPrefix}${r.name}/${fname}`;
+
+      const isTs = fname.endsWith('.ts');
+      const isJpg = fname.toLowerCase().endsWith('.jpg') || fname.toLowerCase().endsWith('.jpeg');
+      const contentType = isTs ? 'video/mp2t' : (isJpg ? 'image/jpeg' : 'application/octet-stream');
+
+      const token = crypto.randomUUID();
+      await storage.bucket(bucketName).upload(localPath, {
+        destination: destPath,
+        metadata: {
+          contentType,
+          metadata: { firebaseStorageDownloadTokens: token },
+          cacheControl: 'public, max-age=31536000'
+        }
+      });
+
+      const publicUrl = buildDownloadUrl(bucketName, destPath, token);
+      if (isTs) segmentUrlMap.set(fname, publicUrl);
+      if (!thumbUrl && isJpg && fname.toLowerCase() === 'thumb.jpg') thumbUrl = publicUrl;
+    }
+
+    const plLocal = path.join(varDir, 'index.m3u8');
+    let plContent = '';
+    try { plContent = (await fs.readFile(plLocal)).toString('utf8'); }
+    catch (e) { logger.error(`[HLS] Failed reading ${r.name}/index.m3u8`, e); return; }
+
+    const plRewritten = plContent.split(/\r?\n/).map((line) => {
+      const t = line.trim();
+      if (!t || t.startsWith('#')) return line;
+      if (segmentUrlMap.has(t)) return segmentUrlMap.get(t);
+      return line;
+    }).join('\n');
+
+    const playlistToken = crypto.randomUUID();
+    const variantDest = `${dstPrefix}${r.name}/index.m3u8`;
+    await storage.bucket(bucketName).file(variantDest).save(plRewritten, {
+      contentType: 'application/x-mpegURL',
+      metadata: { metadata: { firebaseStorageDownloadTokens: playlistToken }, cacheControl: 'public, max-age=3600' },
+      resumable: false
+    });
+    const variantUrl = buildDownloadUrl(bucketName, variantDest, playlistToken);
+    variantPlaylistUrls.set(r.name, variantUrl);
+  }
+
+  {
+    const masterLines = [
+      '#EXTM3U',
+      '#EXT-X-VERSION:3',
+      '#EXT-X-INDEPENDENT-SEGMENTS',
+    ];
+    for (const r of renditions) {
+      const url = variantPlaylistUrls.get(r.name);
+      if (!url) continue;
+      masterLines.push(`#EXT-X-STREAM-INF:BANDWIDTH=${r.bandwidth},RESOLUTION=${r.resolution}`);
+      masterLines.push(url);
+    }
+    const masterContent = masterLines.join('\n');
+    await storage.bucket(bucketName).file(m3u8Dest).save(masterContent, {
+      contentType: 'application/x-mpegURL',
+      metadata: { metadata: { firebaseStorageDownloadTokens: masterToken }, cacheControl: 'public, max-age=60' },
+      resumable: false
+    });
+
+    const earlyHlsUrl = buildDownloadUrl(bucketName, m3u8Dest, masterToken);
+
+    try {
+      let earlySermonId = undefined;
+      const encSrcPath = encodeURIComponent(srcPath);
+      const fileNameOnly = path.basename(srcPath);
+      for (let i = 0; i < 6; i++) {
+        try {
+          const resp = await fetch(`${SERVER_API_URL}/sermons`);
+          const list = await resp.json();
+          const match = Array.isArray(list) ? list.find((s) => {
+            try {
+              if (s?.firebaseStoragePath && s.firebaseStoragePath === srcPath) return true;
+              const v = s?.videoUrl;
+              if (typeof v === 'string') {
+                const base = v.split('?')[0] || v;
+                if (base.includes(`/o/${encSrcPath}`)) return true;
+                if (fileNameOnly && base.toLowerCase().includes(fileNameOnly.toLowerCase())) return true;
+              }
+            } catch {}
+            return false;
+          }) : undefined;
+          if (match && match.id) { earlySermonId = String(match.id); break; }
+        } catch (e) {
+          logger.warn(`[HLS] Early lookup attempt ${i+1} failed`, e);
+        }
+        await new Promise(r => setTimeout(r, 5000));
+      }
+
+      if (earlySermonId) {
+        const body = { hlsUrl: earlyHlsUrl };
+        const resp = await fetch(`${SERVER_API_URL}/sermons/${encodeURIComponent(earlySermonId)}/hls-callback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-HLS-SECRET': HLS_CALLBACK_SECRET },
+          body: JSON.stringify(body)
+        });
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`Early callback failed ${resp.status}: ${text}`);
+        }
+        logger.log('[HLS] Early callback success for sermon', earlySermonId);
+      } else {
+        logger.error('[HLS] Early stage: Could not find sermonId for storagePath', srcPath);
+      }
+    } catch (e) {
+      logger.error('[HLS] Early callback error', e);
+    }
+  }
+
+  for (const r of restRenditions) {
     const varDir = path.join(outDir, r.name);
     await ensureDir(varDir);
     await new Promise((resolve, reject) => {
@@ -189,15 +357,13 @@ exports.hlsOnUploadV2 = onObjectFinalized({ region: REGION, timeoutSeconds: 540,
   logger.log('[HLS] All renditions finished');
 
   const durationSec = await getDurationSec(srcFileLocal);
-  const thumbLocal = await generateThumbnail(srcFileLocal, outDir);
+  let thumbLocal = await generateThumbnail(srcFileLocal, outDir);
 
   // Upload segments, variant playlists, and thumbnail; then create master
   const bucket = storage.bucket(bucketName);
-  let thumbUrl = undefined;
-  const variantPlaylistUrls = new Map(); // name -> url
 
   // Upload thumbnail if present later in loop
-  for (const r of renditions) {
+  for (const r of restRenditions) {
     const varDir = path.join(outDir, r.name);
     const files = await listFilesRecursive(varDir);
     const segmentUrlMap = new Map();
@@ -286,11 +452,9 @@ exports.hlsOnUploadV2 = onObjectFinalized({ region: REGION, timeoutSeconds: 540,
   }
   const masterContent = masterLines.join('\n');
 
-  const masterToken = crypto.randomUUID();
-  const m3u8Dest = `${dstPrefix}master.m3u8`;
   await bucket.file(m3u8Dest).save(masterContent, {
     contentType: 'application/x-mpegURL',
-    metadata: { metadata: { firebaseStorageDownloadTokens: masterToken }, cacheControl: 'public, max-age=1800' },
+    metadata: { metadata: { firebaseStorageDownloadTokens: masterToken }, cacheControl: 'public, max-age=60' },
     resumable: false
   });
 

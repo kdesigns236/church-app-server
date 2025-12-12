@@ -110,9 +110,16 @@ export async function uploadVideoToFirebase(
           try {
             // Get signed download URL with custom metadata
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-            
+
+            // Prefer the appspot.com bucket form to avoid an extra redirect in some environments
+            const rawBucket = (uploadTask.snapshot.ref as any).bucket || (storage as any)?.app?.options?.storageBucket || '';
+            const appspotBucket = typeof rawBucket === 'string' ? rawBucket.replace('.firebasestorage.app', '.appspot.com') : rawBucket;
+            const optimizedURL = typeof downloadURL === 'string'
+              ? downloadURL.replace(`/b/${rawBucket}/o/`, `/b/${appspotBucket}/o/`)
+              : downloadURL;
+
             // Add CORS query parameter to URL
-            const urlWithCors = new URL(downloadURL);
+            const urlWithCors = new URL(optimizedURL);
             urlWithCors.searchParams.append('alt', 'media');
             urlWithCors.searchParams.append('cors', '*');
             
@@ -121,9 +128,9 @@ export async function uploadVideoToFirebase(
             
             resolve({
               success: true,
-              videoUrl: downloadURL,
+              videoUrl: urlWithCors.toString(),
               storagePath: uploadTask.snapshot.ref.fullPath,
-              bucket: (uploadTask.snapshot.ref as any).bucket || (storage as any)?.app?.options?.storageBucket
+              bucket: appspotBucket
             });
           } catch (error: any) {
             console.error('[Firebase] Error getting download URL:', error);
