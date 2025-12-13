@@ -57,6 +57,10 @@ const HeaderLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         '/golive',
         '/prostream',
         '/create-post',
+        '/login',
+        '/register',
+        '/verify-email',
+        '/forgot-password',
     ];
     const path = (location.pathname || '/').toLowerCase().replace(/\/$/, '');
     const showHeader = path === '' || !hideHeaderOn.some((r) => {
@@ -330,6 +334,17 @@ const App: React.FC = () => {
             } catch {}
         })();
     }, []);
+
+    useEffect(() => {
+        try {
+            if (!isAuthenticated) {
+                const hash = window.location.hash || '';
+                if (!hash || hash === '#' || hash === '#/' || hash === '#') {
+                    window.location.replace('#/login');
+                }
+            }
+        } catch {}
+    }, [isAuthenticated]);
 
     useEffect(() => {
         (async () => {

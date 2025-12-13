@@ -369,7 +369,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     return () => { aborted = true; try { controller.abort(); } catch {} };
   }, [videoSrc, isActive]);
 
-  // HLS (.m3u8) fallback using hls.js with dynamic CDN load — only attach when active
+  // HLS (.m3u8) fallback using hls.js with robust CDN/timeout fallback — only attach when active
   useEffect(() => {
     const v = videoRef.current;
     const src = videoSrc;
@@ -381,17 +381,40 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     }
     const isHls = /\.m3u8(\?.*)?$/i.test(src);
     const canNative = v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl');
-    let scriptEl: HTMLScriptElement | null = null;
     let cancelled = false;
+    let currentScript: HTMLScriptElement | null = null;
+    let timer: any = null;
     const cleanup = () => {
       try { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } } catch {}
-      // Keep the HLS script loaded once to avoid reloading on subsequent visits
+      if (currentScript && currentScript.parentNode) { try { currentScript.parentNode.removeChild(currentScript); } catch {} }
+      if (timer) { try { window.clearTimeout(timer); } catch {} }
     };
     if (!isHls) { cleanup(); return; }
     if (canNative) {
       try { v.src = src; } catch {}
       return () => { /* native */ };
     }
+
+    const tryNonHlsFallback = () => {
+      if (fallbackTriedRef.current) return;
+      try {
+        const fbCandidates: any[] = [
+          (sermon as any)?.fullSermonUrl,
+          (sermon as any)?.videoUrl,
+          (sermon as any)?.video?.url,
+          (sermon as any)?.url,
+          (sermon as any)?.media?.url,
+        ];
+        const fb = fbCandidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u) && !/\.m3u8(\?.*)?$/i.test(u));
+        if (fb) {
+          fallbackTriedRef.current = true;
+          setIsBuffering(false);
+          setIsReady(false);
+          setVideoSrc(fb);
+        }
+      } catch {}
+    };
+
     const attachHls = () => {
       try {
         if ((window as any).Hls && (window as any).Hls.isSupported()) {
@@ -399,13 +422,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           const hls = new HlsCtor({
             enableWorker: true,
             lowLatencyMode: false,
-            startLevel: 0, // start at lowest for fastest startup, ABR will ramp
+            startLevel: 0,
             capLevelToPlayerSize: true,
             maxBufferLength: 30,
             backBufferLength: 30,
             liveSyncDuration: 3,
             startFragPrefetch: true,
-            abrEwmaDefaultEstimate: 800000, // bias initial bitrate estimate to ~800kbps for quicker start
+            abrEwmaDefaultEstimate: 800000,
             fragLoadingTimeOut: 20000,
             manifestLoadingTimeOut: 20000,
           });
@@ -415,7 +438,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             if (cancelled) return;
             try { hls.loadSource(src); } catch {}
           });
-          // Capture duration from manifest/level for progress bar
           try {
             hls.on(HlsCtor.Events.MANIFEST_PARSED, () => {
               try { if (isFinite(v.duration)) setDurationSec(v.duration); } catch {}
@@ -429,27 +451,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             hls.on(HlsCtor.Events.ERROR, (_event: any, data: any) => {
               if (!data) return;
               if (data.fatal) {
-                // Attempt a one-time fallback to a non-HLS URL if available
                 if (!fallbackTriedRef.current) {
-                  try {
-                    const fbCandidates: any[] = [
-                      (sermon as any)?.fullSermonUrl,
-                      (sermon as any)?.videoUrl,
-                      (sermon as any)?.video?.url,
-                      (sermon as any)?.url,
-                      (sermon as any)?.media?.url,
-                    ];
-                    const fb = fbCandidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u) && !/\.m3u8(\?.*)?$/i.test(u));
-                    if (fb) {
-                      fallbackTriedRef.current = true;
-                      try { hls.destroy(); } catch {}
-                      hlsRef.current = null;
-                      setIsBuffering(false);
-                      setIsReady(false);
-                      setVideoSrc(fb);
-                      return;
-                    }
-                  } catch {}
+                  tryNonHlsFallback();
+                  if (fallbackTriedRef.current) return;
                 }
                 switch (data.type) {
                   case 'mediaError':
@@ -473,13 +477,32 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       } catch {}
       return false;
     };
-    if (!attachHls()) {
-      scriptEl = document.createElement('script');
-      scriptEl.src = 'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js';
-      scriptEl.async = true;
-      scriptEl.onload = () => { if (!cancelled) attachHls(); };
-      document.head.appendChild(scriptEl);
-    }
+
+    const cdns = [
+      'https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js',
+      'https://unpkg.com/hls.js@1.5.13/dist/hls.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js',
+    ];
+    let idx = 0;
+    const loadFromCdn = () => {
+      if (cancelled) return;
+      if (attachHls()) return;
+      if (idx >= cdns.length) { tryNonHlsFallback(); return; }
+      try {
+        if (currentScript && currentScript.parentNode) currentScript.parentNode.removeChild(currentScript);
+      } catch {}
+      const s = document.createElement('script');
+      currentScript = s;
+      s.src = cdns[idx++];
+      s.async = true;
+      s.onload = () => { if (!cancelled) { if (!attachHls()) { loadFromCdn(); } } };
+      s.onerror = () => { if (!cancelled) loadFromCdn(); };
+      document.head.appendChild(s);
+      if (timer) { try { window.clearTimeout(timer); } catch {} }
+      timer = window.setTimeout(() => { if (!cancelled) loadFromCdn(); }, 3500);
+    };
+
+    loadFromCdn();
     return () => { cancelled = true; cleanup(); };
   }, [videoSrc, isActive]);
 
