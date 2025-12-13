@@ -1,6 +1,7 @@
 import { CapacitorDownloader } from '@capgo/capacitor-downloader';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
+import { chunkedVideoDownloader } from './chunkedVideoDownloader';
 
 export type MinimalSermon = { id: string | number; videoUrl?: string };
 
@@ -185,6 +186,7 @@ export const backgroundDownloadService = {
 
   async scheduleForSermons(sermons: MinimalSermon[]) {
     if (!Array.isArray(sermons) || sermons.length === 0) return;
+    try { await Filesystem.requestPermissions(); } catch {}
     await ensureDir();
     const map = getFileMap();
 
@@ -207,16 +209,29 @@ export const backgroundDownloadService = {
         }
 
         // Build absolute destination URI in app data dir
-        const uri = await Filesystem.getUri({ directory: Directory.Data, path: relPath });
-        await CapacitorDownloader.download({
-          id: `sermon-${id}`,
-          url,
-          destination: uri.uri,
-          network: 'cellular',
-          priority: 'high'
-        });
-        map[id] = relPath;
-        setFileMap(map);
+        let uri: { uri: string } | null = null;
+        try {
+          uri = await Filesystem.getUri({ directory: Directory.Data, path: relPath });
+        } catch (e) {
+          uri = null;
+        }
+        try {
+          await CapacitorDownloader.download({
+            id: `sermon-${id}`,
+            url,
+            // Some Android versions require a file:// path; convertFileSrc returns content:// for webview.
+            // The plugin accepts the app-internal destination URI from Filesystem.getUri.
+            destination: uri?.uri || relPath,
+            network: 'cellular',
+            priority: 'high'
+          } as any);
+          map[id] = relPath;
+          setFileMap(map);
+        } catch (nativeErr) {
+          // Native download failed — fall back to web chunked downloader (IndexedDB)
+          console.warn('[BackgroundDownloader] Native download failed, falling back to web downloader', id, nativeErr);
+          try { await chunkedVideoDownloader.download(id, url); } catch {}
+        }
       } catch (e) {
         // Continue with next
         console.warn('[BackgroundDownloader] Failed to download', id, e);
