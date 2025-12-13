@@ -62,7 +62,10 @@ const HeaderLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         '/verify-email',
         '/forgot-password',
     ];
-    const path = (location.pathname || '/').toLowerCase().replace(/\/$/, '');
+    const hashPath = (typeof window !== 'undefined' && window.location && typeof window.location.hash === 'string' && window.location.hash.startsWith('#/'))
+        ? window.location.hash.slice(1)
+        : (location.pathname || '/');
+    const path = hashPath.toLowerCase().replace(/\/$/, '');
     const showHeader = path === '' || !hideHeaderOn.some((r) => {
         const base = r.toLowerCase().replace(/\/$/, '');
         return path === base || path.startsWith(base + '/');
@@ -79,7 +82,10 @@ const HeaderLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 
 const PageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const location = useLocation();
-    const showFooter = location.pathname === '/';
+    const hashPath = (typeof window !== 'undefined' && window.location && typeof window.location.hash === 'string' && window.location.hash.startsWith('#/'))
+        ? window.location.hash.slice(1)
+        : (location.pathname || '/');
+    const showFooter = hashPath === '/';
     
     return (
         <div className="flex flex-col min-h-screen">
@@ -114,7 +120,10 @@ const ProtectedRoutes: React.FC = () => {
         '/prostream',
         '/create-post',
     ];
-    const path = (location.pathname || '/').toLowerCase().replace(/\/$/, '');
+    const hashPath2 = (typeof window !== 'undefined' && window.location && typeof window.location.hash === 'string' && window.location.hash.startsWith('#/'))
+        ? window.location.hash.slice(1)
+        : (location.pathname || '/');
+    const path = hashPath2.toLowerCase().replace(/\/$/, '');
     const showHeader = !hideHeaderOn.some((r) => {
         const base = r.toLowerCase().replace(/\/$/, '');
         return path === base || path.startsWith(base + '/');
