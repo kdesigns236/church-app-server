@@ -97,6 +97,7 @@ const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
 const ProtectedRoutes: React.FC = () => {
     const location = useLocation();
+    const [visitedPaths, setVisitedPaths] = useState<string[]>([]);
 
     const hideHeaderOn = [
         '/sermons',
@@ -159,26 +160,51 @@ const ProtectedRoutes: React.FC = () => {
         return () => clearInterval(interval);
     }, [location.pathname]);
 
+    // Track visited paths to enable keep-alive only after first visit
+    useEffect(() => {
+        const p = (location.pathname || '/').toLowerCase().replace(/\/$/, '');
+        setVisitedPaths(prev => (prev.includes(p) ? prev : [...prev, p]));
+    }, [location.pathname]);
+
     return (
         <>
             <PageLayout>
                 <Suspense fallback={<LoadingFallback />}>
-                    {/* Keep Sermons page alive across route changes */}
+                    {/* Keep-alive pages for fastness: mount once after first visit and keep hidden when inactive */}
+                    {/* Sermons */}
                     <div style={{ display: path === '/sermons' ? 'block' : 'none' }}>
                         <SermonsPage />
                     </div>
+                    {/* Chat / Community */}
+                    {(path === '/chat' || visitedPaths.includes('/chat')) && (
+                        <div style={{ display: path === '/chat' ? 'block' : 'none' }}>
+                            <CommunityFeedPage />
+                        </div>
+                    )}
+                    {/* Bible (large data) */}
+                    {(path === '/bible' || visitedPaths.includes('/bible')) && (
+                        <div style={{ display: path === '/bible' ? 'block' : 'none' }}>
+                            <BiblePage />
+                        </div>
+                    )}
+                    {/* Pro Stream (heavy UI) */}
+                    {(path === '/prostream' || visitedPaths.includes('/prostream')) && (
+                        <div style={{ display: path === '/prostream' ? 'block' : 'none' }}>
+                            <ProStreamApp />
+                        </div>
+                    )}
                     <Routes>
                         <Route path="/" element={<HomePage />} />
                         <Route path="/sermons" element={<></>} />
                         <Route path="/announcements" element={<AnnouncementsPage />} />
                         <Route path="/events" element={<EventsPage />} />
-                        <Route path="/bible" element={<BiblePage />} />
+                        <Route path="/bible" element={<></>} />
                         <Route path="/bible-study" element={<BibleStudyPage />} />
                         <Route path="/giving" element={<GivingPage />} />
                         <Route path="/members" element={<MembersPage />} />
                         <Route path="/golive" element={<GoLivePage />} />
-                        <Route path="/prostream" element={<ProStreamApp />} />
-                        <Route path="/chat" element={<CommunityFeedPage />} />
+                        <Route path="/prostream" element={<></>} />
+                        <Route path="/chat" element={<></>} />
                         <Route path="/chat-room" element={<ChatPage />} />
                         <Route path="/create-post" element={<CreatePostPage />} />
                         <Route path="/contact" element={<ContactPage />} />

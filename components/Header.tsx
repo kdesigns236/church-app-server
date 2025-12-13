@@ -117,7 +117,9 @@ export const Header: React.FC = () => {
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsOpen(!isOpen)}
-              className="p-2 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-navy-light focus:outline-none"
+              className="p-2 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-white hover:bg-navy-light focus:outline-none will-change-transform transition-colors"
+              aria-expanded={isOpen}
+              aria-controls="mobile-menu"
             >
               <span className="sr-only">Open main menu</span>
               {isOpen ? <FiX className="block h-6 w-6" /> : <FiMenu className="block h-6 w-6" />}
@@ -126,9 +128,12 @@ export const Header: React.FC = () => {
         </div>
       </nav>
 
-      {isOpen && (
-        <div className="md:hidden bg-primary dark:bg-gray-900 border-t border-navy-light max-h-[calc(100vh-3.5rem)] overflow-y-auto">
-          <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+      <div
+        id="mobile-menu"
+        aria-hidden={!isOpen}
+        className={`md:hidden bg-primary dark:bg-gray-900 border-t border-navy-light h-[calc(100vh-3.5rem)] overflow-y-auto pb-[max(env(safe-area-inset-bottom),1rem)] transform transition-all duration-200 ease-out ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+      >
+          <div className="px-2 pr-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
@@ -187,7 +192,6 @@ export const Header: React.FC = () => {
              )}
           </div>
         </div>
-      )}
     </header>
   );
 };
