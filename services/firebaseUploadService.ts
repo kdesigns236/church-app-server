@@ -5,7 +5,8 @@
  */
 
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../config/firebase';
+import { storage, auth } from '../config/firebase';
+import { signInAnonymously } from 'firebase/auth';
 
 interface UploadProgress {
   progress: number;
@@ -41,9 +42,15 @@ export async function uploadMediaToFirebase(
   onProgress?: (progress: UploadMediaProgress) => void
 ): Promise<UploadMediaResult> {
   try {
+    try { await signInAnonymously(auth); } catch {}
     const ts = Date.now();
-    const ext = (file.type && file.type.split('/')[1]) || 'bin';
-    const safeName = `${folder}/${ts}_${(file.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_')}.${ext}`;
+    // Derive extension from file name or MIME type
+    const namePart = (file.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const nameExtMatch = namePart.match(/\.([a-zA-Z0-9]+)$/);
+    const mimeExt = (file.type && file.type.split('/')[1]) || 'bin';
+    const ext = (nameExtMatch && nameExtMatch[1]) ? nameExtMatch[1] : mimeExt;
+    const base = namePart.replace(/\.[a-zA-Z0-9]+$/, '');
+    const safeName = `${folder}/${ts}_${base}.${ext}`;
     const storageRef = ref(storage, safeName);
 
     const uploadTask = uploadBytesResumable(storageRef, file, {
@@ -56,6 +63,7 @@ export async function uploadMediaToFirebase(
     });
 
     return await new Promise<UploadMediaResult>((resolve, reject) => {
+      try { if (onProgress) onProgress({ progress: 0, bytesTransferred: 0, totalBytes: file.size || 0 }); } catch {}
       uploadTask.on(
         'state_changed',
         (snapshot) => {
@@ -107,6 +115,7 @@ export async function uploadVideoToFirebase(
   onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
   try {
+    try { await signInAnonymously(auth); } catch {}
     console.log('[Firebase] Starting upload:', videoFile.name);
     console.log('[Firebase] File size:', (videoFile.size / 1024 / 1024).toFixed(2), 'MB');
 
@@ -135,6 +144,7 @@ export async function uploadVideoToFirebase(
 
     // Return promise that resolves when upload completes
     return new Promise((resolve, reject) => {
+      try { if (onProgress) onProgress({ progress: 0, bytesTransferred: 0, totalBytes: videoFile.size || 0 }); } catch {}
       uploadTask.on(
         'state_changed',
         // Progress callback

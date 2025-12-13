@@ -163,10 +163,23 @@ const CreatePostPage: React.FC = () => {
         if (!original) return;
         const canEdit = (user.role === 'admin') || (original.author === user.name);
         if (!canEdit) return;
+        let newMedia: { url: string; type: 'image' | 'video' } | undefined = undefined;
+        if (!removedExistingMedia) {
+          if (selectedMedia) {
+            if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:')) {
+              // Upload newly selected media if it's a data URL
+              newMedia = await uploadSelectedMedia('post');
+            } else {
+              newMedia = selectedMedia;
+            }
+          } else {
+            newMedia = original.media;
+          }
+        }
         const updated = {
           ...original,
           content: trimmed,
-          media: removedExistingMedia ? undefined : (selectedMedia ? selectedMedia : original.media),
+          media: newMedia,
         };
         updatePost(updated as any);
       } catch {}

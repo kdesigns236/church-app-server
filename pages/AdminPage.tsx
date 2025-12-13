@@ -1,4 +1,4 @@
-import React, { useEffect, useState, FormEvent } from 'react';
+import React, { useEffect, useState, FormEvent, useRef } from 'react';
 import type { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStudy, User } from '../types';
 import { CloseIcon, UsersIcon, SermonsIcon, EventsIcon, GivingIcon } from '../constants/icons';
 import { useAppContext } from '../context/AppContext';
@@ -325,6 +325,7 @@ const AdminPage: React.FC = () => {
     // State for video upload progress
     const [uploadingVideo, setUploadingVideo] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
+    const uploadStallTimerRef = useRef<number | null>(null);
     const [nativeBgEnabled, setNativeBgEnabled] = useState<boolean>(() => {
         try { return localStorage.getItem('enableNativeBgFetch') === '1'; } catch { return false; }
     });
@@ -350,6 +351,23 @@ const AdminPage: React.FC = () => {
     const handleCloseModal = () => {
         setModalConfig({ isOpen: false, type: null, item: null });
     };
+
+    // Watchdog: if upload UI is shown but progress never advances, surface helpful hint
+    useEffect(() => {
+        if (!uploadingVideo) {
+            if (uploadStallTimerRef.current) { try { window.clearTimeout(uploadStallTimerRef.current); } catch {} uploadStallTimerRef.current = null; }
+            return;
+        }
+        if (uploadStallTimerRef.current) { try { window.clearTimeout(uploadStallTimerRef.current); } catch {} }
+        uploadStallTimerRef.current = window.setTimeout(() => {
+            try {
+                if (uploadProgress < 1) {
+                    alert('Upload has not started. Please ensure you are logged in as Admin and have internet connectivity. If this persists, verify Firebase keys in the build.');
+                }
+            } catch {}
+        }, 12000) as any;
+        return () => { if (uploadStallTimerRef.current) { try { window.clearTimeout(uploadStallTimerRef.current); } catch {} uploadStallTimerRef.current = null; } };
+    }, [uploadingVideo, uploadProgress]);
 
     const handleMoveSermon = (id: string, direction: 'up' | 'down') => {
         if (sortedSermons.length === 0) {

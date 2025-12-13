@@ -49,6 +49,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const cachedOnceRef = useRef(false);
   const fallbackTriedRef = useRef(false);
   const wantUnmuteRef = useRef(false);
+  const retryOnceRef = useRef(false);
 
   // Sync fullscreen state with document and persist to localStorage
   useEffect(() => {
@@ -930,7 +931,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             autoPlay={isActive}
             loop
             playsInline
-            crossOrigin="anonymous"
             muted={muted}
             src={/\.m3u8(\?.*)?$/i.test(videoSrc) && !(videoRef.current && videoRef.current.canPlayType && videoRef.current.canPlayType('application/vnd.apple.mpegurl')) ? undefined : videoSrc}
             preload={isActive ? 'auto' : preloadHint}
