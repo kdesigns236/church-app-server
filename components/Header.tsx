@@ -131,7 +131,7 @@ export const Header: React.FC = () => {
       <div
         id="mobile-menu"
         aria-hidden={!isOpen}
-        className={`md:hidden bg-primary dark:bg-gray-900 border-t border-navy-light h-[calc(100vh-3.5rem)] overflow-y-auto pb-[max(env(safe-area-inset-bottom),1rem)] transform transition-all duration-200 ease-out ${isOpen ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2 pointer-events-none'}`}
+        className={`md:hidden fixed top-14 left-0 right-0 z-[999] bg-primary dark:bg-gray-900 border-t border-navy-light h-[calc(100vh-3.5rem)] overflow-y-auto pb-[max(env(safe-area-inset-bottom),1rem)] transform transition-all duration-200 ease-out ${isOpen ? 'block opacity-100 translate-y-0' : 'hidden opacity-0 -translate-y-2'}`}
       >
           <div className="px-2 pr-2 pt-2 pb-3 space-y-1 sm:px-3">
             {navLinks.map((link) => (

@@ -174,109 +174,63 @@ const ProtectedRoutes: React.FC = () => {
         <>
             <PageLayout>
                 <Suspense fallback={<LoadingFallback />}>
-                    {/* Keep-alive pages for fastness: mount once after first visit and keep hidden when inactive */}
-                    {/* Sermons */}
+                    {/* Keep-alive pages: always mounted, simply shown/hidden by CSS */}
                     <div style={{ display: path === '/sermons' ? 'block' : 'none' }}>
                         <SermonsPage />
                     </div>
-                    {/* Chat / Community */}
-                    {(path === '/chat' || visitedPaths.includes('/chat')) && (
-                        <div style={{ display: path === '/chat' ? 'block' : 'none' }}>
-                            <CommunityFeedPage />
-                        </div>
-                    )}
-                    {/* Bible (large data) */}
-                    {(path === '/bible' || visitedPaths.includes('/bible')) && (
-                        <div style={{ display: path === '/bible' ? 'block' : 'none' }}>
-                            <BiblePage />
-                        </div>
-                    )}
+                    <div style={{ display: path === '/chat' ? 'block' : 'none' }}>
+                        <CommunityFeedPage />
+                    </div>
+                    <div style={{ display: path === '/bible' ? 'block' : 'none' }}>
+                        <BiblePage />
+                    </div>
                     {/* Pro Stream (no keep-alive) */}
-                    {/* Home */}
-                    {(path === '' || visitedPaths.includes('')) && (
-                        <div style={{ display: path === '' ? 'block' : 'none' }}>
-                            <HomePage />
-                        </div>
-                    )}
-                    {/* Announcements */}
-                    {(path === '/announcements' || visitedPaths.includes('/announcements')) && (
-                        <div style={{ display: path === '/announcements' ? 'block' : 'none' }}>
-                            <AnnouncementsPage />
-                        </div>
-                    )}
-                    {/* Events */}
-                    {(path === '/events' || visitedPaths.includes('/events')) && (
-                        <div style={{ display: path === '/events' ? 'block' : 'none' }}>
-                            <EventsPage />
-                        </div>
-                    )}
-                    {/* Bible Study */}
-                    {(path === '/bible-study' || visitedPaths.includes('/bible-study')) && (
-                        <div style={{ display: path === '/bible-study' ? 'block' : 'none' }}>
-                            <BibleStudyPage />
-                        </div>
-                    )}
-                    {/* Giving */}
-                    {(path === '/giving' || visitedPaths.includes('/giving')) && (
-                        <div style={{ display: path === '/giving' ? 'block' : 'none' }}>
-                            <GivingPage />
-                        </div>
-                    )}
-                    {/* Members */}
-                    {(path === '/members' || visitedPaths.includes('/members')) && (
-                        <div style={{ display: path === '/members' ? 'block' : 'none' }}>
-                            <MembersPage />
-                        </div>
-                    )}
+                    <div style={{ display: path === '' ? 'block' : 'none' }}>
+                        <HomePage />
+                    </div>
+                    <div style={{ display: path === '/announcements' ? 'block' : 'none' }}>
+                        <AnnouncementsPage />
+                    </div>
+                    <div style={{ display: path === '/events' ? 'block' : 'none' }}>
+                        <EventsPage />
+                    </div>
+                    <div style={{ display: path === '/bible-study' ? 'block' : 'none' }}>
+                        <BibleStudyPage />
+                    </div>
+                    <div style={{ display: path === '/giving' ? 'block' : 'none' }}>
+                        <GivingPage />
+                    </div>
+                    <div style={{ display: path === '/members' ? 'block' : 'none' }}>
+                        <MembersPage />
+                    </div>
                     {/* Go Live (no keep-alive) */}
-                    {/* Chat Room */}
-                    {(path === '/chat-room' || visitedPaths.includes('/chat-room')) && (
-                        <div style={{ display: path === '/chat-room' ? 'block' : 'none' }}>
-                            <ChatPage />
-                        </div>
-                    )}
-                    {/* Create Post */}
-                    {(path === '/create-post' || visitedPaths.includes('/create-post')) && (
-                        <div style={{ display: path === '/create-post' ? 'block' : 'none' }}>
-                            <CreatePostPage />
-                        </div>
-                    )}
-                    {/* Contact */}
-                    {(path === '/contact' || visitedPaths.includes('/contact')) && (
-                        <div style={{ display: path === '/contact' ? 'block' : 'none' }}>
-                            <ContactPage />
-                        </div>
-                    )}
-                    {/* Profile */}
-                    {(path === '/profile' || visitedPaths.includes('/profile')) && (
-                        <div style={{ display: path === '/profile' ? 'block' : 'none' }}>
-                            <ProfilePage />
-                        </div>
-                    )}
-                    {/* Pastor AI */}
-                    {(path === '/pastor-ai' || visitedPaths.includes('/pastor-ai')) && (
-                        <div style={{ display: path === '/pastor-ai' ? 'block' : 'none' }}>
-                            <PastorAiPage />
-                        </div>
-                    )}
+                    <div style={{ display: path === '/chat-room' ? 'block' : 'none' }}>
+                        <ChatPage />
+                    </div>
+                    <div style={{ display: path === '/create-post' ? 'block' : 'none' }}>
+                        <CreatePostPage />
+                    </div>
+                    <div style={{ display: path === '/contact' ? 'block' : 'none' }}>
+                        <ContactPage />
+                    </div>
+                    <div style={{ display: path === '/profile' ? 'block' : 'none' }}>
+                        <ProfilePage />
+                    </div>
+                    <div style={{ display: path === '/pastor-ai' ? 'block' : 'none' }}>
+                        <PastorAiPage />
+                    </div>
                     {/* Video Call (no keep-alive) */}
                     {/* Camera Client (no keep-alive) */}
-                    {/* Admin - Json Converter */}
-                    {(path === '/admin/json-converter' || visitedPaths.includes('/admin/json-converter')) && (
-                        <AdminRoute>
-                            <div style={{ display: path === '/admin/json-converter' ? 'block' : 'none' }}>
-                                <JsonConverterPage />
-                            </div>
-                        </AdminRoute>
-                    )}
-                    {/* Admin - Main */}
-                    {(path === '/admin' || visitedPaths.includes('/admin')) && (
-                        <AdminRoute>
-                            <div style={{ display: path === '/admin' ? 'block' : 'none' }}>
-                                <AdminPage />
-                            </div>
-                        </AdminRoute>
-                    )}
+                    <AdminRoute>
+                        <div style={{ display: path === '/admin/json-converter' ? 'block' : 'none' }}>
+                            <JsonConverterPage />
+                        </div>
+                    </AdminRoute>
+                    <AdminRoute>
+                        <div style={{ display: path === '/admin' ? 'block' : 'none' }}>
+                            <AdminPage />
+                        </div>
+                    </AdminRoute>
                     <Routes>
                         <Route path="/" element={<></>} />
                         <Route path="/sermons" element={<></>} />
