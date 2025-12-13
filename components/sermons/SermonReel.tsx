@@ -396,9 +396,21 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       return () => { /* native */ };
     }
 
-    const tryNonHlsFallback = () => {
+    const tryNonHlsFallback = async () => {
       if (fallbackTriedRef.current) return;
+      fallbackTriedRef.current = true;
       try {
+        const storagePaths: (string | null | undefined)[] = [
+          (sermon as any)?.firebaseStoragePath,
+          (sermon as any)?.storagePath,
+          (sermon as any)?.video?.storagePath,
+        ];
+        for (const p of storagePaths) {
+          if (typeof p === 'string' && p.trim()) {
+            const fresh = await resolveFirebaseDownloadUrl(p.trim());
+            if (fresh && isMountedRef.current) { setIsBuffering(false); setIsReady(false); setVideoSrc(fresh); return; }
+          }
+        }
         const fbCandidates: any[] = [
           (sermon as any)?.fullSermonUrl,
           (sermon as any)?.videoUrl,
@@ -407,12 +419,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           (sermon as any)?.media?.url,
         ];
         const fb = fbCandidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u) && !/\.m3u8(\?.*)?$/i.test(u));
-        if (fb) {
-          fallbackTriedRef.current = true;
-          setIsBuffering(false);
-          setIsReady(false);
-          setVideoSrc(fb);
-        }
+        if (fb) { setIsBuffering(false); setIsReady(false); setVideoSrc(fb); return; }
       } catch {}
     };
 
@@ -956,6 +963,19 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   console.error('Failed to refresh video URL:', authError);
                 }
               }
+              try {
+                if (/\/sermons%2Fhls%2F/i.test(videoSrc)) {
+                  const enc = videoSrc.split('/o/')[1]?.split('?')[0] || '';
+                  const dec = decodeURIComponent(enc);
+                  const m = dec.match(/sermons\/hls\/([^/]+)\//);
+                  if (m && m[1]) {
+                    const mp4Path = `sermons/${m[1]}.mp4`;
+                    const fresh = await getDownloadURL(ref(storage, mp4Path));
+                    if (fresh && isMountedRef.current) { setVideoSrc(fresh); return; }
+                  }
+                }
+              } catch {}
+              try { await tryNonHlsFallback(); } catch {}
             }}
           />
           {isActive && (!isReady || isBuffering) && (
