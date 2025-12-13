@@ -21,6 +21,79 @@ interface UploadResult {
   error?: string;
 }
 
+interface UploadMediaProgress {
+  progress: number;
+  bytesTransferred: number;
+  totalBytes: number;
+}
+
+interface UploadMediaResult {
+  success: boolean;
+  url?: string;
+  storagePath?: string;
+  bucket?: string;
+  error?: string;
+}
+
+export async function uploadMediaToFirebase(
+  folder: 'posts' | 'stories',
+  file: File,
+  onProgress?: (progress: UploadMediaProgress) => void
+): Promise<UploadMediaResult> {
+  try {
+    const ts = Date.now();
+    const ext = (file.type && file.type.split('/')[1]) || 'bin';
+    const safeName = `${folder}/${ts}_${(file.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_')}.${ext}`;
+    const storageRef = ref(storage, safeName);
+
+    const uploadTask = uploadBytesResumable(storageRef, file, {
+      contentType: file.type || 'application/octet-stream',
+      cacheControl: 'public, max-age=31536000',
+      customMetadata: {
+        uploadedBy: 'member',
+        uploadDate: new Date().toISOString(),
+      },
+    });
+
+    return await new Promise<UploadMediaResult>((resolve, reject) => {
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          if (onProgress) {
+            onProgress({
+              progress,
+              bytesTransferred: snapshot.bytesTransferred,
+              totalBytes: snapshot.totalBytes,
+            });
+          }
+        },
+        (error) => {
+          reject({ success: false, error: error?.message || 'Upload failed' });
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            const rawBucket = (uploadTask.snapshot.ref as any).bucket || (storage as any)?.app?.options?.storageBucket || '';
+            const appspotBucket = typeof rawBucket === 'string' ? rawBucket.replace('.firebasestorage.app', '.appspot.com') : rawBucket;
+            const optimizedURL = typeof downloadURL === 'string'
+              ? downloadURL.replace(`/b/${rawBucket}/o/`, `/b/${appspotBucket}/o/`)
+              : downloadURL;
+            const urlWithAlt = new URL(optimizedURL);
+            urlWithAlt.searchParams.set('alt', 'media');
+            urlWithAlt.searchParams.set('cors', '*');
+            resolve({ success: true, url: urlWithAlt.toString(), storagePath: uploadTask.snapshot.ref.fullPath, bucket: appspotBucket });
+          } catch (e: any) {
+            reject({ success: false, error: e?.message || 'Failed to get URL' });
+          }
+        }
+      );
+    });
+  } catch (e: any) {
+    return { success: false, error: e?.message || 'Unknown upload error' };
+  }
+}
+
 /**
  * Upload video to Firebase Storage
  * @param videoFile - The video file to upload

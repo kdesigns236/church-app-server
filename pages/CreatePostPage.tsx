@@ -5,6 +5,8 @@ import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
 import { websocketService } from '../services/websocketService';
 import { FiX, FiImage, FiVideo, FiSmile } from 'react-icons/fi';
+import { uploadService } from '../services/uploadService';
+import { uploadMediaToFirebase } from '../services/firebaseUploadService';
 
 const CreatePostPage: React.FC = () => {
   const { user } = useAuth();
@@ -61,13 +63,54 @@ const CreatePostPage: React.FC = () => {
     } catch {}
   }, [isEditing, editPostId, posts]);
 
-  const handlePost = () => {
+  const dataUrlToFile = (dataUrl: string, filename: string): File => {
+    const arr = dataUrl.split(',');
+    const match = arr[0].match(/:(.*?);/);
+    const mime = match ? match[1] : 'application/octet-stream';
+    const bstr = atob(arr[1] || '');
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new File([u8arr], filename, { type: mime });
+  };
+
+  const uploadSelectedMedia = async (kind: 'story' | 'post'): Promise<{ url: string; type: 'image' | 'video' } | undefined> => {
+    if (!selectedMedia) return undefined;
+    try {
+      if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:')) {
+        const ext = selectedMedia.type === 'video' ? 'mp4' : 'png';
+        const file = dataUrlToFile(selectedMedia.url, `${kind}-${Date.now()}.${ext}`);
+        // Try Firebase first
+        try {
+          const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', file);
+          if (fb.success && fb.url) {
+            return { url: fb.url, type: selectedMedia.type };
+          }
+        } catch {}
+        // Fallback to server upload endpoint
+        try {
+          const remoteUrl = await uploadService.uploadFile(file);
+          return { url: remoteUrl, type: selectedMedia.type };
+        } catch {}
+        return undefined;
+      } else {
+        return selectedMedia;
+      }
+    } catch {
+      return undefined;
+    }
+  };
+
+  const handlePost = async () => {
     if (!user) return;
     const trimmed = postContent.trim();
     if (!trimmed) return;
 
     if (isStoryMode) {
       try {
+        const uploadedMedia = await uploadSelectedMedia('story');
         const newStory = {
           id: Date.now(),
           createdAt: Date.now(),
@@ -75,7 +118,7 @@ const CreatePostPage: React.FC = () => {
           author: user.name,
           avatar: user.name.trim().charAt(0).toUpperCase(),
           content: trimmed,
-          media: selectedMedia || undefined,
+          media: uploadedMedia,
           viewed: false,
           type: selectedMedia
             ? selectedMedia.type === 'video'
@@ -83,10 +126,27 @@ const CreatePostPage: React.FC = () => {
               : 'photo'
             : 'text',
         };
-        const existing = localStorage.getItem('communityStories');
-        const stories = existing ? JSON.parse(existing) : [];
-        stories.unshift(newStory);
-        localStorage.setItem('communityStories', JSON.stringify(stories));
+        try {
+          const existing = localStorage.getItem('communityStories');
+          const stories = existing ? JSON.parse(existing) : [];
+          stories.unshift(newStory);
+          try {
+            localStorage.setItem('communityStories', JSON.stringify(stories));
+          } catch (e) {
+            const slim = stories.slice(0, 50).map((s: any) => ({
+              id: s.id,
+              createdAt: s.createdAt,
+              authorId: s.authorId,
+              author: s.author,
+              avatar: s.avatar,
+              content: s.content,
+              viewed: !!s.viewed,
+              type: s.type,
+              media: s.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s.media,
+            }));
+            try { localStorage.setItem('communityStories', JSON.stringify(slim)); } catch {}
+          }
+        } catch {}
 
         websocketService.pushUpdate({
           type: 'communityStories',
@@ -111,7 +171,14 @@ const CreatePostPage: React.FC = () => {
         updatePost(updated as any);
       } catch {}
     } else {
-      createPost(trimmed, user, selectedMedia || undefined);
+      let mediaForPost: { url: string; type: 'image' | 'video' } | undefined = undefined;
+      try {
+        mediaForPost = await uploadSelectedMedia('post');
+      } catch (e) {
+        console.error('Media upload failed, posting without media', e);
+        mediaForPost = undefined;
+      }
+      createPost(trimmed, user, mediaForPost);
     }
 
     setPostContent('');

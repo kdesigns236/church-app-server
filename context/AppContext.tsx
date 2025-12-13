@@ -179,7 +179,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [posts, setPosts] = useState<Post[]>(() => {
       try {
         const storedPosts = localStorage.getItem('communityPosts');
-        return storedPosts ? JSON.parse(storedPosts) : [];
+        const parsed = storedPosts ? JSON.parse(storedPosts) : [];
+        const sanitized = Array.isArray(parsed)
+          ? parsed.map((p: any) => ({
+              ...p,
+              media:
+                p?.media && typeof p.media.url === 'string' && p.media.url.startsWith('data:')
+                  ? undefined
+                  : p?.media,
+            }))
+          : [];
+        return sanitized;
       } catch (error) {
         console.error('Error parsing posts from localStorage', error);
         return [];
@@ -271,7 +281,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       } catch {}
 
         if (filtered.length !== prev.length) {
-          localStorage.setItem('communityPosts', JSON.stringify(filtered));
+          safeSetItem('communityPosts', filtered);
           console.log('[AppContext] Removed legacy community demo posts from localStorage');
         }
 
@@ -310,7 +320,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
         if (changed) {
           setPosts(normalized as Post[]);
-          localStorage.setItem('communityPosts', JSON.stringify(normalized));
+          safeSetItem('communityPosts', normalized);
         }
       } catch {}
     }, [posts]);
@@ -350,15 +360,48 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
         if (changed) {
           setPosts(withIds as Post[]);
-          localStorage.setItem('communityPosts', JSON.stringify(withIds));
+          safeSetItem('communityPosts', withIds);
         }
       } catch {}
     }, [users, posts]);
 
     // Helper function to save data and update sync timestamp
     const saveToLocalStorage = (key: string, data: any) => {
-      localStorage.setItem(key, JSON.stringify(data));
-      localStorage.setItem('lastSyncTime', Date.now().toString());
+      try { localStorage.setItem(key, JSON.stringify(data)); } catch {}
+      try { localStorage.setItem('lastSyncTime', Date.now().toString()); } catch {}
+    };
+
+    const slimPosts = (arr: any[]) => {
+      const limit = 200;
+      const sanitized = (arr || []).map((p: any) => ({
+        ...p,
+        media: p?.media && typeof p.media.url === 'string' && p.media.url.startsWith('data:') ? undefined : p?.media,
+      }));
+      return sanitized.slice(0, limit);
+    };
+
+    const slimStories = (arr: any[]) => {
+      const limit = 100;
+      const sanitized = (arr || []).map((s: any) => ({
+        ...s,
+        media: s?.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s?.media,
+      }));
+      return sanitized.slice(0, limit);
+    };
+
+    const safeSetItem = (key: string, value: any) => {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (_e) {
+        try {
+          if (key === 'communityPosts') {
+            localStorage.setItem(key, JSON.stringify(slimPosts(value)));
+          } else if (key === 'communityStories') {
+            localStorage.setItem(key, JSON.stringify(slimStories(value)));
+          }
+        } catch {}
+      }
+      try { localStorage.setItem('lastSyncTime', Date.now().toString()); } catch {}
     };
 
     // Merge-add: keep existing local items; add any new items from server by id
@@ -593,9 +636,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (Array.isArray(full.prayerRequests)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
                 if (Array.isArray(full.bibleStudies)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
                 if (Array.isArray(full.chatMessages)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
-                if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); localStorage.setItem('communityPosts', JSON.stringify(full.posts)); }
-                if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); localStorage.setItem('communityComments', JSON.stringify(full.comments)); }
-                if (Array.isArray(full.communityStories)) { try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {} }
+                if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); safeSetItem('communityPosts', full.posts); }
+                if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
+                if (Array.isArray(full.communityStories)) { try { safeSetItem('communityStories', full.communityStories); } catch {} }
                 localStorage.setItem('lastSyncTime', Date.now().toString());
                 syncOk = true;
                 anyFetchOk = true;
@@ -620,9 +663,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   if (Array.isArray(full.prayerRequests)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
                   if (Array.isArray(full.bibleStudies)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
                   if (Array.isArray(full.chatMessages)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
-                  if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); localStorage.setItem('communityPosts', JSON.stringify(full.posts)); }
-                  if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); localStorage.setItem('communityComments', JSON.stringify(full.comments)); }
-                  if (Array.isArray(full.communityStories)) { try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {} }
+                  if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); safeSetItem('communityPosts', full.posts); }
+                  if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
+                  if (Array.isArray(full.communityStories)) { try { safeSetItem('communityStories', full.communityStories); } catch {} }
                   localStorage.setItem('lastSyncTime', Date.now().toString());
                   syncOk = true;
                   anyFetchOk = true;
@@ -668,8 +711,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (Array.isArray(full.prayerRequests) && (full.prayerRequests.length > 0 || prayerRequests.length === 0)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
               if (Array.isArray(full.bibleStudies) && (full.bibleStudies.length > 0 || bibleStudies.length === 0)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
               if (Array.isArray(full.chatMessages) && (full.chatMessages.length > 0 || chatMessages.length === 0)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
-              if (Array.isArray(full.posts) && (full.posts.length > 0 || posts.length === 0)) { setPosts(full.posts as Post[]); localStorage.setItem('communityPosts', JSON.stringify(full.posts)); }
-              if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); localStorage.setItem('communityComments', JSON.stringify(full.comments)); }
+              if (Array.isArray(full.posts) && (full.posts.length > 0 || posts.length === 0)) { setPosts(full.posts as Post[]); safeSetItem('communityPosts', full.posts); }
+              if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
               if (Array.isArray(full.communityStories)) {
                 try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {}
               }
@@ -1032,7 +1075,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }, [prayerRequests]);
 
     useEffect(() => {
-      localStorage.setItem('communityPosts', JSON.stringify(posts));
+      safeSetItem('communityPosts', posts);
     }, [posts]);
 
     useEffect(() => {
@@ -1059,7 +1102,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       setPosts(prev => {
         const updated = [newPost, ...prev];
-        localStorage.setItem('communityPosts', JSON.stringify(updated));
+        safeSetItem('communityPosts', updated);
         return updated;
       });
 
@@ -1073,7 +1116,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updatePost = (post: Post) => {
       setPosts(prev => {
         const updated = prev.map(p => (p.id === post.id ? post : p));
-        localStorage.setItem('communityPosts', JSON.stringify(updated));
+        safeSetItem('communityPosts', updated);
         return updated;
       });
       websocketService.pushUpdate({ type: 'posts', action: 'update', data: post });
@@ -1112,7 +1155,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const deletePost = (postId: number) => {
       setPosts(prev => {
         const updated = prev.filter(post => post.id !== postId);
-        localStorage.setItem('communityPosts', JSON.stringify(updated));
+        safeSetItem('communityPosts', updated);
         return updated;
       });
 

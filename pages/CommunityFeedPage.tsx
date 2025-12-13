@@ -43,6 +43,24 @@ const CommunityFeedPage: React.FC = () => {
     return () => clearInterval(id);
   }, []);
 
+  const saveStoriesSafe = (arr: Story[]) => {
+    try {
+      const slim = (arr || []).slice(0, 100).map((s: any) => ({
+        ...s,
+        media: s?.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s?.media,
+      }));
+      localStorage.setItem('communityStories', JSON.stringify(slim));
+    } catch (e) {
+      try {
+        const slimmer = (arr || []).slice(0, 50).map((s: any) => ({
+          ...s,
+          media: s?.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s?.media,
+        }));
+        localStorage.setItem('communityStories', JSON.stringify(slimmer));
+      } catch {}
+    }
+  };
+
   const [stories, setStories] = useState<Story[]>(() => {
     try {
       const stored = localStorage.getItem('communityStories');
@@ -70,7 +88,7 @@ const CommunityFeedPage: React.FC = () => {
             }
           }
           const deduped = Array.from(byId.values()).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
-          try { localStorage.setItem('communityStories', JSON.stringify(deduped)); } catch {}
+          try { saveStoriesSafe(deduped as Story[]); } catch {}
           return deduped as Story[];
         }
         console.warn('[CommunityFeed] communityStories in localStorage was not an array, resetting.');
@@ -499,7 +517,7 @@ const CommunityFeedPage: React.FC = () => {
           });
           const merged = Array.from(byId.values()).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
           setStories(merged);
-          try { localStorage.setItem('communityStories', JSON.stringify(merged)); } catch {}
+          try { saveStoriesSafe(merged as Story[]); } catch {}
         }
       } catch (e) {
         console.error('[CommunityFeed] Failed to fetch community stories from server', e);
@@ -513,7 +531,7 @@ const CommunityFeedPage: React.FC = () => {
   useEffect(() => {
     try {
       console.log('[CommunityFeed] Saving communityStories to localStorage:', stories.length);
-      localStorage.setItem('communityStories', JSON.stringify(stories));
+      saveStoriesSafe(stories);
     } catch (error) {
       console.error('Error saving communityStories to localStorage', error);
     }
