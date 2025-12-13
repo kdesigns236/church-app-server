@@ -112,26 +112,15 @@ const SermonsPage: React.FC = () => {
     safeBackgroundFetchService.scheduleBackgroundFetch(sortedSermons).catch(() => {});
   }, [sortedSermons.length]);
 
-  // Preconnect to video origins and preload the next video resource for faster starts
+  // Reduce network usage: do not preload upcoming videos; minimal preconnect only
   useEffect(() => {
     const links: HTMLLinkElement[] = [];
-    const addPreconnect = (url: string) => {
+    const addPreconnectOrigin = (origin: string) => {
       try {
-        const u = new URL(url, window.location.href);
         const el = document.createElement('link');
         el.rel = 'preconnect';
-        el.href = u.origin;
+        el.href = origin;
         el.crossOrigin = 'anonymous';
-        document.head.appendChild(el);
-        links.push(el);
-      } catch {}
-    };
-    const addPreload = (url: string) => {
-      try {
-        const el = document.createElement('link');
-        el.rel = 'preload';
-        (el as any).as = 'video';
-        el.href = url;
         document.head.appendChild(el);
         links.push(el);
       } catch {}
@@ -149,13 +138,14 @@ const SermonsPage: React.FC = () => {
       return null;
     };
 
-    const ahead = [currentIndex, currentIndex + 1, currentIndex + 2].filter(i => i >= 0 && i < sortedSermons.length);
-    const urls = ahead.map(i => pickUrl(sortedSermons[i])).filter((u): u is string => !!u);
-    const origins = Array.from(new Set(urls.map((u) => { try { return new URL(u).origin; } catch { return ''; } }).filter(Boolean)));
-    // Preconnect all unique origins we’ll need shortly
-    origins.forEach(o => addPreconnect(o));
-    // Preload the next video resource specifically
-    if (urls[1]) addPreload(urls[1]);
+    const current = sortedSermons[currentIndex];
+    const url = current ? pickUrl(current) : null;
+    if (url) {
+      try {
+        const origin = new URL(url).origin;
+        addPreconnectOrigin(origin);
+      } catch {}
+    }
 
     return () => { links.forEach(l => { try { l.parentNode?.removeChild(l); } catch {} }); };
   }, [currentIndex, sortedSermons]);
@@ -237,13 +227,7 @@ const SermonsPage: React.FC = () => {
               showChrome={showChrome}
               onUserInteraction={handleUserInteraction}
               preloadHint={
-                index === currentIndex
-                  ? 'auto'
-                  : index === currentIndex + 1
-                  ? 'auto'
-                  : index === currentIndex - 1
-                  ? 'metadata'
-                  : 'none'
+                index === currentIndex ? 'auto' : 'none'
               }
             />
           ))

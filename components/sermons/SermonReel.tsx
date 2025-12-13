@@ -47,6 +47,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const bufferingTimerRef = useRef<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const cachedOnceRef = useRef(false);
+  const fallbackTriedRef = useRef(false);
 
   // Sync fullscreen state with document and persist to localStorage
   useEffect(() => {
@@ -134,8 +135,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     }
   };
 
-  // Load video from cloud or IndexedDB (load once per sermon)
+  // Load video source only when this reel is active to avoid loading all sermons
   useEffect(() => {
+    if (!isActive) {
+      // Do not resolve or set video source when not active
+      return;
+    }
     let objectUrl: string | null = null;
     const pickSermonUrl = (s: any): string | null => {
       const candidates: any[] = [
@@ -280,6 +285,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         if (isMountedRef.current) setVideoSrc('');
       }
     };
+    fallbackTriedRef.current = false;
     loadVideo();
 
     return () => {
@@ -287,16 +293,16 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [sermon.id]);
+  }, [sermon.id, isActive]);
 
   useEffect(() => {
     isMountedRef.current = true;
     return () => { isMountedRef.current = false; };
   }, []);
 
-  // Preconnect and preload current video source to speed up starts
+  // Preconnect and preload only for active reel to prevent mass loading on scroll
   useEffect(() => {
-    if (!videoSrc) return;
+    if (!videoSrc || !isActive) return;
     let preconnectEl: HTMLLinkElement | null = null;
     let preloadEl: HTMLLinkElement | null = null;
     try {
@@ -326,16 +332,16 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       try { if (preconnectEl && preconnectEl.parentNode) preconnectEl.parentNode.removeChild(preconnectEl); } catch {}
       try { if (preloadEl && preloadEl.parentNode) preloadEl.parentNode.removeChild(preloadEl); } catch {}
     };
-  }, [videoSrc]);
+  }, [videoSrc, isActive]);
 
-  // Opportunistically pre-warm HLS manifest and first segment to reduce startup latency
+  // Opportunistically pre-warm HLS manifest only for the active reel
   useEffect(() => {
     let aborted = false;
     const controller = new AbortController();
     const warm = async () => {
       try {
         const src = videoSrc;
-        if (!src || !/\.m3u8(\?.*)?$/i.test(src)) return;
+        if (!isActive || !src || !/\.m3u8(\?.*)?$/i.test(src)) return;
         // Fetch master playlist
         const masterRes = await fetch(src, { cache: 'force-cache', mode: 'cors', signal: controller.signal });
         if (!masterRes.ok) return;
@@ -360,13 +366,18 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     };
     warm();
     return () => { aborted = true; try { controller.abort(); } catch {} };
-  }, [videoSrc]);
+  }, [videoSrc, isActive]);
 
-  // HLS (.m3u8) fallback using hls.js with dynamic CDN load
+  // HLS (.m3u8) fallback using hls.js with dynamic CDN load — only attach when active
   useEffect(() => {
     const v = videoRef.current;
     const src = videoSrc;
     if (!v || !src) return;
+    if (!isActive) {
+      // If not active, ensure any existing HLS instance is cleaned up
+      try { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } } catch {}
+      return;
+    }
     const isHls = /\.m3u8(\?.*)?$/i.test(src);
     const canNative = v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl');
     let scriptEl: HTMLScriptElement | null = null;
@@ -407,7 +418,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           try {
             hls.on(HlsCtor.Events.MANIFEST_PARSED, () => {
               try { if (isFinite(v.duration)) setDurationSec(v.duration); } catch {}
-              try { v.play().catch(() => {}); } catch {}
+              if (isActive) { try { v.play().catch(() => {}); } catch {} }
               setIsReady(true); setIsBuffering(false);
             });
             hls.on(HlsCtor.Events.LEVEL_LOADED, (_e: any, data: any) => {
@@ -417,6 +428,28 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             hls.on(HlsCtor.Events.ERROR, (_event: any, data: any) => {
               if (!data) return;
               if (data.fatal) {
+                // Attempt a one-time fallback to a non-HLS URL if available
+                if (!fallbackTriedRef.current) {
+                  try {
+                    const fbCandidates: any[] = [
+                      (sermon as any)?.fullSermonUrl,
+                      (sermon as any)?.videoUrl,
+                      (sermon as any)?.video?.url,
+                      (sermon as any)?.url,
+                      (sermon as any)?.media?.url,
+                    ];
+                    const fb = fbCandidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u) && !/\.m3u8(\?.*)?$/i.test(u));
+                    if (fb) {
+                      fallbackTriedRef.current = true;
+                      try { hls.destroy(); } catch {}
+                      hlsRef.current = null;
+                      setIsBuffering(false);
+                      setIsReady(false);
+                      setVideoSrc(fb);
+                      return;
+                    }
+                  } catch {}
+                }
                 switch (data.type) {
                   case 'mediaError':
                     try { hls.recoverMediaError(); } catch {}
@@ -447,7 +480,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       document.head.appendChild(scriptEl);
     }
     return () => { cancelled = true; cleanup(); };
-  }, [videoSrc]);
+  }, [videoSrc, isActive]);
 
   // Start muted by default; unmute only after a user gesture
   useEffect(() => { /* no-op: required for autoplay policies */ }, []);
