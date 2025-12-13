@@ -48,6 +48,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const [isDragging, setIsDragging] = useState(false);
   const cachedOnceRef = useRef(false);
   const fallbackTriedRef = useRef(false);
+  const wantUnmuteRef = useRef(false);
 
   // Sync fullscreen state with document and persist to localStorage
   useEffect(() => {
@@ -482,8 +483,47 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     return () => { cancelled = true; cleanup(); };
   }, [videoSrc, isActive]);
 
-  // Start muted by default; unmute only after a user gesture
-  useEffect(() => { /* no-op: required for autoplay policies */ }, []);
+  // Global mute preference: initialize from localStorage and sync across reels
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem('sermonMuted');
+      // Always start muted to satisfy autoplay; remember preference and apply after first gesture
+      if (stored === '0') {
+        wantUnmuteRef.current = true;
+        setMuted(true);
+      } else {
+        setMuted(true);
+      }
+    } catch {}
+    const onFirstGesture = () => {
+      try {
+        if (wantUnmuteRef.current) {
+          wantUnmuteRef.current = false;
+          setMuted(false);
+          try { localStorage.setItem('sermonMuted', '0'); } catch {}
+          try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: false } })); } catch {}
+          const v = videoRef.current;
+          try { if (v) { v.muted = false; v.volume = 1; v.play().catch(() => {}); } } catch {}
+        }
+      } catch {}
+      try { window.removeEventListener('pointerdown', onFirstGesture, true); } catch {}
+      try { window.removeEventListener('touchstart', onFirstGesture, true); } catch {}
+    };
+    try { window.addEventListener('pointerdown', onFirstGesture, true); } catch {}
+    try { window.addEventListener('touchstart', onFirstGesture, true); } catch {}
+    const onMuteChanged = (e: any) => {
+      try {
+        const m = e && e.detail && typeof e.detail.muted === 'boolean' ? e.detail.muted : undefined;
+        if (typeof m === 'boolean') setMuted(m);
+      } catch {}
+    };
+    try { window.addEventListener('sermon-mute-changed', onMuteChanged as any); } catch {}
+    return () => {
+      try { window.removeEventListener('sermon-mute-changed', onMuteChanged as any); } catch {}
+      try { window.removeEventListener('pointerdown', onFirstGesture, true); } catch {}
+      try { window.removeEventListener('touchstart', onFirstGesture, true); } catch {}
+    };
+  }, []);
 
   // First-visit scroll hint (one-time)
   useEffect(() => {
@@ -823,7 +863,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                 title={sermon.title}
                 width="100%"
                 height="100%"
-                src={`https://www.youtube.com/embed/${embedId}?playsinline=1`}
+                src={`https://www.youtube.com/embed/${embedId}?autoplay=1&mute=1&playsinline=1`}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
                 style={{ border: '0' }}
@@ -838,7 +878,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                 title={sermon.title}
                 width="100%"
                 height="100%"
-                src={`https://player.vimeo.com/video/${embedId}`}
+                src={`https://player.vimeo.com/video/${embedId}?autoplay=1&muted=1&playsinline=1&title=0&byline=0&portrait=0`}
                 allow="autoplay; fullscreen; picture-in-picture"
                 allowFullScreen
                 style={{ border: '0' }}
@@ -975,6 +1015,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               setMuted(next);
               try { if (v) { v.muted = next; if (!next) { v.volume = 1; v.play().catch(() => {}); } } } catch {}
               try { localStorage.setItem('sermonMuted', next ? '1' : '0'); } catch {}
+              try { window.dispatchEvent(new CustomEvent('sermon-mute-changed', { detail: { muted: next } })); } catch {}
             }}
             className="p-2.5 rounded-full bg-black/60 backdrop-blur-md border border-white/10 shadow-[0_0_20px_rgba(148,163,184,0.8)] hover:bg-black/80 hover:shadow-[0_0_26px_rgba(148,163,184,1)] hover:scale-110 active:scale-95 transition-all duration-300"
             aria-label={muted ? 'Unmute' : 'Mute'}
