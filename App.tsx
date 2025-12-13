@@ -187,12 +187,7 @@ const ProtectedRoutes: React.FC = () => {
                             <BiblePage />
                         </div>
                     )}
-                    {/* Pro Stream (heavy UI) */}
-                    {(path === '/prostream' || visitedPaths.includes('/prostream')) && (
-                        <div style={{ display: path === '/prostream' ? 'block' : 'none' }}>
-                            <ProStreamApp />
-                        </div>
-                    )}
+                    {/* Pro Stream (no keep-alive) */}
                     {/* Home */}
                     {(path === '' || visitedPaths.includes('')) && (
                         <div style={{ display: path === '' ? 'block' : 'none' }}>
@@ -229,12 +224,7 @@ const ProtectedRoutes: React.FC = () => {
                             <MembersPage />
                         </div>
                     )}
-                    {/* Go Live */}
-                    {(path === '/golive' || visitedPaths.includes('/golive')) && (
-                        <div style={{ display: path === '/golive' ? 'block' : 'none' }}>
-                            <GoLivePage />
-                        </div>
-                    )}
+                    {/* Go Live (no keep-alive) */}
                     {/* Chat Room */}
                     {(path === '/chat-room' || visitedPaths.includes('/chat-room')) && (
                         <div style={{ display: path === '/chat-room' ? 'block' : 'none' }}>
@@ -265,18 +255,8 @@ const ProtectedRoutes: React.FC = () => {
                             <PastorAiPage />
                         </div>
                     )}
-                    {/* Video Call */}
-                    {(path === '/video-call' || visitedPaths.includes('/video-call')) && (
-                        <div style={{ display: path === '/video-call' ? 'block' : 'none' }}>
-                            <VideoCallPage />
-                        </div>
-                    )}
-                    {/* Camera Client */}
-                    {(path === '/camera-client' || visitedPaths.includes('/camera-client')) && (
-                        <div style={{ display: path === '/camera-client' ? 'block' : 'none' }}>
-                            <CameraClientPage />
-                        </div>
-                    )}
+                    {/* Video Call (no keep-alive) */}
+                    {/* Camera Client (no keep-alive) */}
                     {/* Admin - Json Converter */}
                     {(path === '/admin/json-converter' || visitedPaths.includes('/admin/json-converter')) && (
                         <AdminRoute>
@@ -302,16 +282,16 @@ const ProtectedRoutes: React.FC = () => {
                         <Route path="/bible-study" element={<></>} />
                         <Route path="/giving" element={<></>} />
                         <Route path="/members" element={<></>} />
-                        <Route path="/golive" element={<></>} />
-                        <Route path="/prostream" element={<></>} />
+                        <Route path="/golive" element={<GoLivePage />} />
+                        <Route path="/prostream" element={<ProStreamApp />} />
                         <Route path="/chat" element={<></>} />
                         <Route path="/chat-room" element={<></>} />
                         <Route path="/create-post" element={<></>} />
                         <Route path="/contact" element={<></>} />
                         <Route path="/profile" element={<></>} />
                         <Route path="/pastor-ai" element={<></>} />
-                        <Route path="/video-call" element={<></>} />
-                        <Route path="/camera-client" element={<></>} />
+                        <Route path="/video-call" element={<VideoCallPage />} />
+                        <Route path="/camera-client" element={<CameraClientPage />} />
                         <Route path="/admin/json-converter" element={<></>} />
                         <Route path="/admin" element={<></>} />
                         <Route path="*" element={<Navigate to="/" />} />
