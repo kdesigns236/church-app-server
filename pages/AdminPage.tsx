@@ -320,6 +320,7 @@ const AdminPage: React.FC = () => {
         contactInfo: siteContent?.contactInfo || { email: '', phone1: '', phone2: '', addressLine1: '', addressLine2: '' },
         socialLinks: siteContent?.socialLinks || { facebook: '', youtube: '', tiktok: '' }
     });
+    const [isEditingSiteContent, setIsEditingSiteContent] = useState(false);
 
     // State for video upload progress
     const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -336,8 +337,10 @@ const AdminPage: React.FC = () => {
     };
 
     useEffect(() => {
-        setEditableSiteContent(siteContent);
-    }, [siteContent]);
+        if (!isEditingSiteContent) {
+            setEditableSiteContent(siteContent);
+        }
+    }, [siteContent, isEditingSiteContent]);
 
 
     const handleOpenModal = (type: 'sermon' | 'announcement' | 'event', item: Sermon | Announcement | Event | null = null) => {
@@ -625,20 +628,20 @@ const AdminPage: React.FC = () => {
                         <form onSubmit={handleSaveSiteContent} className="space-y-6">
                             <div>
                                 <h3 className="text-lg font-semibold text-primary dark:text-white mb-2">Verse of the Week</h3>
-                                <FormTextArea label="Verse Text" name="verseOfTheWeek.text" value={editableSiteContent?.verseOfTheWeek?.text || ''} onChange={handleSiteContentChange} />
-                                <FormInput label="Citation" name="verseOfTheWeek.citation" value={editableSiteContent?.verseOfTheWeek?.citation || ''} onChange={handleSiteContentChange} />
+                                <FormTextArea label="Verse Text" name="verseOfTheWeek.text" value={editableSiteContent?.verseOfTheWeek?.text || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
+                                <FormInput label="Citation" name="verseOfTheWeek.citation" value={editableSiteContent?.verseOfTheWeek?.citation || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
                             </div>
                              <div>
                                 <h3 className="text-lg font-semibold text-primary dark:text-white mt-4 mb-2">Contact Information</h3>
-                                <FormInput label="Email" name="contactInfo.email" type="email" value={editableSiteContent?.contactInfo?.email || ''} onChange={handleSiteContentChange} />
-                                <FormInput label="Phone 1" name="contactInfo.phone1" value={editableSiteContent?.contactInfo?.phone1 || ''} onChange={handleSiteContentChange} />
-                                <FormInput label="Phone 2" name="contactInfo.phone2" value={editableSiteContent?.contactInfo?.phone2 || ''} onChange={handleSiteContentChange} />
+                                <FormInput label="Email" name="contactInfo.email" type="email" value={editableSiteContent?.contactInfo?.email || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
+                                <FormInput label="Phone 1" name="contactInfo.phone1" value={editableSiteContent?.contactInfo?.phone1 || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
+                                <FormInput label="Phone 2" name="contactInfo.phone2" value={editableSiteContent?.contactInfo?.phone2 || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
                             </div>
                              <div>
                                 <h3 className="text-lg font-semibold text-primary dark:text-white mt-4 mb-2">Social Media Links</h3>
-                                <FormInput label="Facebook URL" name="socialLinks.facebook" value={editableSiteContent?.socialLinks?.facebook || ''} onChange={handleSiteContentChange} />
-                                <FormInput label="YouTube URL" name="socialLinks.youtube" value={editableSiteContent?.socialLinks?.youtube || ''} onChange={handleSiteContentChange} />
-                                <FormInput label="TikTok URL" name="socialLinks.tiktok" value={editableSiteContent?.socialLinks?.tiktok || ''} onChange={handleSiteContentChange} />
+                                <FormInput label="Facebook URL" name="socialLinks.facebook" value={editableSiteContent?.socialLinks?.facebook || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
+                                <FormInput label="YouTube URL" name="socialLinks.youtube" value={editableSiteContent?.socialLinks?.youtube || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
+                                <FormInput label="TikTok URL" name="socialLinks.tiktok" value={editableSiteContent?.socialLinks?.tiktok || ''} onChange={handleSiteContentChange} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)} />
                             </div>
                             <div className="flex justify-end">
                                 <button type="submit" className="px-6 py-2 rounded-md bg-secondary text-primary font-bold hover:bg-gold-light transition-colors">Save Site Content</button>
@@ -697,8 +700,8 @@ const AdminPage: React.FC = () => {
                                     </label>
                                     <input
                                         type="text"
-                                        value={siteContent?.contactInfo?.addressLine1 || ''}
-                                        onChange={(e) => updateSiteContent({ ...siteContent, contactInfo: { ...siteContent?.contactInfo, addressLine1: e.target.value } })}
+                                        value={editableSiteContent?.contactInfo?.addressLine1 || ''}
+                                        onChange={(e) => handleSiteContentChange({ target: { name: 'contactInfo.addressLine1', value: e.target.value } } as any)} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)}
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-secondary focus:border-transparent dark:bg-gray-700 dark:text-white"
                                         placeholder="e.g., 123 Church Street"
                                     />
@@ -709,8 +712,8 @@ const AdminPage: React.FC = () => {
                                     </label>
                                     <input
                                         type="text"
-                                        value={siteContent?.contactInfo?.addressLine2 || ''}
-                                        onChange={(e) => updateSiteContent({ ...siteContent, contactInfo: { ...siteContent?.contactInfo, addressLine2: e.target.value } })}
+                                        value={editableSiteContent?.contactInfo?.addressLine2 || ''}
+                                        onChange={(e) => handleSiteContentChange({ target: { name: 'contactInfo.addressLine2', value: e.target.value } } as any)} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)}
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-secondary focus:border-transparent dark:bg-gray-700 dark:text-white"
                                         placeholder="e.g., Kitale, Kenya"
                                     />
@@ -721,8 +724,8 @@ const AdminPage: React.FC = () => {
                                     </label>
                                     <input
                                         type="email"
-                                        value={siteContent?.contactInfo?.email || ''}
-                                        onChange={(e) => updateSiteContent({ ...siteContent, contactInfo: { ...siteContent?.contactInfo, email: e.target.value } })}
+                                        value={editableSiteContent?.contactInfo?.email || ''}
+                                        onChange={(e) => handleSiteContentChange({ target: { name: 'contactInfo.email', value: e.target.value } } as any)} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)}
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-secondary focus:border-transparent dark:bg-gray-700 dark:text-white"
                                         placeholder="e.g., info@church.com"
                                     />
@@ -733,8 +736,8 @@ const AdminPage: React.FC = () => {
                                     </label>
                                     <input
                                         type="tel"
-                                        value={siteContent?.contactInfo?.phone1 || ''}
-                                        onChange={(e) => updateSiteContent({ ...siteContent, contactInfo: { ...siteContent?.contactInfo, phone1: e.target.value } })}
+                                        value={editableSiteContent?.contactInfo?.phone1 || ''}
+                                        onChange={(e) => handleSiteContentChange({ target: { name: 'contactInfo.phone1', value: e.target.value } } as any)} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)}
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-secondary focus:border-transparent dark:bg-gray-700 dark:text-white"
                                         placeholder="e.g., +254 700 000 000"
                                     />
@@ -745,15 +748,15 @@ const AdminPage: React.FC = () => {
                                     </label>
                                     <input
                                         type="tel"
-                                        value={siteContent?.contactInfo?.phone2 || ''}
-                                        onChange={(e) => updateSiteContent({ ...siteContent, contactInfo: { ...siteContent?.contactInfo, phone2: e.target.value } })}
+                                        value={editableSiteContent?.contactInfo?.phone2 || ''}
+                                        onChange={(e) => handleSiteContentChange({ target: { name: 'contactInfo.phone2', value: e.target.value } } as any)} onFocus={() => setIsEditingSiteContent(true)} onBlur={() => setIsEditingSiteContent(false)}
                                         className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:ring-2 focus:ring-secondary focus:border-transparent dark:bg-gray-700 dark:text-white"
                                         placeholder="e.g., +254 700 000 001"
                                     />
                                 </div>
                                 <button
                                     onClick={() => {
-                                        // The updateSiteContent function should already save to backend
+                                        updateSiteContent(editableSiteContent);
                                         alert('Church information saved successfully!');
                                     }}
                                     className="w-full bg-secondary text-primary font-bold px-6 py-3 rounded-md hover:bg-gold-light transition-colors mt-4"
