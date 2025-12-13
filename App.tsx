@@ -193,35 +193,127 @@ const ProtectedRoutes: React.FC = () => {
                             <ProStreamApp />
                         </div>
                     )}
+                    {/* Home */}
+                    {(path === '' || visitedPaths.includes('')) && (
+                        <div style={{ display: path === '' ? 'block' : 'none' }}>
+                            <HomePage />
+                        </div>
+                    )}
+                    {/* Announcements */}
+                    {(path === '/announcements' || visitedPaths.includes('/announcements')) && (
+                        <div style={{ display: path === '/announcements' ? 'block' : 'none' }}>
+                            <AnnouncementsPage />
+                        </div>
+                    )}
+                    {/* Events */}
+                    {(path === '/events' || visitedPaths.includes('/events')) && (
+                        <div style={{ display: path === '/events' ? 'block' : 'none' }}>
+                            <EventsPage />
+                        </div>
+                    )}
+                    {/* Bible Study */}
+                    {(path === '/bible-study' || visitedPaths.includes('/bible-study')) && (
+                        <div style={{ display: path === '/bible-study' ? 'block' : 'none' }}>
+                            <BibleStudyPage />
+                        </div>
+                    )}
+                    {/* Giving */}
+                    {(path === '/giving' || visitedPaths.includes('/giving')) && (
+                        <div style={{ display: path === '/giving' ? 'block' : 'none' }}>
+                            <GivingPage />
+                        </div>
+                    )}
+                    {/* Members */}
+                    {(path === '/members' || visitedPaths.includes('/members')) && (
+                        <div style={{ display: path === '/members' ? 'block' : 'none' }}>
+                            <MembersPage />
+                        </div>
+                    )}
+                    {/* Go Live */}
+                    {(path === '/golive' || visitedPaths.includes('/golive')) && (
+                        <div style={{ display: path === '/golive' ? 'block' : 'none' }}>
+                            <GoLivePage />
+                        </div>
+                    )}
+                    {/* Chat Room */}
+                    {(path === '/chat-room' || visitedPaths.includes('/chat-room')) && (
+                        <div style={{ display: path === '/chat-room' ? 'block' : 'none' }}>
+                            <ChatPage />
+                        </div>
+                    )}
+                    {/* Create Post */}
+                    {(path === '/create-post' || visitedPaths.includes('/create-post')) && (
+                        <div style={{ display: path === '/create-post' ? 'block' : 'none' }}>
+                            <CreatePostPage />
+                        </div>
+                    )}
+                    {/* Contact */}
+                    {(path === '/contact' || visitedPaths.includes('/contact')) && (
+                        <div style={{ display: path === '/contact' ? 'block' : 'none' }}>
+                            <ContactPage />
+                        </div>
+                    )}
+                    {/* Profile */}
+                    {(path === '/profile' || visitedPaths.includes('/profile')) && (
+                        <div style={{ display: path === '/profile' ? 'block' : 'none' }}>
+                            <ProfilePage />
+                        </div>
+                    )}
+                    {/* Pastor AI */}
+                    {(path === '/pastor-ai' || visitedPaths.includes('/pastor-ai')) && (
+                        <div style={{ display: path === '/pastor-ai' ? 'block' : 'none' }}>
+                            <PastorAiPage />
+                        </div>
+                    )}
+                    {/* Video Call */}
+                    {(path === '/video-call' || visitedPaths.includes('/video-call')) && (
+                        <div style={{ display: path === '/video-call' ? 'block' : 'none' }}>
+                            <VideoCallPage />
+                        </div>
+                    )}
+                    {/* Camera Client */}
+                    {(path === '/camera-client' || visitedPaths.includes('/camera-client')) && (
+                        <div style={{ display: path === '/camera-client' ? 'block' : 'none' }}>
+                            <CameraClientPage />
+                        </div>
+                    )}
+                    {/* Admin - Json Converter */}
+                    {(path === '/admin/json-converter' || visitedPaths.includes('/admin/json-converter')) && (
+                        <AdminRoute>
+                            <div style={{ display: path === '/admin/json-converter' ? 'block' : 'none' }}>
+                                <JsonConverterPage />
+                            </div>
+                        </AdminRoute>
+                    )}
+                    {/* Admin - Main */}
+                    {(path === '/admin' || visitedPaths.includes('/admin')) && (
+                        <AdminRoute>
+                            <div style={{ display: path === '/admin' ? 'block' : 'none' }}>
+                                <AdminPage />
+                            </div>
+                        </AdminRoute>
+                    )}
                     <Routes>
-                        <Route path="/" element={<HomePage />} />
+                        <Route path="/" element={<></>} />
                         <Route path="/sermons" element={<></>} />
-                        <Route path="/announcements" element={<AnnouncementsPage />} />
-                        <Route path="/events" element={<EventsPage />} />
+                        <Route path="/announcements" element={<></>} />
+                        <Route path="/events" element={<></>} />
                         <Route path="/bible" element={<></>} />
-                        <Route path="/bible-study" element={<BibleStudyPage />} />
-                        <Route path="/giving" element={<GivingPage />} />
-                        <Route path="/members" element={<MembersPage />} />
-                        <Route path="/golive" element={<GoLivePage />} />
+                        <Route path="/bible-study" element={<></>} />
+                        <Route path="/giving" element={<></>} />
+                        <Route path="/members" element={<></>} />
+                        <Route path="/golive" element={<></>} />
                         <Route path="/prostream" element={<></>} />
                         <Route path="/chat" element={<></>} />
-                        <Route path="/chat-room" element={<ChatPage />} />
-                        <Route path="/create-post" element={<CreatePostPage />} />
-                        <Route path="/contact" element={<ContactPage />} />
-                        <Route path="/profile" element={<ProfilePage />} />
-                        <Route path="/pastor-ai" element={<PastorAiPage />} />
-                        <Route path="/video-call" element={<VideoCallPage />} />
-                        <Route path="/camera-client" element={<CameraClientPage />} />
-                        <Route path="/admin/json-converter" element={
-                            <AdminRoute>
-                                <JsonConverterPage />
-                            </AdminRoute>
-                        } />
-                        <Route path="/admin" element={
-                            <AdminRoute>
-                                <AdminPage />
-                            </AdminRoute>
-                        } />
+                        <Route path="/chat-room" element={<></>} />
+                        <Route path="/create-post" element={<></>} />
+                        <Route path="/contact" element={<></>} />
+                        <Route path="/profile" element={<></>} />
+                        <Route path="/pastor-ai" element={<></>} />
+                        <Route path="/video-call" element={<></>} />
+                        <Route path="/camera-client" element={<></>} />
+                        <Route path="/admin/json-converter" element={<></>} />
+                        <Route path="/admin" element={<></>} />
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
                 </Suspense>
