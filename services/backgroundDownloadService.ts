@@ -2,6 +2,8 @@ import { CapacitorDownloader } from '@capgo/capacitor-downloader';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { chunkedVideoDownloader } from './chunkedVideoDownloader';
+import { storage } from '../config/firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
 
 export type MinimalSermon = { id: string | number; videoUrl?: string };
 
@@ -193,7 +195,17 @@ export const backgroundDownloadService = {
     for (const s of sermons) {
       const id = String(s?.id || '');
       if (!id) continue;
-      const url = s?.videoUrl || '';
+      let url = s?.videoUrl || '';
+      try {
+        const p: any = (s as any)?.firebaseStoragePath;
+        if (typeof p === 'string' && p) {
+          url = await getDownloadURL(ref(storage, p));
+        } else if (typeof url === 'string' && url.includes('firebasestorage.googleapis.com') && url.includes('/o/')) {
+          const enc = url.split('/o/')[1]?.split('?')[0] || '';
+          const path = decodeURIComponent(enc);
+          if (path) url = await getDownloadURL(ref(storage, path));
+        }
+      } catch {}
       if (!url || !/^https?:\/\//i.test(url)) continue;
       const existing = map[id];
       if (existing && (await fileExists(existing))) continue;

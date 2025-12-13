@@ -215,7 +215,18 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
         // Remote URL fallback
         if (typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
-          if (isMountedRef.current) setVideoSrc(rawUrl);
+          if (rawUrl.includes('firebasestorage.googleapis.com') && rawUrl.includes('/o/')) {
+            try { await signInAnonymously(auth); } catch {}
+            try {
+              const enc = rawUrl.split('/o/')[1]?.split('?')[0] || '';
+              const p = decodeURIComponent(enc);
+              if (p) {
+                const fresh = await getDownloadURL(ref(storage, p));
+                if (fresh && isMountedRef.current) { setVideoSrc(fresh); return; }
+              }
+            } catch {}
+          }
+          if (isMountedRef.current) { setVideoSrc(rawUrl); return; }
         } else if (typeof rawUrl === 'string') {
           const resolved = await resolveFirebaseDownloadUrl(rawUrl);
           if (resolved && isMountedRef.current) {

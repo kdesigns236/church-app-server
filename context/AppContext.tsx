@@ -7,6 +7,8 @@ import { initialSiteContent } from '../constants/siteContent';
 import { useAuth } from '../hooks/useAuth';
 import { videoStorageService } from '../services/videoStorageService';
 import { safeBackgroundFetchService } from '../services/safeBackgroundFetchService';
+import { storage } from '../config/firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
 
 interface AppContextType {
     sermons: Sermon[];
@@ -433,8 +435,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (!sermon || !sermon.videoUrl) continue;
           if (typeof sermon.videoUrl !== 'string') continue;
 
-          // Only prefetch http(s) videos; legacy indexed-db:// videos are already local
-          if (!sermon.videoUrl.startsWith('http://') && !sermon.videoUrl.startsWith('https://')) {
+          let effectiveUrl: string = sermon.videoUrl;
+          try {
+            const p: any = (sermon as any)?.firebaseStoragePath;
+            if (typeof p === 'string' && p) {
+              effectiveUrl = await getDownloadURL(ref(storage, p));
+            } else if (effectiveUrl.includes('firebasestorage.googleapis.com') && effectiveUrl.includes('/o/')) {
+              const enc = effectiveUrl.split('/o/')[1]?.split('?')[0] || '';
+              const path = decodeURIComponent(enc);
+              if (path) {
+                effectiveUrl = await getDownloadURL(ref(storage, path));
+              }
+            }
+          } catch {}
+
+          if (!effectiveUrl.startsWith('http://') && !effectiveUrl.startsWith('https://')) {
             continue;
           }
 
@@ -449,7 +464,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             prefetchInFlightRef.current.add(sermonId);
             console.log('[AppContext] 🎥 Prefetching video for sermon', sermonId);
             try {
-              const head = await fetch(sermon.videoUrl, { method: 'HEAD' as any });
+              const head = await fetch(effectiveUrl, { method: 'HEAD' as any });
               const len = head.headers?.get('content-length');
               if (!len) {
                 continue;
@@ -466,7 +481,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             const controller = new AbortController();
             const to = setTimeout(() => controller.abort(), 30000);
-            const response = await fetch(sermon.videoUrl, { signal: controller.signal, cache: 'default' as any });
+            const response = await fetch(effectiveUrl, { signal: controller.signal, cache: 'default' as any });
             clearTimeout(to);
             if (!response.ok) {
               console.warn('[AppContext] Failed to prefetch video for sermon', sermonId, response.status);

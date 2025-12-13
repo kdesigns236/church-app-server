@@ -87,10 +87,7 @@ export async function uploadMediaToFirebase(
             const optimizedURL = typeof downloadURL === 'string'
               ? downloadURL.replace(`/b/${rawBucket}/o/`, `/b/${appspotBucket}/o/`)
               : downloadURL;
-            const urlWithAlt = new URL(optimizedURL);
-            urlWithAlt.searchParams.set('alt', 'media');
-            urlWithAlt.searchParams.set('cors', '*');
-            resolve({ success: true, url: urlWithAlt.toString(), storagePath: uploadTask.snapshot.ref.fullPath, bucket: appspotBucket });
+            resolve({ success: true, url: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)), storagePath: uploadTask.snapshot.ref.fullPath, bucket: appspotBucket });
           } catch (e: any) {
             reject({ success: false, error: e?.message || 'Failed to get URL' });
           }
@@ -201,17 +198,12 @@ export async function uploadVideoToFirebase(
               ? downloadURL.replace(`/b/${rawBucket}/o/`, `/b/${appspotBucket}/o/`)
               : downloadURL;
 
-            // Add CORS query parameter to URL
-            const urlWithCors = new URL(optimizedURL);
-            urlWithCors.searchParams.append('alt', 'media');
-            urlWithCors.searchParams.append('cors', '*');
-            
             console.log('[Firebase] ✅ Upload successful!');
-            console.log('[Firebase] Video URL:', urlWithCors.toString());
+            console.log('[Firebase] Video URL:', (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)));
             
             resolve({
               success: true,
-              videoUrl: urlWithCors.toString(),
+              videoUrl: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)),
               storagePath: uploadTask.snapshot.ref.fullPath,
               bucket: appspotBucket
             });
