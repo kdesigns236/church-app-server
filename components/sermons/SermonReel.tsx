@@ -457,9 +457,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   useEffect(() => {
     const onPrefetched = async (ev: any) => {
       try {
-        const id = String(ev?.detail?.id || '');
-        if (!id || String(sermon.id) !== id) return;
-        const offline = await videoStorageService.getVideoUrl(id);
+        const offline = await videoStorageService.getVideoUrl(String(sermon.id));
         if (offline && isMountedRef.current) {
           setVideoSrc(offline);
         }
@@ -1229,6 +1227,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             onError={async (e) => {
               console.error('Video load error:', e);
               console.log('Video URL:', videoSrc);
+              try {
+                const offline = await videoStorageService.getVideoUrl(String(sermon.id));
+                if (offline && isMountedRef.current) { setVideoSrc(offline); return; }
+              } catch {}
               
               // If it's a Firebase URL and auth is required, try to get a fresh URL
               if (videoSrc.includes('firebasestorage.googleapis.com')) {

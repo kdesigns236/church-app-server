@@ -112,6 +112,7 @@ class VideoStorageService {
       console.log(`[VideoStorage] Video saved: ${sermonId} (${this.formatBytes(videoFile.size)})`);
       
       // Return a custom URL identifier
+      try { window.dispatchEvent(new CustomEvent('sermon-prefetched', { detail: { id: sermonId } })); } catch {}
       return `indexed-db://${sermonId}`;
     } catch (error) {
       console.error('[VideoStorage] Error saving video:', error);
