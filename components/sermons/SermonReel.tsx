@@ -5,7 +5,7 @@ import { FaVolumeMute, FaVolumeUp, FaArrowDown, FaExpand, FaCompress } from 'rea
 import { videoStorageService } from '../../services/videoStorageService';
 import { backgroundDownloadService } from '../../services/backgroundDownloadService';
 import { auth, storage } from '../../config/firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
+import { ref, getDownloadURL, listAll } from 'firebase/storage';
 import { signInAnonymously } from 'firebase/auth';
 
 interface SermonReelProps {
@@ -64,6 +64,26 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     try { const ls = localStorage.getItem('sermonFS'); if (ls === '1') setIsFullscreen(true); } catch {}
     return () => { document.removeEventListener('fullscreenchange', onFsChange); };
   }, []);
+
+  const tryFindByTimestampPrefix = async (basePath: string): Promise<string | null> => {
+    try {
+      const m = basePath.match(/^sermons\/(\d+)_/);
+      if (!m || !m[1]) return null;
+      const prefix = m[1];
+      try { await signInAnonymously(auth); } catch {}
+      const dirRef = ref(storage, 'sermons');
+      const res = await listAll(dirRef);
+      const candidate = res.items.find((it: any) => {
+        const name = (it && it.name) ? String(it.name) : '';
+        return name.startsWith(prefix + '_') && /\.mp4$/i.test(name);
+      });
+      if (candidate) {
+        const u = await getDownloadURL(candidate);
+        if (u) return normalizeFirebasePublicUrl(String(u));
+      }
+    } catch {}
+    return null;
+  };
 
   const parseYouTubeId = (url: string): string | null => {
     try {
@@ -275,6 +295,11 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                 const fresh = await tryGetUrlVariants(p);
                 const normalized = fresh ? String(fresh) : '';
                 if (normalized && isMountedRef.current) { setVideoSrc(normalized); return; }
+                // Attempt recovery by timestamp prefix if filename mismatched
+                try {
+                  const recovered = await tryFindByTimestampPrefix(p);
+                  if (recovered && isMountedRef.current) { setVideoSrc(recovered); return; }
+                } catch {}
               }
             } catch {}
             // Firebase URL but we couldn't resolve a fresh signed variant; do not set the raw URL
@@ -412,6 +437,50 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       try { if (preconnectEl && preconnectEl.parentNode) preconnectEl.parentNode.removeChild(preconnectEl); } catch {}
       try { if (preloadEl && preloadEl.parentNode) preloadEl.parentNode.removeChild(preloadEl); } catch {}
     };
+  }, [videoSrc, isActive]);
+
+  useEffect(() => {
+    try {
+      if (!isActive || !videoSrc) return;
+      if (!/^https?:\/\//i.test(videoSrc)) return;
+      if (/\.m3u8(\?.*)?$/i.test(videoSrc)) return;
+      if (videoSrc.startsWith('blob:')) return;
+      let timer: any = null;
+      timer = window.setTimeout(async () => {
+        try {
+          const v = videoRef.current;
+          if (!v) return;
+          if (v.readyState === 0) {
+            const resp = await fetch(videoSrc, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+            if (resp && resp.ok) {
+              const blob = await resp.blob();
+              if (blob && blob.size > 0) {
+                const obj = URL.createObjectURL(blob);
+                try { if (errorBlobUrlRef.current) URL.revokeObjectURL(errorBlobUrlRef.current); } catch {}
+                errorBlobUrlRef.current = obj;
+                if (isMountedRef.current) setVideoSrc(obj);
+              }
+            } else {
+              try {
+                if (videoSrc.includes('firebasestorage.googleapis.com') && videoSrc.includes('/o/')) {
+                  try { await signInAnonymously(auth); } catch {}
+                  const enc = videoSrc.split('/o/')[1]?.split('?')[0] || '';
+                  const path = decodeURIComponent(enc);
+                  if (path) {
+                    const fresh = await tryGetUrlVariants(path);
+                    if (fresh && isMountedRef.current) { setVideoSrc(fresh); return; }
+                    // If not found by exact/variant, try timestamp-prefix recovery
+                    const recovered = await tryFindByTimestampPrefix(path);
+                    if (recovered && isMountedRef.current) { setVideoSrc(recovered); return; }
+                  }
+                }
+              } catch {}
+            }
+          }
+        } catch {}
+      }, 2500);
+      return () => { try { if (timer) window.clearTimeout(timer); } catch {} };
+    } catch {}
   }, [videoSrc, isActive]);
 
   // Opportunistically pre-warm HLS manifest only for the active reel
@@ -1080,7 +1149,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   const storagePath = decodeURIComponent(videoSrc.split('/o/')[1].split('?')[0]);
                   const freshUrl = await tryGetUrlVariants(storagePath);
                   const normalized = freshUrl ? String(freshUrl) : '';
-                  if (normalized && isMountedRef.current) setVideoSrc(normalized);
+                  if (normalized && isMountedRef.current) setVideoSrc(normalized); else {
+                    try {
+                      const recovered = await tryFindByTimestampPrefix(storagePath);
+                      if (recovered && isMountedRef.current) setVideoSrc(recovered);
+                    } catch {}
+                  }
                 } catch (authError) {
                   console.error('Failed to refresh video URL:', authError);
                 }
