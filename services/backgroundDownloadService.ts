@@ -2,8 +2,9 @@ import { CapacitorDownloader } from '@capgo/capacitor-downloader';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { chunkedVideoDownloader } from './chunkedVideoDownloader';
-import { storage } from '../config/firebase';
+import { storage, auth } from '../config/firebase';
 import { ref, getDownloadURL } from 'firebase/storage';
+import { signInAnonymously } from 'firebase/auth';
 
 export type MinimalSermon = { id: string | number; videoUrl?: string };
 
@@ -197,6 +198,7 @@ export const backgroundDownloadService = {
       if (!id) continue;
       let url = s?.videoUrl || '';
       try {
+        try { await signInAnonymously(auth); } catch {}
         const p: any = (s as any)?.firebaseStoragePath;
         if (typeof p === 'string' && p) {
           url = await getDownloadURL(ref(storage, p));
@@ -204,6 +206,18 @@ export const backgroundDownloadService = {
           const enc = url.split('/o/')[1]?.split('?')[0] || '';
           const path = decodeURIComponent(enc);
           if (path) url = await getDownloadURL(ref(storage, path));
+        }
+      } catch {}
+      // Sanitize any legacy Firebase URL params to avoid malformed requests
+      try {
+        if (typeof url === 'string' && url.includes('firebasestorage.googleapis.com')) {
+          const u = new URL(url);
+          u.searchParams.delete('cors');
+          const token = u.searchParams.get('token');
+          if (token) { u.searchParams.delete('token'); u.searchParams.append('token', token); }
+          const alt = u.searchParams.get('alt');
+          if (alt) { u.searchParams.delete('alt'); u.searchParams.append('alt', 'media'); }
+          url = u.toString();
         }
       } catch {}
       if (!url || !/^https?:\/\//i.test(url)) continue;

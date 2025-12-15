@@ -7,8 +7,9 @@ import { initialSiteContent } from '../constants/siteContent';
 import { useAuth } from '../hooks/useAuth';
 import { videoStorageService } from '../services/videoStorageService';
 import { safeBackgroundFetchService } from '../services/safeBackgroundFetchService';
-import { storage } from '../config/firebase';
+import { storage, auth } from '../config/firebase';
 import { ref, getDownloadURL } from 'firebase/storage';
+import { signInAnonymously } from 'firebase/auth';
 
 interface AppContextType {
     sermons: Sermon[];
@@ -437,6 +438,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           let effectiveUrl: string = sermon.videoUrl;
           try {
+            try { await signInAnonymously(auth); } catch {}
             const p: any = (sermon as any)?.firebaseStoragePath;
             if (typeof p === 'string' && p) {
               effectiveUrl = await getDownloadURL(ref(storage, p));
@@ -446,6 +448,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (path) {
                 effectiveUrl = await getDownloadURL(ref(storage, path));
               }
+            }
+          } catch {}
+
+          // Sanitize any legacy Firebase URL params to avoid malformed requests
+          try {
+            if (effectiveUrl.includes('firebasestorage.googleapis.com')) {
+              const u = new URL(effectiveUrl);
+              u.searchParams.delete('cors');
+              const token = u.searchParams.get('token');
+              if (token) { u.searchParams.delete('token'); u.searchParams.append('token', token); }
+              const alt = u.searchParams.get('alt');
+              if (alt) { u.searchParams.delete('alt'); u.searchParams.append('alt', 'media'); }
+              effectiveUrl = u.toString();
             }
           } catch {}
 
@@ -464,14 +479,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             prefetchInFlightRef.current.add(sermonId);
             console.log('[AppContext] 🎥 Prefetching video for sermon', sermonId);
             try {
-              const head = await fetch(effectiveUrl, { method: 'HEAD' as any });
-              const len = head.headers?.get('content-length');
-              if (!len) {
+              let size: number | null = null;
+              // Try HEAD first
+              try {
+                const head = await fetch(effectiveUrl, { method: 'HEAD' as any });
+                if (head.ok) {
+                  const len = head.headers?.get('content-length');
+                  if (len) size = parseInt(len, 10);
+                }
+              } catch {}
+
+              // If HEAD failed or missing length, try Range GET (first byte)
+              if (size === null || !isFinite(size)) {
+                try {
+                  const probe = await fetch(effectiveUrl, { headers: { Range: 'bytes=0-0' } });
+                  if (probe.ok) {
+                    const cr = probe.headers?.get('content-range') || '';
+                    // Content-Range: bytes 0-0/1234567
+                    const m = cr.match(/\/(\d+)$/);
+                    if (m && m[1]) size = parseInt(m[1], 10);
+                    if (!size || !isFinite(size)) {
+                      const blob = await probe.blob();
+                      size = blob.size || null;
+                    }
+                  }
+                } catch {}
+              }
+
+              if (!size || !isFinite(size)) {
                 continue;
               }
-              const size = parseInt(len, 10);
               const max = 120 * 1024 * 1024;
-              if (!isNaN(size) && size > max) {
+              if (size > max) {
                 console.warn('[AppContext] Skipping prefetch (too large):', sermonId, Math.round(size/1024/1024), 'MB');
                 continue;
               }

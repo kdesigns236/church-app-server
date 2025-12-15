@@ -112,7 +112,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     try {
       if (typeof u !== 'string') return u as any;
       if (u.includes('firebasestorage.googleapis.com')) {
-        return u.replace(/\/(b)\/([^/]+)\//, (_m, g1, bucket) => {
+        const replaced = u.replace(/\/(b)\/([^/]+)\//, (_m, g1, bucket) => {
           let b = String(bucket);
           b = b.replace('.firebasestorage.app', '.appspot.com');
           if (b.endsWith('appspot.com') && !b.includes('.appspot.com')) {
@@ -120,6 +120,15 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           }
           return `/${g1}/${b}/`;
         });
+        try {
+          const url = new URL(replaced);
+          url.searchParams.delete('cors');
+          const token = url.searchParams.get('token');
+          if (token) { url.searchParams.delete('token'); url.searchParams.append('token', token); }
+          const alt = url.searchParams.get('alt');
+          if (alt) { url.searchParams.delete('alt'); url.searchParams.append('alt', 'media'); }
+          return url.toString();
+        } catch { return replaced; }
       }
       return u;
     } catch { return u; }
@@ -131,7 +140,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       try { await signInAnonymously(auth); } catch {}
       const r = ref(storage, maybePath);
       const u = await getDownloadURL(r);
-      return u || null;
+      return u ? normalizeFirebasePublicUrl(String(u)) : null;
     } catch {
       return null;
     }
@@ -222,7 +231,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               const p = decodeURIComponent(enc);
               if (p) {
                 const fresh = await getDownloadURL(ref(storage, p));
-                if (fresh && isMountedRef.current) { setVideoSrc(fresh); return; }
+                const normalized = fresh ? normalizeFirebasePublicUrl(String(fresh)) : '';
+                if (normalized && isMountedRef.current) { setVideoSrc(normalized); return; }
               }
             } catch {}
           }
@@ -968,8 +978,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   const storagePath = decodeURIComponent(videoSrc.split('/o/')[1].split('?')[0]);
                   const storageRef = ref(storage, storagePath);
                   const freshUrl = await getDownloadURL(storageRef);
-                  
-                  if (isMountedRef.current) setVideoSrc(freshUrl);
+                  const normalized = freshUrl ? normalizeFirebasePublicUrl(String(freshUrl)) : '';
+                  if (normalized && isMountedRef.current) setVideoSrc(normalized);
                 } catch (authError) {
                   console.error('Failed to refresh video URL:', authError);
                 }
@@ -982,7 +992,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   if (m && m[1]) {
                     const mp4Path = `sermons/${m[1]}.mp4`;
                     const fresh = await getDownloadURL(ref(storage, mp4Path));
-                    if (fresh && isMountedRef.current) { setVideoSrc(fresh); return; }
+                    const normalized = fresh ? normalizeFirebasePublicUrl(String(fresh)) : '';
+                    if (normalized && isMountedRef.current) { setVideoSrc(normalized); return; }
                   }
                 }
               } catch {}
