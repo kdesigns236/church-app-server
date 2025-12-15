@@ -567,10 +567,35 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             }
           }
         } catch {}
-      }, 1500);
+      }, 800);
       return () => { try { if (timer) window.clearTimeout(timer); } catch {} };
     } catch {}
   }, [videoSrc, isActive]);
+
+  useEffect(() => {
+    const resume = () => {
+      try {
+        if (!isActive) return;
+        const v = videoRef.current;
+        if (!v || !videoSrc) return;
+        if (v.paused) {
+          try { v.muted = true; } catch {}
+          tryAutoplay(v);
+        }
+      } catch {}
+    };
+    const onVisibility = () => { try { if (document.visibilityState === 'visible') resume(); } catch {} };
+    try { window.addEventListener('visibilitychange', onVisibility); } catch {}
+    try { window.addEventListener('pageshow', resume as any); } catch {}
+    try { window.addEventListener('focus', resume as any); } catch {}
+    try { window.addEventListener('hashchange', resume as any); } catch {}
+    return () => {
+      try { window.removeEventListener('visibilitychange', onVisibility); } catch {}
+      try { window.removeEventListener('pageshow', resume as any); } catch {}
+      try { window.removeEventListener('focus', resume as any); } catch {}
+      try { window.removeEventListener('hashchange', resume as any); } catch {}
+    };
+  }, [isActive, videoSrc]);
 
   // Opportunistically pre-warm HLS manifest only for the active reel
   useEffect(() => {
