@@ -146,6 +146,24 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     }
   };
 
+  const tryGetUrlVariants = async (basePath: string): Promise<string | null> => {
+    // Try the exact path first
+    try {
+      const u = await getDownloadURL(ref(storage, basePath));
+      if (u) return normalizeFirebasePublicUrl(String(u));
+    } catch {}
+    // If path ends with _d or _g before extension, try without suffix
+    try {
+      const m = basePath.match(/^(.*)_[dg](\.[a-z0-9]+)$/i);
+      if (m) {
+        const alt = m[1] + m[2];
+        const u2 = await getDownloadURL(ref(storage, alt));
+        if (u2) return normalizeFirebasePublicUrl(String(u2));
+      }
+    } catch {}
+    return null;
+  };
+
   // Load video source only when this reel is active to avoid loading all sermons
   useEffect(() => {
     if (!isActive) {
@@ -230,8 +248,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               const enc = rawUrl.split('/o/')[1]?.split('?')[0] || '';
               const p = decodeURIComponent(enc);
               if (p) {
-                const fresh = await getDownloadURL(ref(storage, p));
-                const normalized = fresh ? normalizeFirebasePublicUrl(String(fresh)) : '';
+                const fresh = await tryGetUrlVariants(p);
+                const normalized = fresh ? String(fresh) : '';
                 if (normalized && isMountedRef.current) { setVideoSrc(normalized); return; }
               }
             } catch {}
@@ -976,9 +994,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   
                   // Get a fresh URL with the new auth token
                   const storagePath = decodeURIComponent(videoSrc.split('/o/')[1].split('?')[0]);
-                  const storageRef = ref(storage, storagePath);
-                  const freshUrl = await getDownloadURL(storageRef);
-                  const normalized = freshUrl ? normalizeFirebasePublicUrl(String(freshUrl)) : '';
+                  const freshUrl = await tryGetUrlVariants(storagePath);
+                  const normalized = freshUrl ? String(freshUrl) : '';
                   if (normalized && isMountedRef.current) setVideoSrc(normalized);
                 } catch (authError) {
                   console.error('Failed to refresh video URL:', authError);
@@ -990,9 +1007,14 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   const dec = decodeURIComponent(enc);
                   const m = dec.match(/sermons\/hls\/([^/]+)\//);
                   if (m && m[1]) {
-                    const mp4Path = `sermons/${m[1]}.mp4`;
-                    const fresh = await getDownloadURL(ref(storage, mp4Path));
-                    const normalized = fresh ? normalizeFirebasePublicUrl(String(fresh)) : '';
+                    const base = m[1];
+                    const primary = `sermons/${base}.mp4`;
+                    let fresh = await tryGetUrlVariants(primary);
+                    if (!fresh && /_[dg]$/i.test(base)) {
+                      const noSfx = base.replace(/_[dg]$/i, '');
+                      fresh = await tryGetUrlVariants(`sermons/${noSfx}.mp4`);
+                    }
+                    const normalized = fresh ? String(fresh) : '';
                     if (normalized && isMountedRef.current) { setVideoSrc(normalized); return; }
                   }
                 }

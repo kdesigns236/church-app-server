@@ -437,19 +437,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           if (typeof sermon.videoUrl !== 'string') continue;
 
           let effectiveUrl: string = sermon.videoUrl;
+          let resolvedFresh = false;
           try {
             try { await signInAnonymously(auth); } catch {}
+            const tryVariants = async (path: string): Promise<string | null> => {
+              try { const u = await getDownloadURL(ref(storage, path)); if (u) return u; } catch {}
+              try {
+                const m = path.match(/^(.*)_([dg])(\.[a-z0-9]+)$/i);
+                if (m) {
+                  const uns = m[1] + m[3];
+                  try { const u2 = await getDownloadURL(ref(storage, uns)); if (u2) return u2; } catch {}
+                  const flip = m[1] + '_' + (m[2].toLowerCase() === 'd' ? 'g' : 'd') + m[3];
+                  try { const u3 = await getDownloadURL(ref(storage, flip)); if (u3) return u3; } catch {}
+                }
+              } catch {}
+              return null;
+            };
             const p: any = (sermon as any)?.firebaseStoragePath;
             if (typeof p === 'string' && p) {
-              effectiveUrl = await getDownloadURL(ref(storage, p));
+              const r = await tryVariants(p);
+              if (r) { effectiveUrl = r; resolvedFresh = true; }
             } else if (effectiveUrl.includes('firebasestorage.googleapis.com') && effectiveUrl.includes('/o/')) {
               const enc = effectiveUrl.split('/o/')[1]?.split('?')[0] || '';
               const path = decodeURIComponent(enc);
               if (path) {
-                effectiveUrl = await getDownloadURL(ref(storage, path));
+                const r = await tryVariants(path);
+                if (r) { effectiveUrl = r; resolvedFresh = true; }
               }
             }
           } catch {}
+
+          // If this is a Firebase Storage URL but we could not resolve a fresh signed URL, skip prefetch
+          if (!resolvedFresh && effectiveUrl.includes('firebasestorage.googleapis.com') && effectiveUrl.includes('/o/')) {
+            continue;
+          }
 
           // Sanitize any legacy Firebase URL params to avoid malformed requests
           try {
