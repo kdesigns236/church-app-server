@@ -65,7 +65,8 @@ const HeaderLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     const hashPath = (typeof window !== 'undefined' && window.location && typeof window.location.hash === 'string' && window.location.hash.startsWith('#/'))
         ? window.location.hash.slice(1)
         : (location.pathname || '/');
-    const path = hashPath.toLowerCase().replace(/\/$/, '');
+    const pathOnly = (hashPath || '/').split('?')[0];
+    const path = pathOnly.toLowerCase().replace(/\/$/, '');
     const showHeader = path === '' || !hideHeaderOn.some((r) => {
         const base = r.toLowerCase().replace(/\/$/, '');
         return path === base || path.startsWith(base + '/');
@@ -123,7 +124,8 @@ const ProtectedRoutes: React.FC = () => {
     const hashPath2 = (typeof window !== 'undefined' && window.location && typeof window.location.hash === 'string' && window.location.hash.startsWith('#/'))
         ? window.location.hash.slice(1)
         : (location.pathname || '/');
-    const path = hashPath2.toLowerCase().replace(/\/$/, '');
+    const pathOnly2 = (hashPath2 || '/').split('?')[0];
+    const path = pathOnly2.toLowerCase().replace(/\/$/, '');
     const showHeader = !hideHeaderOn.some((r) => {
         const base = r.toLowerCase().replace(/\/$/, '');
         return path === base || path.startsWith(base + '/');

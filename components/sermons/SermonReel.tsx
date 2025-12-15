@@ -589,11 +589,13 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     try { window.addEventListener('pageshow', resume as any); } catch {}
     try { window.addEventListener('focus', resume as any); } catch {}
     try { window.addEventListener('hashchange', resume as any); } catch {}
+    try { window.addEventListener('popstate', resume as any); } catch {}
     return () => {
       try { window.removeEventListener('visibilitychange', onVisibility); } catch {}
       try { window.removeEventListener('pageshow', resume as any); } catch {}
       try { window.removeEventListener('focus', resume as any); } catch {}
       try { window.removeEventListener('hashchange', resume as any); } catch {}
+      try { window.removeEventListener('popstate', resume as any); } catch {}
     };
   }, [isActive, videoSrc]);
 
