@@ -1,10 +1,9 @@
-const CACHE_NAME = 'cogel-v1';
-const RUNTIME_CACHE = 'cogel-runtime-v1';
+const SW_VERSION = '2025-12-15-01';
+const CACHE_NAME = `cogel-static-${SW_VERSION}`;
+const RUNTIME_CACHE = `cogel-runtime-${SW_VERSION}`;
 
-// Assets to cache on install
+// Assets to cache on install (exclude index.html to avoid stale app shell)
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
   '/bible/en.json',
   '/bible/sw.json',
 ];
@@ -18,69 +17,77 @@ const ONLINE_ONLY_ROUTES = [
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing...');
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Caching static assets');
-      return cache.addAll(STATIC_ASSETS);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(STATIC_ASSETS))
   );
   self.skipWaiting();
 });
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('[Service Worker] Activating...');
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
+    caches.keys().then((cacheNames) =>
+      Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME && cacheName !== RUNTIME_CACHE) {
-            console.log('[Service Worker] Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
-      );
-    })
+      )
+    )
   );
   return self.clients.claim();
 });
 
 // Fetch event - implement caching strategy
 self.addEventListener('fetch', (event) => {
-  const { request } = event;
+  const request = event.request;
   const url = new URL(request.url);
 
   // Skip cross-origin requests
-  if (url.origin !== location.origin) {
-    return;
-  }
+  if (url.origin !== location.origin) return;
 
-  // Only handle GET requests. Cache API does not support PUT/POST/etc
-  // requests, and trying to cache them will throw a runtime error.
-  if (request.method !== 'GET') {
-    return;
-  }
-
-  // Skip development files
-  if (url.pathname.includes('/@') || 
-      url.pathname.includes('?t=') || 
-      url.pathname.includes('.tsx') ||
-      url.pathname.includes('.ts') ||
-      url.pathname.includes('.jsx') ||
-      url.pathname.includes('.js') ||
-      url.pathname.includes('node_modules')) {
-    return;
-  }
+  // Only handle GET requests
+  if (request.method !== 'GET') return;
 
   // Skip WebSocket connections
-  if (url.protocol === 'ws:' || url.protocol === 'wss:') {
+  if (url.protocol === 'ws:' || url.protocol === 'wss:') return;
+
+  // Skip development files
+  if (
+    url.pathname.includes('/@') ||
+    url.pathname.includes('?t=') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.jsx') ||
+    url.pathname.endsWith('.js') ||
+    url.pathname.includes('node_modules')
+  ) {
     return;
   }
 
-  // Online-only routes (GoLive chat, AI)
-  if (ONLINE_ONLY_ROUTES.some(route => url.pathname.includes(route))) {
+  // Online-only routes
+  if (ONLINE_ONLY_ROUTES.some((route) => url.pathname.includes(route))) {
     event.respondWith(fetch(request));
+    return;
+  }
+
+  // Network-first for navigations (ensures latest index.html)
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch('/index.html', { cache: 'no-store' })
+        .then((response) => {
+          const clone = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => {
+            cache.put('/index.html', clone);
+          });
+          return response;
+        })
+        .catch(async () => {
+          const cached = await caches.match('/index.html');
+          return cached || new Response('Offline', { status: 503 });
+        })
+    );
     return;
   }
 
@@ -89,44 +96,33 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Clone the response and cache it
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseClone);
-          });
+          const clone = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone));
           return response;
         })
-        .catch(() => {
-          // If network fails, try cache
-          return caches.match(request);
-        })
+        .catch(() => caches.match(request))
     );
     return;
   }
 
-  // Cache-first strategy for static assets (Bible, images, etc.)
+  // Cache-first strategy for static assets (Bible, images, CSS, etc.)
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Return cached version and update cache in background
-        fetch(request).then((response) => {
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, response);
-          });
-        }).catch(() => {
-          // Ignore network errors when updating cache
-        });
+        fetch(request)
+          .then((response) =>
+            caches
+              .open(RUNTIME_CACHE)
+              .then((cache) => cache.put(request, response))
+          )
+          .catch(() => {});
         return cachedResponse;
       }
 
-      // Not in cache, fetch from network
       return fetch(request).then((response) => {
-        // Cache the response for future use
         if (response.status === 200) {
-          const responseClone = response.clone();
-          caches.open(RUNTIME_CACHE).then((cache) => {
-            cache.put(request, responseClone);
-          });
+          const clone = response.clone();
+          caches.open(RUNTIME_CACHE).then((cache) => cache.put(request, clone));
         }
         return response;
       });
@@ -139,14 +135,12 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  
+
   if (event.data && event.data.type === 'CLEAR_CACHE') {
     event.waitUntil(
-      caches.keys().then((cacheNames) => {
-        return Promise.all(
-          cacheNames.map((cacheName) => caches.delete(cacheName))
-        );
-      })
+      caches.keys().then((cacheNames) =>
+        Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)))
+      )
     );
   }
 });
