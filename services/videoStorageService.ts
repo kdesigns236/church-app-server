@@ -12,19 +12,50 @@ class VideoStorageService {
   private dbName = 'ChurchVideoDB';
   private dbVersion = 1;
   private db: IDBDatabase | null = null;
+  private disabled: boolean = false;
+  private initPromise: Promise<void> | null = null;
+  private loggedInitError: boolean = false;
 
   // Initialize IndexedDB
   async initialize(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(this.dbName, this.dbVersion);
+    if (this.db || this.disabled) return Promise.resolve();
+    if (this.initPromise) return this.initPromise;
+    try {
+      // Feature/permission guard
+      if (typeof indexedDB === 'undefined') {
+        this.disabled = true;
+        return Promise.resolve();
+      }
+    } catch {
+      this.disabled = true;
+      return Promise.resolve();
+    }
+    this.initPromise = new Promise((resolve) => {
+      let request: IDBOpenDBRequest;
+      try {
+        request = indexedDB.open(this.dbName, this.dbVersion);
+      } catch {
+        this.disabled = true;
+        if (!this.loggedInitError) {
+          this.loggedInitError = true;
+          console.warn('[VideoStorage] IndexedDB unavailable; offline video cache disabled');
+        }
+        resolve();
+        return;
+      }
 
       request.onerror = () => {
-        console.error('[VideoStorage] Failed to open database');
-        reject(request.error);
+        this.disabled = true;
+        if (!this.loggedInitError) {
+          this.loggedInitError = true;
+          console.warn('[VideoStorage] Failed to open database; disabling offline video cache');
+        }
+        resolve();
       };
 
       request.onsuccess = () => {
         this.db = request.result;
+        this.disabled = false;
         console.log('[VideoStorage] Database initialized');
         resolve();
       };
@@ -45,12 +76,20 @@ class VideoStorageService {
           console.log('[VideoStorage] Blob store created');
         }
       };
-    });
+    }).finally(() => { this.initPromise = null; });
+    return this.initPromise;
   }
 
   // Save video file to IndexedDB
   async saveVideo(sermonId: string, videoFile: File): Promise<string> {
     try {
+      if (this.disabled) {
+        if (!this.loggedInitError) {
+          this.loggedInitError = true;
+          console.warn('[VideoStorage] Offline cache disabled; skipping save');
+        }
+        return `indexed-db://${sermonId}`;
+      }
       if (!this.db) await this.initialize();
 
       // Read file as blob
@@ -83,6 +122,7 @@ class VideoStorageService {
   // Get video blob from IndexedDB
   async getVideo(sermonId: string): Promise<Blob | null> {
     try {
+      if (this.disabled) return null;
       if (!this.db) await this.initialize();
 
       const data = await this.getFromStore('videoBlobs', sermonId);
@@ -100,6 +140,7 @@ class VideoStorageService {
   // Get video URL (creates blob URL from stored blob)
   async getVideoUrl(sermonId: string): Promise<string | null> {
     try {
+      if (this.disabled) return null;
       const blob = await this.getVideo(sermonId);
       if (blob) {
         const url = URL.createObjectURL(blob);
@@ -116,6 +157,7 @@ class VideoStorageService {
   // Check if video exists
   async hasVideo(sermonId: string): Promise<boolean> {
     try {
+      if (this.disabled) return false;
       if (!this.db) await this.initialize();
       const data = await this.getFromStore('videoBlobs', sermonId);
       return !!data;
@@ -127,6 +169,7 @@ class VideoStorageService {
   // Delete video
   async deleteVideo(sermonId: string): Promise<void> {
     try {
+      if (this.disabled) return;
       if (!this.db) await this.initialize();
       await this.deleteFromStore('videos', sermonId);
       await this.deleteFromStore('videoBlobs', sermonId);
@@ -140,6 +183,7 @@ class VideoStorageService {
   // Get all stored videos metadata
   async getAllVideos(): Promise<VideoMetadata[]> {
     try {
+      if (this.disabled) return [];
       if (!this.db) await this.initialize();
       return await this.getAllFromStore('videos');
     } catch (error) {
@@ -151,12 +195,17 @@ class VideoStorageService {
   // Get storage usage
   async getStorageUsage(): Promise<{ used: number; videos: number }> {
     try {
+      if (this.disabled) return { used: 0, videos: 0 };
       const videos = await this.getAllVideos();
       const used = videos.reduce((total, video) => total + video.size, 0);
       return { used, videos: videos.length };
     } catch (error) {
       return { used: 0, videos: 0 };
     }
+  }
+
+  isEnabled(): boolean {
+    return !this.disabled;
   }
 
   // Helper: Save to object store

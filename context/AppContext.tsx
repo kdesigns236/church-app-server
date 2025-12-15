@@ -430,6 +430,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         if (document.readyState !== 'complete') {
           return;
         }
+        // If offline cache is unavailable (e.g., private mode or restricted env), skip prefetch entirely
+        try {
+          if (videoStorageService && typeof (videoStorageService as any).isEnabled === 'function' && !(videoStorageService as any).isEnabled()) {
+            return;
+          }
+        } catch {}
 
         let prefetched = 0;
         for (const sermon of sermonsToPrefetch) {

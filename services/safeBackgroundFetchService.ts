@@ -70,6 +70,14 @@ class SafeBackgroundFetchService {
       const cfg = this.getConfig();
       if (!cfg.enabled) { this.running = false; return false; }
 
+      // If offline cache is unavailable (IndexedDB blocked), skip background fetch gracefully
+      try {
+        if (videoStorageService && typeof (videoStorageService as any).isEnabled === 'function' && !(videoStorageService as any).isEnabled()) {
+          this.running = false;
+          return false;
+        }
+      } catch {}
+
       const connection: any = (navigator as any).connection;
       const effective: string | undefined = connection?.effectiveType;
       if (effective && /(2g|3g)/i.test(effective)) return false;

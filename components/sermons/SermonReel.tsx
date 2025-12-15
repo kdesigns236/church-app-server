@@ -779,8 +779,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         const v = videoRef.current;
         if (v && isActive) tryAutoplay(v);
       } catch {}
-      // Opportunistic caching for non-HLS MP4/WebM on web: save to IndexedDB once
+      // Opportunistic caching for non-HLS MP4/WebM on web: save to IndexedDB once (only if enabled)
       try {
+        const enabled = (videoStorageService as any)?.isEnabled ? (videoStorageService as any).isEnabled() : true;
+        if (!enabled) return;
         if (!cachedOnceRef.current && typeof videoSrc === 'string' && !/\.m3u8(\?.*)?$/i.test(videoSrc)) {
           cachedOnceRef.current = true;
           (async () => {
