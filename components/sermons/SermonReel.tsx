@@ -446,7 +446,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         ];
         for (const p of storagePaths) {
           if (typeof p === 'string' && p.trim()) {
-            const fresh = await resolveFirebaseDownloadUrl(p.trim());
+            const fresh = await tryGetUrlVariants(p.trim());
             if (fresh && isMountedRef.current) { setIsBuffering(false); setIsReady(false); setVideoSrc(fresh); return; }
           }
         }
@@ -458,7 +458,21 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           (sermon as any)?.media?.url,
         ];
         const fb = fbCandidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u) && !/\.m3u8(\?.*)?$/i.test(u));
-        if (fb) { setIsBuffering(false); setIsReady(false); setVideoSrc(fb); return; }
+        if (fb) {
+          let out = String(fb);
+          try {
+            if (out.includes('firebasestorage.googleapis.com') && out.includes('/o/')) {
+              try { await signInAnonymously(auth); } catch {}
+              const enc = out.split('/o/')[1]?.split('?')[0] || '';
+              const path = decodeURIComponent(enc);
+              if (path) {
+                const fresh = await tryGetUrlVariants(path);
+                if (fresh) out = fresh;
+              }
+            }
+          } catch {}
+          setIsBuffering(false); setIsReady(false); setVideoSrc(out); return;
+        }
       } catch {}
     };
 
