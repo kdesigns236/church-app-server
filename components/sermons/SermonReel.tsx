@@ -152,13 +152,20 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       const u = await getDownloadURL(ref(storage, basePath));
       if (u) return normalizeFirebasePublicUrl(String(u));
     } catch {}
-    // If path ends with _d or _g before extension, try without suffix
+    // If path ends with _d or _g before extension, try without suffix and flipped suffix
     try {
-      const m = basePath.match(/^(.*)_[dg](\.[a-z0-9]+)$/i);
+      const m = basePath.match(/^(.*)_([dg])(\.[a-z0-9]+)$/i);
       if (m) {
-        const alt = m[1] + m[2];
-        const u2 = await getDownloadURL(ref(storage, alt));
-        if (u2) return normalizeFirebasePublicUrl(String(u2));
+        const unsuffixed = m[1] + m[3];
+        try {
+          const u2 = await getDownloadURL(ref(storage, unsuffixed));
+          if (u2) return normalizeFirebasePublicUrl(String(u2));
+        } catch {}
+        const flipped = m[1] + '_' + (m[2].toLowerCase() === 'd' ? 'g' : 'd') + m[3];
+        try {
+          const u3 = await getDownloadURL(ref(storage, flipped));
+          if (u3) return normalizeFirebasePublicUrl(String(u3));
+        } catch {}
       }
     } catch {}
     return null;
@@ -248,13 +255,31 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               const enc = rawUrl.split('/o/')[1]?.split('?')[0] || '';
               const p = decodeURIComponent(enc);
               if (p) {
+                // If the URL is an HLS manifest path, try MP4 variants first
+                const isHlsPath = /^sermons\/hls\//i.test(p);
+                if (isHlsPath) {
+                  const m = p.match(/^sermons\/hls\/([^/]+)\//i);
+                  if (m && m[1]) {
+                    const base = m[1];
+                    const primary = `sermons/${base}.mp4`;
+                    let fresh = await tryGetUrlVariants(primary);
+                    if (!fresh && /_[dg]$/i.test(base)) {
+                      const noSfx = base.replace(/_[dg]$/i, '');
+                      fresh = await tryGetUrlVariants(`sermons/${noSfx}.mp4`);
+                    }
+                    if (fresh && isMountedRef.current) { setVideoSrc(String(fresh)); return; }
+                  }
+                }
+                // Otherwise, try the path as-is with variant normalization
                 const fresh = await tryGetUrlVariants(p);
                 const normalized = fresh ? String(fresh) : '';
                 if (normalized && isMountedRef.current) { setVideoSrc(normalized); return; }
               }
             } catch {}
+            // Firebase URL but we couldn't resolve a fresh signed variant; do not set the raw URL
+          } else {
+            if (isMountedRef.current) { setVideoSrc(rawUrl); return; }
           }
-          if (isMountedRef.current) { setVideoSrc(rawUrl); return; }
         } else if (typeof rawUrl === 'string') {
           const resolved = await resolveFirebaseDownloadUrl(rawUrl);
           if (resolved && isMountedRef.current) {
@@ -271,9 +296,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         // Cloud-hosted videos (fallback when no cached copy)
         if (typeof rawUrl === 'string' && 
             (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
-          console.log('[SermonReel] Loading video from cloud:', rawUrl);
-          if (isMountedRef.current) setVideoSrc(rawUrl);
-          return;
+          // Avoid setting unresolved Firebase URLs; only set for non-Firebase hosts here
+          if (!(rawUrl.includes('firebasestorage.googleapis.com') && rawUrl.includes('/o/'))) {
+            console.log('[SermonReel] Loading video from cloud:', rawUrl);
+            if (isMountedRef.current) setVideoSrc(rawUrl);
+            return;
+          }
         }
         // Firebase storage path fallback
         if (typeof rawUrl === 'string') {
@@ -439,6 +467,29 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (fallbackTriedRef.current) return;
       fallbackTriedRef.current = true;
       try {
+        try { await signInAnonymously(auth); } catch {}
+        // 1) Try deriving MP4 directly from the current HLS src
+        try {
+          if (typeof src === 'string' && src.includes('firebasestorage.googleapis.com') && src.includes('/o/')) {
+            const enc = src.split('/o/')[1]?.split('?')[0] || '';
+            const path = decodeURIComponent(enc);
+            if (path && /^sermons\/hls\//i.test(path)) {
+              const m = path.match(/^sermons\/hls\/([^/]+)\//i);
+              if (m && m[1]) {
+                const base = m[1];
+                const primary = `sermons/${base}.mp4`;
+                let fresh = await tryGetUrlVariants(primary);
+                if (!fresh && /_[dg]$/i.test(base)) {
+                  const noSfx = base.replace(/_[dg]$/i, '');
+                  fresh = await tryGetUrlVariants(`sermons/${noSfx}.mp4`);
+                }
+                if (fresh && isMountedRef.current) { setIsBuffering(false); setIsReady(false); setVideoSrc(fresh); return; }
+              }
+            }
+          }
+        } catch {}
+
+        // 2) Try explicit storage paths on the sermon
         const storagePaths: (string | null | undefined)[] = [
           (sermon as any)?.firebaseStoragePath,
           (sermon as any)?.storagePath,
@@ -450,6 +501,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
             if (fresh && isMountedRef.current) { setIsBuffering(false); setIsReady(false); setVideoSrc(fresh); return; }
           }
         }
+        // 3) Try known URL fields (require Firebase paths to resolve fresh)
         const fbCandidates: any[] = [
           (sermon as any)?.fullSermonUrl,
           (sermon as any)?.videoUrl,
@@ -467,7 +519,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               const path = decodeURIComponent(enc);
               if (path) {
                 const fresh = await tryGetUrlVariants(path);
-                if (fresh) out = fresh;
+                if (fresh) {
+                  out = fresh;
+                } else {
+                  // If we cannot resolve a fresh Firebase URL, abort this candidate
+                  return;
+                }
               }
             }
           } catch {}
