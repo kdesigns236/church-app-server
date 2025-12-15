@@ -50,6 +50,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const fallbackTriedRef = useRef(false);
   const wantUnmuteRef = useRef(false);
   const retryOnceRef = useRef(false);
+  const errorBlobUrlRef = useRef<string | null>(null);
 
   // Sync fullscreen state with document and persist to localStorage
   useEffect(() => {
@@ -369,6 +370,17 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     return () => { isMountedRef.current = false; };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      try {
+        if (errorBlobUrlRef.current) {
+          URL.revokeObjectURL(errorBlobUrlRef.current);
+          errorBlobUrlRef.current = null;
+        }
+      } catch {}
+    };
+  }, []);
+
   // Preconnect and preload only for active reel to prevent mass loading on scroll
   useEffect(() => {
     if (!videoSrc || !isActive) return;
@@ -386,13 +398,12 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       preloadEl.rel = 'preload';
       const isHls = /\.m3u8(\?.*)?$/i.test(videoSrc);
       if (isHls) {
-        // For HLS manifests, preload as fetch so the manifest is available instantly for hls.js
-        (preloadEl as any).as = 'fetch';
-        (preloadEl as any).crossOrigin = 'anonymous';
-        (preloadEl as any).type = 'application/x-mpegURL';
+        // Preload manifest as a document for widest browser support
+        preloadEl.as = 'document';
+        preloadEl.crossOrigin = 'anonymous';
         preloadEl.href = videoSrc;
       } else {
-        (preloadEl as any).as = 'video';
+        preloadEl.as = 'video';
         preloadEl.href = videoSrc;
       }
       document.head.appendChild(preloadEl);
@@ -1092,7 +1103,68 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   }
                 }
               } catch {}
-              try { await tryNonHlsFallback(); } catch {}
+              // Try explicit storage paths on the sermon
+              try {
+                const storagePaths: (string | null | undefined)[] = [
+                  (sermon as any)?.firebaseStoragePath,
+                  (sermon as any)?.storagePath,
+                  (sermon as any)?.video?.storagePath,
+                ];
+                for (const p of storagePaths) {
+                  if (typeof p === 'string' && p.trim()) {
+                    const fresh = await tryGetUrlVariants(p.trim());
+                    if (fresh && isMountedRef.current) { setIsBuffering(false); setIsReady(false); setVideoSrc(fresh); return; }
+                  }
+                }
+              } catch {}
+              // Try known URL fields (require Firebase paths to resolve fresh)
+              try {
+                const fbCandidates: any[] = [
+                  (sermon as any)?.fullSermonUrl,
+                  (sermon as any)?.videoUrl,
+                  (sermon as any)?.video?.url,
+                  (sermon as any)?.url,
+                  (sermon as any)?.media?.url,
+                ];
+                const fb = fbCandidates.find((u) => typeof u === 'string' && /^https?:\/\//i.test(u) && !/\.m3u8(\?.*)?$/i.test(u));
+                if (fb) {
+                  let out = String(fb);
+                  try {
+                    if (out.includes('firebasestorage.googleapis.com') && out.includes('/o/')) {
+                      try { await signInAnonymously(auth); } catch {}
+                      const enc = out.split('/o/')[1]?.split('?')[0] || '';
+                      const path = decodeURIComponent(enc);
+                      if (path) {
+                        const fresh = await tryGetUrlVariants(path);
+                        if (fresh) {
+                          out = fresh;
+                        } else {
+                          // If we cannot resolve a fresh Firebase URL, abort this candidate
+                          throw new Error('No fresh Firebase URL');
+                        }
+                      }
+                    }
+                  } catch {}
+                  setIsBuffering(false); setIsReady(false); setVideoSrc(out); return;
+                }
+              } catch {}
+
+              // Final safety: fetch as Blob and play via object URL (works around odd headers/codecs in some envs)
+              try {
+                const srcForFetch = videoSrc;
+                if (typeof srcForFetch === 'string' && /^https?:\/\//i.test(srcForFetch) && !/\.m3u8(\?.*)?$/i.test(srcForFetch) && !srcForFetch.startsWith('blob:')) {
+                  const resp = await fetch(srcForFetch, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
+                  if (resp.ok) {
+                    const blob = await resp.blob();
+                    if (blob && blob.size > 0) {
+                      const obj = URL.createObjectURL(blob);
+                      try { if (errorBlobUrlRef.current) URL.revokeObjectURL(errorBlobUrlRef.current); } catch {}
+                      errorBlobUrlRef.current = obj;
+                      if (isMountedRef.current) { setVideoSrc(obj); return; }
+                    }
+                  }
+                }
+              } catch {}
             }}
           />
           {isActive && (!isReady || isBuffering) && (
