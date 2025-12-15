@@ -455,6 +455,21 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   }, []);
 
   useEffect(() => {
+    const onPrefetched = async (ev: any) => {
+      try {
+        const id = String(ev?.detail?.id || '');
+        if (!id || String(sermon.id) !== id) return;
+        const offline = await videoStorageService.getVideoUrl(id);
+        if (offline && isMountedRef.current) {
+          setVideoSrc(offline);
+        }
+      } catch {}
+    };
+    try { window.addEventListener('sermon-prefetched', onPrefetched as any); } catch {}
+    return () => { try { window.removeEventListener('sermon-prefetched', onPrefetched as any); } catch {}; };
+  }, [sermon.id]);
+
+  useEffect(() => {
     return () => {
       try {
         if (errorBlobUrlRef.current) {
@@ -496,6 +511,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           const v = videoRef.current;
           if (!v) return;
           if (v.readyState === 0) {
+            try {
+              const offline = await videoStorageService.getVideoUrl(String(sermon.id));
+              if (offline && isMountedRef.current) { setVideoSrc(offline); return; }
+            } catch {}
             try {
               const resp = await fetch(videoSrc, { mode: 'cors', credentials: 'omit', cache: 'no-store' });
               if (resp && resp.ok) {
@@ -542,6 +561,10 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                     if (recovered && isMountedRef.current) { setVideoSrc(recovered); return; }
                   }
                 }
+              } catch {}
+              try {
+                const offline = await videoStorageService.getVideoUrl(String(sermon.id));
+                if (offline && isMountedRef.current) { setVideoSrc(offline); return; }
               } catch {}
             }
           }

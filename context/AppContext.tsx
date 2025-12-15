@@ -561,6 +561,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
             await videoStorageService.saveVideo(sermonId, file);
             console.log('[AppContext] ✅ Prefetched video for sermon', sermonId);
+            try { window.dispatchEvent(new CustomEvent('sermon-prefetched', { detail: { id: sermonId } })); } catch {}
             prefetched += 1;
             if (prefetched >= 2) break;
             await new Promise((r) => setTimeout(r, 1500));
