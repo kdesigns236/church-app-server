@@ -7,9 +7,6 @@ import { initialSiteContent } from '../constants/siteContent';
 import { useAuth } from '../hooks/useAuth';
 import { videoStorageService } from '../services/videoStorageService';
 import { safeBackgroundFetchService } from '../services/safeBackgroundFetchService';
-import { storage, auth } from '../config/firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
 
 interface AppContextType {
     sermons: Sermon[];
@@ -424,6 +421,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Background prefetch: automatically download sermon videos into IndexedDB
     const prefetchSermonVideos = async (sermonsToPrefetch: Sermon[]) => {
       try {
+        const resolveApiUrlForPrefetch = (): string => {
+          try {
+            const w: any = (typeof window !== 'undefined') ? window : {};
+            const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+            const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+            const fromEnv = (import.meta as any).env?.VITE_API_URL;
+            const fallback = 'https://church-app-server.onrender.com/api';
+            const url = (fromStorage || fromWindow || fromEnv || fallback) as string;
+            return url.endsWith('/') ? url.replace(/\/$/, '') : url;
+          } catch {
+            return 'https://church-app-server.onrender.com/api';
+          }
+        };
+
+        const isTokenizedFirebaseUrl = (u: string): boolean => {
+          try {
+            if (!u || !u.includes('firebasestorage.googleapis.com')) return false;
+            const url = new URL(u);
+            return !!url.searchParams.get('token');
+          } catch {
+            return false;
+          }
+        };
+
+        const resolveFirebaseDownloadUrlFromServer = async (storagePath: string, bucket?: string): Promise<string | null> => {
+          try {
+            const base = resolveApiUrlForPrefetch();
+            const qs = new URLSearchParams();
+            qs.set('path', storagePath);
+            if (bucket) qs.set('bucket', bucket);
+            const resp = await fetch(`${base}/firebase-storage/download-url?${qs.toString()}`);
+            if (!resp.ok) return null;
+            const data: any = await resp.json();
+            const url = data && typeof data.url === 'string' ? data.url : '';
+            return url || null;
+          } catch {
+            return null;
+          }
+        };
+
         if (typeof window === 'undefined' || !navigator.onLine) {
           return;
         }
@@ -445,30 +482,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           let effectiveUrl: string = sermon.videoUrl;
           let resolvedFresh = false;
           try {
-            try { await signInAnonymously(auth); } catch {}
-            const tryVariants = async (path: string): Promise<string | null> => {
-              try { const u = await getDownloadURL(ref(storage, path)); if (u) return u; } catch {}
-              try {
-                const m = path.match(/^(.*)_([dg])(\.[a-z0-9]+)$/i);
-                if (m) {
-                  const uns = m[1] + m[3];
-                  try { const u2 = await getDownloadURL(ref(storage, uns)); if (u2) return u2; } catch {}
-                  const flip = m[1] + '_' + (m[2].toLowerCase() === 'd' ? 'g' : 'd') + m[3];
-                  try { const u3 = await getDownloadURL(ref(storage, flip)); if (u3) return u3; } catch {}
-                }
-              } catch {}
-              return null;
-            };
             const p: any = (sermon as any)?.firebaseStoragePath;
+            const bucket: any = (sermon as any)?.firebaseBucket;
             if (typeof p === 'string' && p) {
-              const r = await tryVariants(p);
+              const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
               if (r) { effectiveUrl = r; resolvedFresh = true; }
             } else if (effectiveUrl.includes('firebasestorage.googleapis.com') && effectiveUrl.includes('/o/')) {
               const enc = effectiveUrl.split('/o/')[1]?.split('?')[0] || '';
               const path = decodeURIComponent(enc);
               if (path) {
-                const r = await tryVariants(path);
+                const r = await resolveFirebaseDownloadUrlFromServer(path, (typeof bucket === 'string' ? bucket : undefined));
                 if (r) { effectiveUrl = r; resolvedFresh = true; }
+                else if (isTokenizedFirebaseUrl(effectiveUrl)) {
+                  resolvedFresh = true;
+                }
               }
             }
           } catch {}

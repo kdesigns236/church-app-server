@@ -12,6 +12,32 @@ const multer = require('multer');
 const facebookLiveRoutes = require('./routes/facebookLiveRoutes');
 const youtubeLiveRoutes = require('./routes/youtubeLiveRoutes');
 
+let firebaseAdmin;
+let firebaseAdminInitAttempted = false;
+function getFirebaseAdmin() {
+  try {
+    if (firebaseAdminInitAttempted) return firebaseAdmin || null;
+    firebaseAdminInitAttempted = true;
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY;
+    if (!projectId || !clientEmail || !privateKeyRaw) return null;
+    firebaseAdmin = require('firebase-admin');
+    if (!firebaseAdmin.apps || firebaseAdmin.apps.length === 0) {
+      const privateKey = String(privateKeyRaw).replace(/\\n/g, '\n');
+      const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
+      firebaseAdmin.initializeApp({
+        credential: firebaseAdmin.credential.cert({ projectId, clientEmail, privateKey }),
+        projectId,
+        storageBucket,
+      });
+    }
+    return firebaseAdmin;
+  } catch {
+    return null;
+  }
+}
+
 // Lazy load database
 let database;
 let useDatabase = false;
@@ -1082,6 +1108,77 @@ app.get('/api/sync/data', (req, res) => {
 app.get('/api/sermons', (req, res) => {
   console.log('[Server] Fetching all sermons');
   res.json(dataStore.sermons || []);
+});
+
+app.get('/api/firebase-storage/download-url', async (req, res) => {
+  try {
+    const p = String(req.query.path || '').trim();
+    const requestedBucket = String(req.query.bucket || '').trim();
+    if (!p) return res.status(400).json({ error: 'Missing path' });
+    if (!/^sermons\//i.test(p)) return res.status(400).json({ error: 'Invalid path' });
+
+    const admin = getFirebaseAdmin();
+    if (!admin || !admin.storage) {
+      return res.status(500).json({ error: 'Firebase admin not configured' });
+    }
+
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const defaultBucket = projectId ? `${projectId}.appspot.com` : undefined;
+    const bucketName = requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket;
+    if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
+
+    const file = admin.storage().bucket(bucketName).file(p);
+    const metaArr = await file.getMetadata();
+    const meta = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+    const rawTokens = (meta && meta.metadata && (meta.metadata.firebaseStorageDownloadTokens || meta.metadata.firebaseStorageDownloadToken)) || '';
+    const token = String(rawTokens || '').split(',')[0].trim();
+
+    const base = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(p)}`;
+    const url = token ? `${base}?alt=media&token=${encodeURIComponent(token)}` : `${base}?alt=media`;
+    res.json({ url, bucket: bucketName, path: p, token: token || null });
+  } catch (error) {
+    const msg = (error && error.message) ? String(error.message) : String(error);
+    if (/No such object|Not Found|404/i.test(msg)) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    res.status(500).json({ error: 'Failed to resolve download url' });
+  }
+});
+
+app.get('/api/firebase-storage/find-sermon-by-prefix', async (req, res) => {
+  try {
+    const ts = String(req.query.ts || '').trim();
+    const requestedBucket = String(req.query.bucket || '').trim();
+    if (!ts || !/^\d+$/.test(ts)) return res.status(400).json({ error: 'Missing ts' });
+
+    const admin = getFirebaseAdmin();
+    if (!admin || !admin.storage) {
+      return res.status(500).json({ error: 'Firebase admin not configured' });
+    }
+
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const defaultBucket = projectId ? `${projectId}.appspot.com` : undefined;
+    const bucketName = requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket;
+    if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
+
+    const prefix = `sermons/${ts}_`;
+    const [files] = await admin.storage().bucket(bucketName).getFiles({ prefix, maxResults: 25 });
+    const mp4 = (files || []).find((f) => {
+      const name = f && f.name ? String(f.name) : '';
+      return /^sermons\//i.test(name) && /\.mp4$/i.test(name);
+    });
+    if (!mp4 || !mp4.name) return res.status(404).json({ error: 'Not found' });
+
+    const metaArr = await admin.storage().bucket(bucketName).file(mp4.name).getMetadata();
+    const meta = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+    const rawTokens = (meta && meta.metadata && (meta.metadata.firebaseStorageDownloadTokens || meta.metadata.firebaseStorageDownloadToken)) || '';
+    const token = String(rawTokens || '').split(',')[0].trim();
+    const base = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(mp4.name)}`;
+    const url = token ? `${base}?alt=media&token=${encodeURIComponent(token)}` : `${base}?alt=media`;
+    res.json({ url, bucket: bucketName, path: mp4.name, token: token || null });
+  } catch {
+    res.status(500).json({ error: 'Failed to find sermon' });
+  }
 });
 
 // Create sermon endpoint

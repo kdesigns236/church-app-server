@@ -1,8 +1,35 @@
 import { videoStorageService } from './videoStorageService';
 import { chunkedVideoDownloader } from './chunkedVideoDownloader';
-import { storage, auth } from '../config/firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
+
+function resolveApiUrl(): string {
+  try {
+    const w: any = (typeof window !== 'undefined') ? window : {};
+    const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+    const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+    const fromEnv = (import.meta as any).env?.VITE_API_URL;
+    const fallback = 'https://church-app-server.onrender.com/api';
+    const url = (fromStorage || fromWindow || fromEnv || fallback) as string;
+    return url.endsWith('/') ? url.replace(/\/$/, '') : url;
+  } catch {
+    return 'https://church-app-server.onrender.com/api';
+  }
+}
+
+async function resolveFirebaseDownloadUrlFromServer(storagePath: string, bucket?: string): Promise<string | null> {
+  try {
+    const base = resolveApiUrl();
+    const qs = new URLSearchParams();
+    qs.set('path', storagePath);
+    if (bucket) qs.set('bucket', bucket);
+    const resp = await fetch(`${base}/firebase-storage/download-url?${qs.toString()}`);
+    if (!resp.ok) return null;
+    const data: any = await resp.json();
+    const url = data && typeof data.url === 'string' ? data.url : '';
+    return url || null;
+  } catch {
+    return null;
+  }
+}
 
 interface BackgroundFetchConfig {
   enabled: boolean;
@@ -96,55 +123,18 @@ class SafeBackgroundFetchService {
         if (!id || !rawUrl) continue;
         if (!/^https?:\/\//i.test(rawUrl)) { cfg.queueIndex = i + 1; this.saveConfig(cfg); continue; }
 
-        // Resolve a fresh signed URL when source is Firebase Storage and handle _d/_g variants
         let effUrl = rawUrl;
         let resolvedFresh = false;
         try {
-          try { await signInAnonymously(auth); } catch {}
-          const tryVariants = async (path: string): Promise<string | null> => {
-            try { const u = await getDownloadURL(ref(storage, path)); if (u) return u; } catch {}
-            try {
-              const m = path.match(/^(.*)_([dg])(\.[a-z0-9]+)$/i);
-              if (m) {
-                const uns = m[1] + m[3];
-                try { const u2 = await getDownloadURL(ref(storage, uns)); if (u2) return u2; } catch {}
-                const flip = m[1] + '_' + (m[2].toLowerCase() === 'd' ? 'g' : 'd') + m[3];
-                try { const u3 = await getDownloadURL(ref(storage, flip)); if (u3) return u3; } catch {}
-              }
-            } catch {}
-            return null;
-          };
-
           const p: any = (s as any)?.firebaseStoragePath;
+          const bucket: any = (s as any)?.firebaseBucket;
           if (typeof p === 'string' && p) {
-            const r = await tryVariants(p);
+            const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
             if (r) { effUrl = r; resolvedFresh = true; }
-          } else if (rawUrl.includes('firebasestorage.googleapis.com') && rawUrl.includes('/o/')) {
-            const enc = rawUrl.split('/o/')[1]?.split('?')[0] || '';
-            const path = decodeURIComponent(enc);
-            if (path) {
-              if (/^sermons\/hls\//i.test(path)) {
-                const m = path.match(/^sermons\/hls\/([^/]+)\//i);
-                if (m && m[1]) {
-                  const base = m[1];
-                  const primary = `sermons/${base}.mp4`;
-                  let fresh = await tryVariants(primary);
-                  if (!fresh && /_[dg]$/i.test(base)) {
-                    const noSfx = base.replace(/_[dg]$/i, '');
-                    fresh = await tryVariants(`sermons/${noSfx}.mp4`);
-                  }
-                  if (fresh) { effUrl = fresh; resolvedFresh = true; }
-                }
-              } else {
-                const r = await tryVariants(path);
-                if (r) { effUrl = r; resolvedFresh = true; }
-              }
-            }
           }
         } catch {}
 
-        // If Firebase Storage path but no fresh URL resolved, skip this sermon to avoid 404 spam
-        if (!resolvedFresh && rawUrl.includes('firebasestorage.googleapis.com') && rawUrl.includes('/o/')) {
+        if (!resolvedFresh && (s as any)?.firebaseStoragePath) {
           if (!cfg.failedSermons.includes(id)) cfg.failedSermons.push(id);
           cfg.queueIndex = i + 1;
           cfg.currentId = null;

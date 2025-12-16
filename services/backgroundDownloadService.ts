@@ -2,9 +2,6 @@ import { CapacitorDownloader } from '@capgo/capacitor-downloader';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { chunkedVideoDownloader } from './chunkedVideoDownloader';
-import { storage, auth } from '../config/firebase';
-import { ref, getDownloadURL } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
 
 export type MinimalSermon = { id: string | number; videoUrl?: string };
 
@@ -85,6 +82,32 @@ function resolveApiUrl(): string {
     return url.endsWith('/') ? url.replace(/\/$/, '') : url;
   } catch {
     return 'https://church-app-server.onrender.com/api';
+  }
+}
+
+function isTokenizedFirebaseUrl(u: string): boolean {
+  try {
+    if (!u || !u.includes('firebasestorage.googleapis.com')) return false;
+    const url = new URL(u);
+    return !!url.searchParams.get('token');
+  } catch {
+    return false;
+  }
+}
+
+async function resolveFirebaseDownloadUrlFromServer(storagePath: string, bucket?: string): Promise<string | null> {
+  try {
+    const base = resolveApiUrl();
+    const qs = new URLSearchParams();
+    qs.set('path', storagePath);
+    if (bucket) qs.set('bucket', bucket);
+    const resp = await fetch(`${base}/firebase-storage/download-url?${qs.toString()}`);
+    if (!resp.ok) return null;
+    const data: any = await resp.json();
+    const url = data && typeof data.url === 'string' ? data.url : '';
+    return url || null;
+  } catch {
+    return null;
   }
 }
 
@@ -199,30 +222,18 @@ export const backgroundDownloadService = {
       let url = s?.videoUrl || '';
       let resolvedFresh = false;
       try {
-        try { await signInAnonymously(auth); } catch {}
-        const tryVariants = async (path: string): Promise<string | null> => {
-          try { const u = await getDownloadURL(ref(storage, path)); if (u) return u; } catch {}
-          try {
-            const m = path.match(/^(.*)_([dg])(\.[a-z0-9]+)$/i);
-            if (m) {
-              const uns = m[1] + m[3];
-              try { const u2 = await getDownloadURL(ref(storage, uns)); if (u2) return u2; } catch {}
-              const flip = m[1] + '_' + (m[2].toLowerCase() === 'd' ? 'g' : 'd') + m[3];
-              try { const u3 = await getDownloadURL(ref(storage, flip)); if (u3) return u3; } catch {}
-            }
-          } catch {}
-          return null;
-        };
         const p: any = (s as any)?.firebaseStoragePath;
+        const bucket: any = (s as any)?.firebaseBucket;
         if (typeof p === 'string' && p) {
-          const r = await tryVariants(p);
+          const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
           if (r) { url = r; resolvedFresh = true; }
         } else if (typeof url === 'string' && url.includes('firebasestorage.googleapis.com') && url.includes('/o/')) {
           const enc = url.split('/o/')[1]?.split('?')[0] || '';
           const path = decodeURIComponent(enc);
           if (path) {
-            const r = await tryVariants(path);
+            const r = await resolveFirebaseDownloadUrlFromServer(path, (typeof bucket === 'string' ? bucket : undefined));
             if (r) { url = r; resolvedFresh = true; }
+            else if (isTokenizedFirebaseUrl(url)) { resolvedFresh = true; }
           }
         }
       } catch {}

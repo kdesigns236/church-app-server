@@ -4,9 +4,6 @@ import { Sermon } from '../../types';
 import { FaVolumeMute, FaVolumeUp, FaArrowDown, FaExpand, FaCompress } from 'react-icons/fa';
 import { videoStorageService } from '../../services/videoStorageService';
 import { backgroundDownloadService } from '../../services/backgroundDownloadService';
-import { auth, storage } from '../../config/firebase';
-import { ref, getDownloadURL, listAll } from 'firebase/storage';
-import { signInAnonymously } from 'firebase/auth';
 
 interface SermonReelProps {
   sermon: Sermon;
@@ -69,6 +66,72 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     try { return String(t || '').replace(/[^a-zA-Z0-9]/g, '_'); } catch { return 'sermon'; }
   };
 
+  const resolveApiUrl = (): string => {
+    try {
+      const w: any = (typeof window !== 'undefined') ? window : {};
+      const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+      const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+      const fromEnv = (import.meta as any).env?.VITE_API_URL;
+      const fallback = 'https://church-app-server.onrender.com/api';
+      const url = (fromStorage || fromWindow || fromEnv || fallback) as string;
+      return url.endsWith('/') ? url.replace(/\/$/, '') : url;
+    } catch {
+      return 'https://church-app-server.onrender.com/api';
+    }
+  };
+
+  const normalizeBucketName = (b: string): string => {
+    try {
+      return String(b || '').replace('.firebasestorage.app', '.appspot.com');
+    } catch {
+      return String(b || '');
+    }
+  };
+
+  const isTokenizedFirebaseUrl = (u: string): boolean => {
+    try {
+      if (!u || !u.includes('firebasestorage.googleapis.com')) return false;
+      const url = new URL(u);
+      return !!url.searchParams.get('token');
+    } catch {
+      return false;
+    }
+  };
+
+  const resolveFirebaseDownloadUrlFromServer = async (storagePath: string, bucket?: string): Promise<string | null> => {
+    try {
+      const base = resolveApiUrl();
+      const qs = new URLSearchParams();
+      qs.set('path', storagePath);
+      const b = bucket ? normalizeBucketName(bucket) : '';
+      if (b) qs.set('bucket', b);
+      const resp = await fetch(`${base}/firebase-storage/download-url?${qs.toString()}`);
+      if (!resp.ok) return null;
+      const data: any = await resp.json();
+      const url = data && typeof data.url === 'string' ? data.url : '';
+      return url || null;
+    } catch {
+      return null;
+    }
+  };
+
+  const findSermonByTimestampPrefixFromServer = async (ts: string, bucket?: string): Promise<string | null> => {
+    try {
+      const base = resolveApiUrl();
+      const qs = new URLSearchParams();
+      qs.set('ts', ts);
+      const b = bucket ? normalizeBucketName(bucket) : '';
+      if (b) qs.set('bucket', b);
+      const resp = await fetch(`${base}/firebase-storage/find-sermon-by-prefix?${qs.toString()}`);
+      if (!resp.ok) return null;
+      const data: any = await resp.json();
+      const url = data && typeof data.url === 'string' ? data.url : '';
+      return url || null;
+    } catch {
+      return null;
+    }
+  };
+
   const tryPathFromTimestampAndTitle = async (basePath: string, title: string): Promise<string | null> => {
     try {
       const m = basePath.match(/^sermons\/(\d+)_/);
@@ -76,11 +139,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       const ts = m[1];
       const seg = sanitizeTitleForPath(title || 'sermon');
       const guess = `sermons/${ts}_${seg}.mp4`;
-      try { await signInAnonymously(auth); } catch {}
-      try {
-        const u = await getDownloadURL(ref(storage, guess));
-        return u ? normalizeFirebasePublicUrl(String(u)) : null;
-      } catch { return null; }
+      const bucket: any = (sermon as any)?.firebaseBucket;
+      const u = await resolveFirebaseDownloadUrlFromServer(guess, (typeof bucket === 'string' ? bucket : undefined));
+      return u ? normalizeFirebasePublicUrl(String(u)) : null;
     } catch { return null; }
   };
 
@@ -89,17 +150,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       const m = basePath.match(/^sermons\/(\d+)_/);
       if (!m || !m[1]) return null;
       const prefix = m[1];
-      try { await signInAnonymously(auth); } catch {}
-      const dirRef = ref(storage, 'sermons');
-      const res = await listAll(dirRef);
-      const candidate = res.items.find((it: any) => {
-        const name = (it && it.name) ? String(it.name) : '';
-        return name.startsWith(prefix + '_') && /\.mp4$/i.test(name);
-      });
-      if (candidate) {
-        const u = await getDownloadURL(candidate);
-        if (u) return normalizeFirebasePublicUrl(String(u));
-      }
+      const bucket: any = (sermon as any)?.firebaseBucket;
+      const u = await findSermonByTimestampPrefixFromServer(prefix, (typeof bucket === 'string' ? bucket : undefined));
+      if (u) return normalizeFirebasePublicUrl(String(u));
     } catch {}
     return null;
   };
@@ -175,11 +228,37 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
   const resolveFirebaseDownloadUrl = async (maybePath: string): Promise<string | null> => {
     try {
-      // Ensure anonymous auth for tokens
-      try { await signInAnonymously(auth); } catch {}
-      const r = ref(storage, maybePath);
-      const u = await getDownloadURL(r);
-      return u ? normalizeFirebasePublicUrl(String(u)) : null;
+      const bucket: any = (sermon as any)?.firebaseBucket;
+      const b = (typeof bucket === 'string' ? bucket : undefined);
+      if (!maybePath || typeof maybePath !== 'string') return null;
+
+      if (/^gs:\/\//i.test(maybePath)) {
+        const rest = maybePath.replace(/^gs:\/\//i, '');
+        const slash = rest.indexOf('/');
+        const gb = slash >= 0 ? rest.slice(0, slash) : '';
+        const gp = slash >= 0 ? rest.slice(slash + 1) : '';
+        if (gp && /^sermons\//i.test(gp)) {
+          const u = await resolveFirebaseDownloadUrlFromServer(gp, gb || b);
+          return u ? normalizeFirebasePublicUrl(String(u)) : null;
+        }
+      }
+
+      if (maybePath.includes('firebasestorage.googleapis.com') && maybePath.includes('/o/')) {
+        if (isTokenizedFirebaseUrl(maybePath)) return normalizeFirebasePublicUrl(maybePath);
+        const enc = maybePath.split('/o/')[1]?.split('?')[0] || '';
+        const p = enc ? decodeURIComponent(enc) : '';
+        if (p && /^sermons\//i.test(p)) {
+          const u = await resolveFirebaseDownloadUrlFromServer(p, b);
+          return u ? normalizeFirebasePublicUrl(String(u)) : null;
+        }
+      }
+
+      if (/^sermons\//i.test(maybePath)) {
+        const u = await resolveFirebaseDownloadUrlFromServer(maybePath, b);
+        return u ? normalizeFirebasePublicUrl(String(u)) : null;
+      }
+
+      return null;
     } catch {
       return null;
     }
@@ -188,7 +267,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
   const tryGetUrlVariants = async (basePath: string): Promise<string | null> => {
     // Try the exact path first
     try {
-      const u = await getDownloadURL(ref(storage, basePath));
+      const bucket: any = (sermon as any)?.firebaseBucket;
+      const u = await resolveFirebaseDownloadUrlFromServer(basePath, (typeof bucket === 'string' ? bucket : undefined));
       if (u) return normalizeFirebasePublicUrl(String(u));
     } catch {}
     // If path ends with _d or _g before extension, try without suffix and flipped suffix
@@ -197,12 +277,14 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (m) {
         const unsuffixed = m[1] + m[3];
         try {
-          const u2 = await getDownloadURL(ref(storage, unsuffixed));
+          const bucket: any = (sermon as any)?.firebaseBucket;
+          const u2 = await resolveFirebaseDownloadUrlFromServer(unsuffixed, (typeof bucket === 'string' ? bucket : undefined));
           if (u2) return normalizeFirebasePublicUrl(String(u2));
         } catch {}
         const flipped = m[1] + '_' + (m[2].toLowerCase() === 'd' ? 'g' : 'd') + m[3];
         try {
-          const u3 = await getDownloadURL(ref(storage, flipped));
+          const bucket: any = (sermon as any)?.firebaseBucket;
+          const u3 = await resolveFirebaseDownloadUrlFromServer(flipped, (typeof bucket === 'string' ? bucket : undefined));
           if (u3) return normalizeFirebasePublicUrl(String(u3));
         } catch {}
       }
@@ -220,7 +302,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         ];
         for (const c of candidates) {
           try {
-            const u4 = await getDownloadURL(ref(storage, c));
+            const bucket: any = (sermon as any)?.firebaseBucket;
+            const u4 = await resolveFirebaseDownloadUrlFromServer(c, (typeof bucket === 'string' ? bucket : undefined));
             if (u4) return normalizeFirebasePublicUrl(String(u4));
           } catch {}
         }
@@ -232,7 +315,8 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         ];
         for (const h of hlsCandidates) {
           try {
-            const hUrl = await getDownloadURL(ref(storage, h));
+            const bucket: any = (sermon as any)?.firebaseBucket;
+            const hUrl = await resolveFirebaseDownloadUrlFromServer(h, (typeof bucket === 'string' ? bucket : undefined));
             if (hUrl) return normalizeFirebasePublicUrl(String(hUrl));
           } catch {}
         }
@@ -324,7 +408,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         // Remote URL fallback
         if (typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
           if (rawUrl.includes('firebasestorage.googleapis.com') && rawUrl.includes('/o/')) {
-            try { await signInAnonymously(auth); } catch {}
             try {
               const enc = rawUrl.split('/o/')[1]?.split('?')[0] || '';
               const p = decodeURIComponent(enc);
@@ -526,7 +609,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                 // Network OK but HTTP not OK (e.g., 404) → attempt Firebase recovery
                 try {
                   if (videoSrc.includes('firebasestorage.googleapis.com') && videoSrc.includes('/o/')) {
-                    try { await signInAnonymously(auth); } catch {}
                     const enc = videoSrc.split('/o/')[1]?.split('?')[0] || '';
                     const path = decodeURIComponent(enc);
                     if (path) {
@@ -546,7 +628,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               // Fetch failed (CORS or network) → still attempt Firebase recovery
               try {
                 if (videoSrc.includes('firebasestorage.googleapis.com') && videoSrc.includes('/o/')) {
-                  try { await signInAnonymously(auth); } catch {}
                   const enc = videoSrc.split('/o/')[1]?.split('?')[0] || '';
                   const path = decodeURIComponent(enc);
                   if (path) {
@@ -662,7 +743,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (fallbackTriedRef.current) return;
       fallbackTriedRef.current = true;
       try {
-        try { await signInAnonymously(auth); } catch {}
         // 1) Try deriving MP4 directly from the current HLS src
         try {
           if (typeof src === 'string' && src.includes('firebasestorage.googleapis.com') && src.includes('/o/')) {
@@ -709,7 +789,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           let out = String(fb);
           try {
             if (out.includes('firebasestorage.googleapis.com') && out.includes('/o/')) {
-              try { await signInAnonymously(auth); } catch {}
               const enc = out.split('/o/')[1]?.split('?')[0] || '';
               const path = decodeURIComponent(enc);
               if (path) {
@@ -1262,8 +1341,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
               if (videoSrc.includes('firebasestorage.googleapis.com')) {
                 try {
                   // Re-attempt anonymous sign in
-                  await signInAnonymously(auth);
-                  
                   // Get a fresh URL with the new auth token
                   const storagePath = decodeURIComponent(videoSrc.split('/o/')[1].split('?')[0]);
                   const freshUrl = await tryGetUrlVariants(storagePath);
@@ -1326,7 +1403,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
                   let out = String(fb);
                   try {
                     if (out.includes('firebasestorage.googleapis.com') && out.includes('/o/')) {
-                      try { await signInAnonymously(auth); } catch {}
                       const enc = out.split('/o/')[1]?.split('?')[0] || '';
                       const path = decodeURIComponent(enc);
                       if (path) {
