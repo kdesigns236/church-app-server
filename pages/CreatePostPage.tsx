@@ -21,7 +21,8 @@ const CreatePostPage: React.FC = () => {
   const editPostId = editIdStr ? parseInt(editIdStr, 10) : null;
   const isEditing = !!editPostId;
   const [postContent, setPostContent] = useState('');
-  const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
+  const [selectedMedia, setSelectedMedia] = useState<{ url: string; type: 'image' | 'video'; file?: File } | null>(null);
+  const prevObjectUrlRef = useRef<string | null>(null);
   const [removedExistingMedia, setRemovedExistingMedia] = useState(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
@@ -31,15 +32,18 @@ const CreatePostPage: React.FC = () => {
     (user?.name && user.name.trim().charAt(0).toUpperCase()) || 'U';
 
   const handleFileSelected = (file: File, type: 'image' | 'video') => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result;
-      if (typeof result === 'string') {
-        setSelectedMedia({ url: result, type });
-        setRemovedExistingMedia(false);
+    try {
+      // Revoke any previous object URL to avoid leaks
+      if (prevObjectUrlRef.current) {
+        try { URL.revokeObjectURL(prevObjectUrlRef.current); } catch {}
+        prevObjectUrlRef.current = null;
       }
-    };
-    reader.readAsDataURL(file);
+      // Use object URL for preview (much lighter than base64 for large videos)
+      const objectUrl = URL.createObjectURL(file);
+      prevObjectUrlRef.current = objectUrl;
+      setSelectedMedia({ url: objectUrl, type, file });
+      setRemovedExistingMedia(false);
+    } catch {}
   };
 
   const handleImageClick = () => {
@@ -79,6 +83,20 @@ const CreatePostPage: React.FC = () => {
   const uploadSelectedMedia = async (kind: 'story' | 'post'): Promise<{ url: string; type: 'image' | 'video' } | undefined> => {
     if (!selectedMedia) return undefined;
     try {
+      // Prefer uploading the File directly when available (reliable on mobile, avoids base64 memory pressure)
+      if (selectedMedia.file instanceof File) {
+        try {
+          const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', selectedMedia.file);
+          if (fb.success && fb.url) {
+            return { url: fb.url, type: selectedMedia.type };
+          }
+        } catch {}
+        try {
+          const remoteUrl = await uploadService.uploadFile(selectedMedia.file);
+          return { url: remoteUrl, type: selectedMedia.type };
+        } catch {}
+        return undefined;
+      }
       if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:')) {
         const ext = selectedMedia.type === 'video' ? 'mp4' : 'png';
         const file = dataUrlToFile(selectedMedia.url, `${kind}-${Date.now()}.${ext}`);
@@ -166,7 +184,10 @@ const CreatePostPage: React.FC = () => {
         let newMedia: { url: string; type: 'image' | 'video' } | undefined = undefined;
         if (!removedExistingMedia) {
           if (selectedMedia) {
-            if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:')) {
+            if (selectedMedia.file instanceof File) {
+              // Upload newly selected media when we have an actual File (mobile-friendly path)
+              newMedia = await uploadSelectedMedia('post');
+            } else if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:')) {
               // Upload newly selected media if it's a data URL
               newMedia = await uploadSelectedMedia('post');
             } else {
@@ -195,6 +216,8 @@ const CreatePostPage: React.FC = () => {
     }
 
     setPostContent('');
+    // Revoke preview URL to free memory
+    try { if (prevObjectUrlRef.current) { URL.revokeObjectURL(prevObjectUrlRef.current); prevObjectUrlRef.current = null; } } catch {}
     setSelectedMedia(null);
     setRemovedExistingMedia(false);
     navigate('/chat');

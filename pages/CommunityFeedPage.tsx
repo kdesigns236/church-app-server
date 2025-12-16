@@ -237,6 +237,52 @@ const CommunityFeedPage: React.FC = () => {
     return !!(match && match.isOnline);
   };
 
+  // Normalize potentially insecure or malformed media URLs so media renders reliably on HTTPS
+  const fixMediaUrl = (u?: string): string => {
+    try {
+      if (!u || typeof u !== 'string') return '';
+      let url = u.trim();
+      if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http:')) {
+        url = url.replace(/^http:/i, 'https:');
+      }
+      if (url.includes('firebasestorage.googleapis.com')) {
+        try {
+          const parsed = new URL(url);
+          // Ensure direct media delivery
+          if (parsed.searchParams.get('alt') !== 'media') parsed.searchParams.set('alt', 'media');
+          const token = parsed.searchParams.get('token');
+          if (token) parsed.searchParams.set('token', token);
+          url = parsed.toString();
+        } catch {}
+      }
+      return url;
+    } catch {
+      return u || '';
+    }
+  };
+
+  const handleImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    try {
+      const el = e.currentTarget;
+      if (!el.dataset.retry) {
+        el.dataset.retry = '1';
+        el.src = fixMediaUrl(el.src);
+      }
+    } catch {}
+  };
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    try {
+      const el = e.currentTarget;
+      const src = el.currentSrc || (el as any).src || '';
+      const fixed = fixMediaUrl(src);
+      if (fixed && fixed !== src) {
+        (el as any).src = fixed;
+        try { el.load(); el.play().catch(() => {}); } catch {}
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     const search = location && location.search ? location.search : '';
     if (!search) return;
@@ -871,17 +917,18 @@ const CommunityFeedPage: React.FC = () => {
                     padding: '8px',
                     background: !latest
                       ? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)'
-                      : (isImage ? `url(${((latest as any).media as any)?.url || ''}) center/cover no-repeat` : 'transparent'),
+                      : (isImage ? `url(${fixMediaUrl((((latest as any).media as any)?.url || ''))}) center/cover no-repeat` : 'transparent'),
                   }}
                 >
                   {isVideo && (
                     <>
                       <video
-                        src={(((latest as any).media as any)?.url || '')}
+                        src={fixMediaUrl((((latest as any).media as any)?.url || ''))}
                         muted
                         playsInline
                         preload="metadata"
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                        onError={handleVideoError}
                       />
                       <div
                         style={{
@@ -1519,7 +1566,7 @@ const CommunityFeedPage: React.FC = () => {
               <div style={{ padding: '0 16px 12px' }}>
                 {post.media.type === 'image' ? (
                   <img
-                    src={post.media.url}
+                    src={fixMediaUrl(post.media.url)}
                     alt="Post media"
                     style={{
                       width: '100%',
@@ -1527,17 +1574,19 @@ const CommunityFeedPage: React.FC = () => {
                       objectFit: 'cover',
                       borderRadius: 10,
                     }}
+                    onError={handleImgError}
                   />
                 ) : (
                   <video
                     controls
-                    src={post.media.url}
+                    src={fixMediaUrl(post.media.url)}
                     style={{
                       width: '100%',
                       maxHeight: '360px',
                       borderRadius: 10,
                       backgroundColor: '#000',
                     }}
+                    onError={handleVideoError}
                   />
                 )}
               </div>
@@ -2136,7 +2185,7 @@ const CommunityFeedPage: React.FC = () => {
               {viewingStory.media ? (
                 viewingStory.media.type === 'image' ? (
                   <img
-                    src={viewingStory.media.url}
+                    src={fixMediaUrl(viewingStory.media.url)}
                     alt="Story media"
                     style={{
                       maxWidth: '100%',
@@ -2144,11 +2193,12 @@ const CommunityFeedPage: React.FC = () => {
                       borderRadius: 16,
                       objectFit: 'cover',
                     }}
+                    onError={handleImgError}
                   />
                 ) : (
                   <video
                     ref={storyVideoRef}
-                    src={viewingStory.media.url}
+                    src={fixMediaUrl(viewingStory.media.url)}
                     autoPlay
                     playsInline
                     preload="auto"
@@ -2175,6 +2225,7 @@ const CommunityFeedPage: React.FC = () => {
                       borderRadius: 16,
                       backgroundColor: '#000',
                     }}
+                    onError={handleVideoError}
                   />
                 )
               ) : (

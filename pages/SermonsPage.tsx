@@ -5,6 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
 import { Sermon } from '../types';
 import { safeBackgroundFetchService } from '../services/safeBackgroundFetchService';
+import { keepAwakeService } from '../services/keepAwakeService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeftIcon } from '../constants/icons';
 
@@ -192,6 +193,58 @@ const SermonsPage: React.FC = () => {
     }, 4000);
   };
 
+  // Best-effort: when returning to /sermons, ensure the active video resumes playback (muted if necessary)
+  const resumeActivePlayback = () => {
+    try {
+      const container = containerRef.current;
+      if (!container) return;
+      const child = container.children[currentIndex] as HTMLElement | undefined;
+      if (!child) return;
+      const v = child.querySelector('video') as HTMLVideoElement | null;
+      if (!v) return;
+      const attempt = async () => {
+        try {
+          await v.play();
+        } catch {
+          try { v.muted = true; await v.play(); } catch {}
+        }
+      };
+      // slight delay to allow layout after display toggles
+      setTimeout(attempt, 50);
+    } catch {}
+  };
+
+  // On navigation back to /sermons or when tab becomes visible, try to resume playback for the active item
+  useEffect(() => {
+    const onPage = location.pathname === '/sermons';
+    if (!onPage) return;
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        resumeActivePlayback();
+      }
+    };
+    // immediate attempt after route change
+    resumeActivePlayback();
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [location.pathname, currentIndex]);
+
+  // Request wake lock while on sermons page to avoid sleep; release on hide/leave (App also releases defensively)
+  useEffect(() => {
+    const onPage = location.pathname === '/sermons';
+    if (!onPage) return;
+    keepAwakeService.request('sermons').catch(() => {});
+    const onHidden = () => {
+      if (document.visibilityState !== 'visible') {
+        keepAwakeService.releaseAll().catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', onHidden);
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden);
+    };
+  }, [location.pathname]);
+
   // Removed comments/sharing overlays for a minimal player
 
   return (
@@ -227,7 +280,11 @@ const SermonsPage: React.FC = () => {
               showChrome={showChrome}
               onUserInteraction={handleUserInteraction}
               preloadHint={
-                index === currentIndex ? 'auto' : 'none'
+                index === currentIndex
+                  ? 'auto'
+                  : (index === currentIndex + 1 || index === currentIndex - 1)
+                    ? 'metadata'
+                    : 'none'
               }
             />
           ))

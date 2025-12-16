@@ -6,6 +6,7 @@
 
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from '../config/firebase';
+import { keepAwakeService } from './keepAwakeService';
 import { signInAnonymously } from 'firebase/auth';
 
 interface UploadProgress {
@@ -62,7 +63,27 @@ export async function uploadMediaToFirebase(
       },
     });
 
-    return await new Promise<UploadMediaResult>((resolve, reject) => {
+    return await new Promise<UploadMediaResult>(async (resolve, reject) => {
+      // Prevent device sleep during upload (mobile)
+      try { await keepAwakeService.request('media-upload'); } catch {}
+
+      let settled = false;
+      let lastTransferred = 0;
+      let stallTimer: number | null = null;
+      const clearStall = () => { if (stallTimer) { try { window.clearTimeout(stallTimer); } catch {} stallTimer = null; } };
+      const armStall = (ms: number) => {
+        clearStall();
+        stallTimer = window.setTimeout(() => {
+          if (settled) return;
+          try { uploadTask.cancel(); } catch {}
+          settled = true;
+          try { keepAwakeService.release('media-upload'); } catch {}
+          reject({ success: false, error: 'Upload stalled' });
+        }, ms) as any;
+      };
+
+      // Arm initial stall guard: if bytesTransferred stays at 0 for 15s, abort & fallback
+      armStall(15000);
       try { if (onProgress) onProgress({ progress: 0, bytesTransferred: 0, totalBytes: file.size || 0 }); } catch {}
       uploadTask.on(
         'state_changed',
@@ -75,21 +96,41 @@ export async function uploadMediaToFirebase(
               totalBytes: snapshot.totalBytes,
             });
           }
+          // Only reset stall guard when we see forward progress
+          if (snapshot.bytesTransferred > lastTransferred) {
+            lastTransferred = snapshot.bytesTransferred;
+            // After first byte moves, allow a longer window (45s) for mobile networks
+            armStall(45000);
+          }
         },
         (error) => {
-          reject({ success: false, error: error?.message || 'Upload failed' });
+          clearStall();
+          if (!settled) {
+            settled = true;
+            try { keepAwakeService.release('media-upload'); } catch {}
+            reject({ success: false, error: error?.message || 'Upload failed' });
+          }
         },
         async () => {
           try {
+            clearStall();
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
             const rawBucket = (uploadTask.snapshot.ref as any).bucket || (storage as any)?.app?.options?.storageBucket || '';
             const appspotBucket = typeof rawBucket === 'string' ? rawBucket.replace('.firebasestorage.app', '.appspot.com') : rawBucket;
             const optimizedURL = typeof downloadURL === 'string'
               ? downloadURL.replace(`/b/${rawBucket}/o/`, `/b/${appspotBucket}/o/`)
               : downloadURL;
-            resolve({ success: true, url: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)), storagePath: uploadTask.snapshot.ref.fullPath, bucket: appspotBucket });
+            if (!settled) {
+              settled = true;
+              try { keepAwakeService.release('media-upload'); } catch {}
+              resolve({ success: true, url: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)), storagePath: uploadTask.snapshot.ref.fullPath, bucket: appspotBucket });
+            }
           } catch (e: any) {
-            reject({ success: false, error: e?.message || 'Failed to get URL' });
+            if (!settled) {
+              settled = true;
+              try { keepAwakeService.release('media-upload'); } catch {}
+              reject({ success: false, error: e?.message || 'Failed to get URL' });
+            }
           }
         }
       );
@@ -140,7 +181,25 @@ export async function uploadVideoToFirebase(
     });
 
     // Return promise that resolves when upload completes
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
+      // Keep device awake during potentially long sermon upload
+      try { await keepAwakeService.request('sermon-upload'); } catch {}
+      let settled = false;
+      let lastTransferred = 0;
+      let stallTimer: number | null = null;
+      const clearStall = () => { if (stallTimer) { try { window.clearTimeout(stallTimer); } catch {} stallTimer = null; } };
+      const armStall = (ms: number) => {
+        clearStall();
+        stallTimer = window.setTimeout(() => {
+          if (settled) return;
+          try { uploadTask.cancel(); } catch {}
+          settled = true;
+          try { keepAwakeService.release('sermon-upload'); } catch {}
+          reject({ success: false, error: 'Upload stalled' } as any);
+        }, ms) as any;
+      };
+      // If we don't see any bytes for 20s, assume stall; after first progress, allow 60s gaps
+      armStall(20000);
       try { if (onProgress) onProgress({ progress: 0, bytesTransferred: 0, totalBytes: videoFile.size || 0 }); } catch {}
       uploadTask.on(
         'state_changed',
@@ -156,6 +215,10 @@ export async function uploadVideoToFirebase(
               bytesTransferred: snapshot.bytesTransferred,
               totalBytes: snapshot.totalBytes
             });
+          }
+          if (snapshot.bytesTransferred > lastTransferred) {
+            lastTransferred = snapshot.bytesTransferred;
+            armStall(60000);
           }
         },
         // Error callback
@@ -183,11 +246,17 @@ export async function uploadVideoToFirebase(
               errorMessage = error.message;
           }
           
-          reject({ success: false, error: errorMessage });
+          clearStall();
+          if (!settled) {
+            settled = true;
+            try { keepAwakeService.release('sermon-upload'); } catch {}
+            reject({ success: false, error: errorMessage });
+          }
         },
         // Success callback
         async () => {
           try {
+            clearStall();
             // Get signed download URL with custom metadata
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 
@@ -201,18 +270,26 @@ export async function uploadVideoToFirebase(
             console.log('[Firebase] ✅ Upload successful!');
             console.log('[Firebase] Video URL:', (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)));
             
-            resolve({
-              success: true,
-              videoUrl: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)),
-              storagePath: uploadTask.snapshot.ref.fullPath,
-              bucket: appspotBucket
-            });
+            if (!settled) {
+              settled = true;
+              try { keepAwakeService.release('sermon-upload'); } catch {}
+              resolve({
+                success: true,
+                videoUrl: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)),
+                storagePath: uploadTask.snapshot.ref.fullPath,
+                bucket: appspotBucket
+              });
+            }
           } catch (error: any) {
             console.error('[Firebase] Error getting download URL:', error);
-            reject({
-              success: false,
-              error: 'Upload succeeded but failed to get URL: ' + error.message
-            });
+            if (!settled) {
+              settled = true;
+              try { keepAwakeService.release('sermon-upload'); } catch {}
+              reject({
+                success: false,
+                error: 'Upload succeeded but failed to get URL: ' + error.message
+              });
+            }
           }
         }
       );

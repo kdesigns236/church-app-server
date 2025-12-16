@@ -114,7 +114,7 @@ const AdminModal: React.FC<AdminModalProps> = ({ config, onClose, onSave }) => {
                 console.error('[AdminPage] No file selected');
             }
         } else {
-            setFormData(prev => ({ ...prev, [name]: value }));
+            setFormData((prev: any) => ({ ...prev, [name]: value }));
         }
     };
 
@@ -321,6 +321,7 @@ const AdminPage: React.FC = () => {
         socialLinks: siteContent?.socialLinks || { facebook: '', youtube: '', tiktok: '' }
     });
     const [isEditingSiteContent, setIsEditingSiteContent] = useState(false);
+    const lastSiteContentJsonRef = useRef<string>(JSON.stringify(siteContent || {}));
 
     // State for video upload progress
     const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -337,18 +338,24 @@ const AdminPage: React.FC = () => {
         try { localStorage.removeItem('enableNativeBgFetch'); setNativeBgEnabled(false); alert('Native background fetch DISABLED.'); } catch {}
     };
 
+    // Only refresh the editable buffer when siteContent truly changes externally.
+    // Do NOT reset the buffer just because an input blurs.
     useEffect(() => {
-        if (!isEditingSiteContent) {
-            setEditableSiteContent(prev => {
-                try {
-                    const a = JSON.stringify(prev);
-                    const b = JSON.stringify(siteContent);
-                    return a === b ? prev : siteContent;
-                } catch {
-                    return siteContent;
-                }
-            });
-        }
+        try {
+            const currentJson = JSON.stringify(siteContent || {});
+            if (!isEditingSiteContent && currentJson !== lastSiteContentJsonRef.current) {
+                setEditableSiteContent(prev => {
+                    try {
+                        const a = JSON.stringify(prev);
+                        // If prev already equals the new siteContent, keep prev to avoid unnecessary rerenders
+                        return a === currentJson ? prev : (siteContent as SiteContent);
+                    } catch {
+                        return (siteContent as SiteContent);
+                    }
+                });
+                lastSiteContentJsonRef.current = currentJson;
+            }
+        } catch {}
     }, [siteContent, isEditingSiteContent]);
 
 
