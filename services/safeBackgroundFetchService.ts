@@ -15,6 +15,16 @@ function resolveApiUrl(): string {
   }
 }
 
+function isTokenizedFirebaseUrl(u: string): boolean {
+  try {
+    if (!u || !u.includes('firebasestorage.googleapis.com')) return false;
+    const url = new URL(u);
+    return !!url.searchParams.get('token');
+  } catch {
+    return false;
+  }
+}
+
 async function resolveFirebaseDownloadUrlFromServer(storagePath: string, bucket?: string): Promise<string | null> {
   try {
     const base = resolveApiUrl();
@@ -126,11 +136,15 @@ class SafeBackgroundFetchService {
         let effUrl = rawUrl;
         let resolvedFresh = false;
         try {
+          if (isTokenizedFirebaseUrl(rawUrl)) {
+            resolvedFresh = true;
+          }
           const p: any = (s as any)?.firebaseStoragePath;
           const bucket: any = (s as any)?.firebaseBucket;
-          if (typeof p === 'string' && p) {
+          if (!resolvedFresh && typeof p === 'string' && p) {
             const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
             if (r) { effUrl = r; resolvedFresh = true; }
+            else if (isTokenizedFirebaseUrl(rawUrl)) { resolvedFresh = true; }
           }
         } catch {}
 

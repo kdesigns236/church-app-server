@@ -482,12 +482,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           let effectiveUrl: string = sermon.videoUrl;
           let resolvedFresh = false;
           try {
+            if (isTokenizedFirebaseUrl(effectiveUrl)) {
+              resolvedFresh = true;
+            }
             const p: any = (sermon as any)?.firebaseStoragePath;
             const bucket: any = (sermon as any)?.firebaseBucket;
-            if (typeof p === 'string' && p) {
+            if (!resolvedFresh && typeof p === 'string' && p) {
               const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
               if (r) { effectiveUrl = r; resolvedFresh = true; }
-            } else if (effectiveUrl.includes('firebasestorage.googleapis.com') && effectiveUrl.includes('/o/')) {
+              else if (isTokenizedFirebaseUrl(effectiveUrl)) { resolvedFresh = true; }
+            } else if (!resolvedFresh && effectiveUrl.includes('firebasestorage.googleapis.com') && effectiveUrl.includes('/o/')) {
               const enc = effectiveUrl.split('/o/')[1]?.split('?')[0] || '';
               const path = decodeURIComponent(enc);
               if (path) {

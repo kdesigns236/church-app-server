@@ -222,12 +222,16 @@ export const backgroundDownloadService = {
       let url = s?.videoUrl || '';
       let resolvedFresh = false;
       try {
+        if (isTokenizedFirebaseUrl(url)) {
+          resolvedFresh = true;
+        }
         const p: any = (s as any)?.firebaseStoragePath;
         const bucket: any = (s as any)?.firebaseBucket;
-        if (typeof p === 'string' && p) {
+        if (!resolvedFresh && typeof p === 'string' && p) {
           const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
           if (r) { url = r; resolvedFresh = true; }
-        } else if (typeof url === 'string' && url.includes('firebasestorage.googleapis.com') && url.includes('/o/')) {
+          else if (isTokenizedFirebaseUrl(url)) { resolvedFresh = true; }
+        } else if (!resolvedFresh && typeof url === 'string' && url.includes('firebasestorage.googleapis.com') && url.includes('/o/')) {
           const enc = url.split('/o/')[1]?.split('?')[0] || '';
           const path = decodeURIComponent(enc);
           if (path) {

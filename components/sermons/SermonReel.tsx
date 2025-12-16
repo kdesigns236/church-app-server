@@ -334,6 +334,25 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     let objectUrl: string | null = null;
     const pickSermonUrl = (s: any): string | null => {
       // Prefer authoritative Storage paths first; then fall back to known HTTP URLs
+      try {
+        const directCandidates: any[] = [
+          s?.hlsUrl,
+          s?.fullSermonUrl,
+          s?.videoUrl,
+          s?.video?.url,
+          s?.video?.link,
+          s?.url,
+          s?.media?.url,
+          Array.isArray(s?.sources) ? s.sources.find((x: any) => typeof x === 'string' && x) : null,
+        ];
+        for (const c of directCandidates) {
+          if (typeof c !== 'string' || !c.trim()) continue;
+          const u = c.trim();
+          if (!/^https?:\/\//i.test(u)) continue;
+          if (!u.includes('firebasestorage.googleapis.com')) return u;
+          if (isTokenizedFirebaseUrl(u)) return u;
+        }
+      } catch {}
       const candidates: any[] = [
         // Storage paths (we can derive fresh signed URLs reliably)
         s?.firebaseStoragePath,
@@ -408,6 +427,9 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         // Remote URL fallback
         if (typeof rawUrl === 'string' && (rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
           if (rawUrl.includes('firebasestorage.googleapis.com') && rawUrl.includes('/o/')) {
+            if (isTokenizedFirebaseUrl(rawUrl)) {
+              if (isMountedRef.current) { setVideoSrc(rawUrl); return; }
+            }
             try {
               const enc = rawUrl.split('/o/')[1]?.split('?')[0] || '';
               const p = decodeURIComponent(enc);
@@ -513,7 +535,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
         }
 
         // Unknown format
-        console.error('[SermonReel] Unknown video URL format:', sermon.videoUrl);
+        console.error('[SermonReel] Unknown video URL format:', rawUrl);
         setVideoSrc('');
         
       } catch (error) {

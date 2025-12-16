@@ -38,6 +38,20 @@ function getFirebaseAdmin() {
   }
 }
 
+function normalizeFirebaseBucketName(bucket) {
+  try {
+    let b = String(bucket || '').trim();
+    if (!b) return '';
+    b = b.replace('.firebasestorage.app', '.appspot.com');
+    if (b.endsWith('appspot.com') && !b.includes('.appspot.com')) {
+      b = b.replace('appspot.com', '.appspot.com');
+    }
+    return b;
+  } catch {
+    return '';
+  }
+}
+
 // Lazy load database
 let database;
 let useDatabase = false;
@@ -1124,24 +1138,48 @@ app.get('/api/firebase-storage/download-url', async (req, res) => {
 
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const defaultBucket = projectId ? `${projectId}.appspot.com` : undefined;
-    const bucketName = requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket;
+    const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
     if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
 
-    const file = admin.storage().bucket(bucketName).file(p);
-    const metaArr = await file.getMetadata();
-    const meta = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+    const bucket = admin.storage().bucket(bucketName);
+    const file = bucket.file(p);
+
+    let meta = null;
+    let metaErr = null;
+    try {
+      const metaArr = await file.getMetadata();
+      meta = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+    } catch (e) {
+      metaErr = e;
+    }
+
     const rawTokens = (meta && meta.metadata && (meta.metadata.firebaseStorageDownloadTokens || meta.metadata.firebaseStorageDownloadToken)) || '';
     const token = String(rawTokens || '').split(',')[0].trim();
 
+    if (token) {
+      const base = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(p)}`;
+      const url = `${base}?alt=media&token=${encodeURIComponent(token)}`;
+      return res.json({ url, bucket: bucketName, path: p, token: token || null, signed: false });
+    }
+
+    try {
+      const [signedUrl] = await file.getSignedUrl({ action: 'read', expires: Date.now() + 1000 * 60 * 60 * 24 });
+      if (signedUrl) return res.json({ url: signedUrl, bucket: bucketName, path: p, token: null, signed: true });
+    } catch (e) {
+      const msg = (e && e.message) ? String(e.message) : String(e);
+      console.error('[Server] firebase-storage/download-url signed-url failed:', msg);
+    }
+
     const base = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(p)}`;
-    const url = token ? `${base}?alt=media&token=${encodeURIComponent(token)}` : `${base}?alt=media`;
-    res.json({ url, bucket: bucketName, path: p, token: token || null });
+    const url = `${base}?alt=media`;
+    return res.json({ url, bucket: bucketName, path: p, token: null, signed: false, warning: metaErr ? 'metadata_failed' : 'token_missing' });
   } catch (error) {
     const msg = (error && error.message) ? String(error.message) : String(error);
+    console.error('[Server] firebase-storage/download-url failed:', msg);
     if (/No such object|Not Found|404/i.test(msg)) {
       return res.status(404).json({ error: 'Not found' });
     }
-    res.status(500).json({ error: 'Failed to resolve download url' });
+    res.status(500).json({ error: 'Failed to resolve download url', details: msg });
   }
 });
 
@@ -1158,7 +1196,7 @@ app.get('/api/firebase-storage/find-sermon-by-prefix', async (req, res) => {
 
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const defaultBucket = projectId ? `${projectId}.appspot.com` : undefined;
-    const bucketName = requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket;
+    const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
     if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
 
     const prefix = `sermons/${ts}_`;
@@ -1169,15 +1207,40 @@ app.get('/api/firebase-storage/find-sermon-by-prefix', async (req, res) => {
     });
     if (!mp4 || !mp4.name) return res.status(404).json({ error: 'Not found' });
 
-    const metaArr = await admin.storage().bucket(bucketName).file(mp4.name).getMetadata();
-    const meta = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+    const bucket = admin.storage().bucket(bucketName);
+    const file = bucket.file(mp4.name);
+
+    let meta = null;
+    let metaErr = null;
+    try {
+      const metaArr = await file.getMetadata();
+      meta = Array.isArray(metaArr) ? metaArr[0] : metaArr;
+    } catch (e) {
+      metaErr = e;
+    }
     const rawTokens = (meta && meta.metadata && (meta.metadata.firebaseStorageDownloadTokens || meta.metadata.firebaseStorageDownloadToken)) || '';
     const token = String(rawTokens || '').split(',')[0].trim();
+    if (token) {
+      const base = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(mp4.name)}`;
+      const url = `${base}?alt=media&token=${encodeURIComponent(token)}`;
+      return res.json({ url, bucket: bucketName, path: mp4.name, token: token || null, signed: false });
+    }
+
+    try {
+      const [signedUrl] = await file.getSignedUrl({ action: 'read', expires: Date.now() + 1000 * 60 * 60 * 24 });
+      if (signedUrl) return res.json({ url: signedUrl, bucket: bucketName, path: mp4.name, token: null, signed: true });
+    } catch (e) {
+      const msg = (e && e.message) ? String(e.message) : String(e);
+      console.error('[Server] firebase-storage/find-sermon-by-prefix signed-url failed:', msg);
+    }
+
     const base = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(mp4.name)}`;
-    const url = token ? `${base}?alt=media&token=${encodeURIComponent(token)}` : `${base}?alt=media`;
-    res.json({ url, bucket: bucketName, path: mp4.name, token: token || null });
-  } catch {
-    res.status(500).json({ error: 'Failed to find sermon' });
+    const url = `${base}?alt=media`;
+    return res.json({ url, bucket: bucketName, path: mp4.name, token: null, signed: false, warning: metaErr ? 'metadata_failed' : 'token_missing' });
+  } catch (error) {
+    const msg = (error && error.message) ? String(error.message) : String(error);
+    console.error('[Server] firebase-storage/find-sermon-by-prefix failed:', msg);
+    res.status(500).json({ error: 'Failed to find sermon', details: msg });
   }
 });
 
