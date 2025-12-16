@@ -485,8 +485,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               u.searchParams.delete('cors');
               const token = u.searchParams.get('token');
               if (token) { u.searchParams.delete('token'); u.searchParams.append('token', token); }
-              const alt = u.searchParams.get('alt');
-              if (alt) { u.searchParams.delete('alt'); u.searchParams.append('alt', 'media'); }
+              u.searchParams.set('alt', 'media');
               effectiveUrl = u.toString();
             }
           } catch {}

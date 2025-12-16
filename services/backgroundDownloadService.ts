@@ -237,8 +237,7 @@ export const backgroundDownloadService = {
           u.searchParams.delete('cors');
           const token = u.searchParams.get('token');
           if (token) { u.searchParams.delete('token'); u.searchParams.append('token', token); }
-          const alt = u.searchParams.get('alt');
-          if (alt) { u.searchParams.delete('alt'); u.searchParams.append('alt', 'media'); }
+          u.searchParams.set('alt', 'media');
           url = u.toString();
         }
       } catch {}

@@ -165,8 +165,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
           url.searchParams.delete('cors');
           const token = url.searchParams.get('token');
           if (token) { url.searchParams.delete('token'); url.searchParams.append('token', token); }
-          const alt = url.searchParams.get('alt');
-          if (alt) { url.searchParams.delete('alt'); url.searchParams.append('alt', 'media'); }
+          url.searchParams.set('alt', 'media');
           return url.toString();
         } catch { return replaced; }
       }

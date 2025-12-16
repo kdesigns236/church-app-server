@@ -159,8 +159,7 @@ class SafeBackgroundFetchService {
             u.searchParams.delete('cors');
             const tok = u.searchParams.get('token');
             if (tok) { u.searchParams.delete('token'); u.searchParams.append('token', tok); }
-            const alt = u.searchParams.get('alt');
-            if (alt) { u.searchParams.delete('alt'); u.searchParams.append('alt', 'media'); }
+            u.searchParams.set('alt', 'media');
             effUrl = u.toString();
           }
         } catch {}
