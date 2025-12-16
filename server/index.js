@@ -26,7 +26,7 @@ function getFirebaseAdmin() {
     firebaseAdmin = require('firebase-admin');
     if (!firebaseAdmin.apps || firebaseAdmin.apps.length === 0) {
       const privateKey = String(privateKeyRaw).replace(/\\n/g, '\n');
-      const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
+      const storageBucket = normalizeFirebaseBucketName(process.env.FIREBASE_STORAGE_BUCKET || projectId || `${projectId}.appspot.com`);
       firebaseAdmin.initializeApp({
         credential: firebaseAdmin.credential.cert({ projectId, clientEmail, privateKey }),
         projectId,
@@ -43,9 +43,31 @@ function normalizeFirebaseBucketName(bucket) {
   try {
     let b = String(bucket || '').trim();
     if (!b) return '';
+    b = b.split('#')[0].split('?')[0].trim();
+    if (/^gs:\/\//i.test(b)) {
+      b = b.replace(/^gs:\/\//i, '');
+    }
+    if (/^https?:\/\//i.test(b)) {
+      try {
+        const u = new URL(b);
+        const m = u.pathname.match(/\/b\/([^/]+)\//);
+        if (m && m[1]) {
+          b = String(m[1]);
+        } else if (u.hostname === 'storage.googleapis.com') {
+          const parts = u.pathname.split('/').filter(Boolean);
+          if (parts[0]) b = String(parts[0]);
+        } else if (/\.storage\.googleapis\.com$/i.test(u.hostname)) {
+          b = u.hostname.replace(/\.storage\.googleapis\.com$/i, '');
+        }
+      } catch {}
+    }
+    if (b.includes('/')) {
+      b = b.split('/')[0];
+    }
     b = b.replace('.firebasestorage.app', '.appspot.com');
-    if (b.endsWith('appspot.com') && !b.includes('.appspot.com')) {
-      b = b.replace('appspot.com', '.appspot.com');
+    b = b.replace(/(\.appspot\.com)\.appspot\.com$/i, '$1');
+    if (!b.includes('.')) {
+      b = `${b}.appspot.com`;
     }
     return b;
   } catch {
@@ -1168,7 +1190,7 @@ app.get('/api/firebase-storage/download-url', async (req, res) => {
     }
 
     const projectId = process.env.FIREBASE_PROJECT_ID;
-    const defaultBucket = projectId ? `${projectId}.appspot.com` : undefined;
+    const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
     const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
     if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
 
@@ -1179,7 +1201,16 @@ app.get('/api/firebase-storage/download-url', async (req, res) => {
     return res.json({ url: ensured.url, bucket: bucketName, path: p, token: ensured.token || null, signed: false });
   } catch (error) {
     const msg = (error && error.message) ? String(error.message) : String(error);
-    console.error('[Server] firebase-storage/download-url failed:', msg);
+    try {
+      const p = String(req.query.path || '').trim();
+      const requestedBucket = String(req.query.bucket || '').trim();
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
+      const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
+      console.error('[Server] firebase-storage/download-url failed:', { msg, path: p, requestedBucket, bucketName, defaultBucket });
+    } catch {
+      console.error('[Server] firebase-storage/download-url failed:', msg);
+    }
     if (/No such object|Not Found|404/i.test(msg)) {
       return res.status(404).json({ error: 'Not found' });
     }
@@ -1199,7 +1230,7 @@ app.get('/api/firebase-storage/find-sermon-by-prefix', async (req, res) => {
     }
 
     const projectId = process.env.FIREBASE_PROJECT_ID;
-    const defaultBucket = projectId ? `${projectId}.appspot.com` : undefined;
+    const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
     const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
     if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
 
@@ -1218,7 +1249,16 @@ app.get('/api/firebase-storage/find-sermon-by-prefix', async (req, res) => {
     return res.json({ url: ensured.url, bucket: bucketName, path: mp4.name, token: ensured.token || null, signed: false });
   } catch (error) {
     const msg = (error && error.message) ? String(error.message) : String(error);
-    console.error('[Server] firebase-storage/find-sermon-by-prefix failed:', msg);
+    try {
+      const ts = String(req.query.ts || '').trim();
+      const requestedBucket = String(req.query.bucket || '').trim();
+      const projectId = process.env.FIREBASE_PROJECT_ID;
+      const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
+      const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
+      console.error('[Server] firebase-storage/find-sermon-by-prefix failed:', { msg, ts, requestedBucket, bucketName, defaultBucket });
+    } catch {
+      console.error('[Server] firebase-storage/find-sermon-by-prefix failed:', msg);
+    }
     if (/No such object|Not Found|404/i.test(msg)) {
       return res.status(404).json({ error: 'Not found' });
     }
