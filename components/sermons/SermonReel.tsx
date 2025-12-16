@@ -335,6 +335,19 @@ export const SermonReel: React.FC<SermonReelProps> = ({
     const pickSermonUrl = (s: any): string | null => {
       // Prefer authoritative Storage paths first; then fall back to known HTTP URLs
       try {
+        const storageCandidates: any[] = [
+          s?.firebaseStoragePath,
+          s?.storagePath,
+          s?.video?.storagePath,
+          s?.video?.path,
+          s?.videoPath,
+          s?.filePath,
+          (s?.video?.bucket && s?.video?.path) ? `gs://${s.video.bucket}/${s.video.path}` : null,
+        ];
+        for (const c of storageCandidates) {
+          if (typeof c === 'string' && c.trim().length > 0) return c.trim();
+        }
+
         const directCandidates: any[] = [
           s?.hlsUrl,
           s?.fullSermonUrl,

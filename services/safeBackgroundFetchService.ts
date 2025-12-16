@@ -136,17 +136,18 @@ class SafeBackgroundFetchService {
         let effUrl = rawUrl;
         let resolvedFresh = false;
         try {
-          if (isTokenizedFirebaseUrl(rawUrl)) {
-            resolvedFresh = true;
-          }
           const p: any = (s as any)?.firebaseStoragePath;
           const bucket: any = (s as any)?.firebaseBucket;
-          if (!resolvedFresh && typeof p === 'string' && p) {
+          if (typeof p === 'string' && p) {
             const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
             if (r) { effUrl = r; resolvedFresh = true; }
             else if (isTokenizedFirebaseUrl(rawUrl)) { resolvedFresh = true; }
           }
         } catch {}
+
+        if (!resolvedFresh && isTokenizedFirebaseUrl(effUrl)) {
+          resolvedFresh = true;
+        }
 
         if (!resolvedFresh && (s as any)?.firebaseStoragePath) {
           if (!cfg.failedSermons.includes(id)) cfg.failedSermons.push(id);

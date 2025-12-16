@@ -482,12 +482,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           let effectiveUrl: string = sermon.videoUrl;
           let resolvedFresh = false;
           try {
-            if (isTokenizedFirebaseUrl(effectiveUrl)) {
-              resolvedFresh = true;
-            }
             const p: any = (sermon as any)?.firebaseStoragePath;
             const bucket: any = (sermon as any)?.firebaseBucket;
-            if (!resolvedFresh && typeof p === 'string' && p) {
+            if (typeof p === 'string' && p) {
               const r = await resolveFirebaseDownloadUrlFromServer(p, (typeof bucket === 'string' ? bucket : undefined));
               if (r) { effectiveUrl = r; resolvedFresh = true; }
               else if (isTokenizedFirebaseUrl(effectiveUrl)) { resolvedFresh = true; }
@@ -503,6 +500,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               }
             }
           } catch {}
+
+          if (!resolvedFresh && isTokenizedFirebaseUrl(effectiveUrl)) {
+            resolvedFresh = true;
+          }
 
           // If this is a Firebase Storage URL but we could not resolve a fresh signed URL, skip prefetch
           if (!resolvedFresh && effectiveUrl.includes('firebasestorage.googleapis.com') && effectiveUrl.includes('/o/')) {
