@@ -238,7 +238,7 @@ const AdminModal: React.FC<AdminModalProps> = ({ config, onClose, onSave }) => {
     );
 };
 
-const FormInput: React.FC<{label: string, name: string, value: string, onChange: any, required?: boolean, type?: string, placeholder?: string}> = ({label, name, ...props}) => (
+const FormInput: React.FC<{label: string, name: string, value: string, onChange: any, required?: boolean, type?: string, placeholder?: string, onFocus?: any, onBlur?: any}> = ({label, name, ...props}) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-text-main dark:text-gray-300 mb-1">{label}</label>
         <input id={name} name={name} {...props} className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-secondary focus:border-secondary" />
@@ -269,7 +269,7 @@ const FormFileInput: React.FC<{
   </div>
 );
 
-const FormTextArea: React.FC<{label: string, name: string, value: string, onChange: any, required?: boolean, placeholder?: string}> = ({label, name, ...props}) => (
+const FormTextArea: React.FC<{label: string, name: string, value: string, onChange: any, required?: boolean, placeholder?: string, onFocus?: any, onBlur?: any}> = ({label, name, ...props}) => (
     <div>
         <label htmlFor={name} className="block text-sm font-medium text-text-main dark:text-gray-300 mb-1">{label}</label>
         <textarea id={name} name={name} rows={3} {...props} className="block w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-secondary focus:border-secondary" />
@@ -339,7 +339,15 @@ const AdminPage: React.FC = () => {
 
     useEffect(() => {
         if (!isEditingSiteContent) {
-            setEditableSiteContent(siteContent);
+            setEditableSiteContent(prev => {
+                try {
+                    const a = JSON.stringify(prev);
+                    const b = JSON.stringify(siteContent);
+                    return a === b ? prev : siteContent;
+                } catch {
+                    return siteContent;
+                }
+            });
         }
     }, [siteContent, isEditingSiteContent]);
 

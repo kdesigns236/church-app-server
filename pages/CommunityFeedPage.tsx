@@ -1174,9 +1174,9 @@ const CommunityFeedPage: React.FC = () => {
                     overflow: 'hidden',
                   }}
                 >
-                  {getUserProfilePicture(post.author) ? (
+                  {getUserProfilePicture((post as any).authorId, post.author) ? (
                     <img
-                      src={getUserProfilePicture(post.author) as string}
+                      src={getUserProfilePicture((post as any).authorId, post.author) as string}
                       alt={post.author}
                       style={{
                         width: '100%',
