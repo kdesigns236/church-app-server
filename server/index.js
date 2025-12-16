@@ -8,6 +8,7 @@ const compression = require('compression');
 const fs = require('fs');
 const path = require('path');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
 const facebookLiveRoutes = require('./routes/facebookLiveRoutes');
 const youtubeLiveRoutes = require('./routes/youtubeLiveRoutes');
 
@@ -79,6 +80,7 @@ async function pruneExpiredStories(options = { save: true, broadcast: false }) {
 }
 
 const app = express();
+app.set('trust proxy', true);
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
@@ -101,6 +103,25 @@ app.use('/api/facebook/live', facebookLiveRoutes);
 app.use('/api/youtube/live', youtubeLiveRoutes);
 // Increase JSON body size limit to handle sync payloads that may include media metadata
 app.use(express.json({ limit: '5mb' }));
+
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
+try { if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
+app.use('/uploads', express.static(UPLOADS_DIR));
+
+const uploadStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    cb(null, UPLOADS_DIR);
+  },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname || 'file'));
+  },
+});
+
+const upload = multer({
+  storage: uploadStorage,
+  limits: { fileSize: 500 * 1024 * 1024 },
+});
 
 const serverPublicDir = path.join(__dirname, 'public');
 const rootPublicDir = path.join(__dirname, '..', 'public');
@@ -186,10 +207,46 @@ const verifyToken = (req, res, next) => {
     console.error('[Auth] Invalid token:', error);
     res.status(401).json({ error: 'Invalid token' });
   }
-};
+}
+
+app.post('/api/upload', verifyToken, upload.single('file'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'No file uploaded' });
+    }
+    const host = req.get('host');
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
+    const fileUrl = `${proto}://${host}/uploads/${req.file.filename}`;
+    return res.json({
+      success: true,
+      filename: req.file.filename,
+      url: fileUrl,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    });
+  } catch (e) {
+    return res.status(500).json({ success: false, error: 'Upload failed' });
+  }
+});
+
+app.delete('/api/upload/:filename', verifyAdmin, (req, res) => {
+  try {
+    const filename = String(req.params.filename || '').trim();
+    if (!filename) return res.status(400).json({ success: false, error: 'Missing filename' });
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (!filePath.startsWith(UPLOADS_DIR)) return res.status(400).json({ success: false, error: 'Invalid filename' });
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+      return res.json({ success: true });
+    }
+    return res.status(404).json({ success: false, error: 'File not found' });
+  } catch (_e) {
+    return res.status(500).json({ success: false, error: 'Delete failed' });
+  }
+});
 
 // Verify admin role only
-const verifyAdmin = (req, res, next) => {
+function verifyAdmin(req, res, next) {
   try {
     const token = req.headers.authorization?.replace('Bearer ', '');
     if (!token) {

@@ -718,9 +718,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (Array.isArray(full.prayerRequests)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
                 if (Array.isArray(full.bibleStudies)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
                 if (Array.isArray(full.chatMessages)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
-                if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); safeSetItem('communityPosts', full.posts); }
-                if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
-                if (Array.isArray(full.communityStories)) { try { safeSetItem('communityStories', full.communityStories); } catch {} }
+                if (Array.isArray(full.posts) && (full.posts.length > 0 || posts.length === 0)) {
+                  setPosts(prev => {
+                    try {
+                      const existing = Array.isArray(prev) ? prev : [];
+                      const incoming = full.posts as Post[];
+                      const byId = new Map<any, any>();
+                      for (const p of existing) { if (p && (p as any).id != null) byId.set((p as any).id, p); }
+                      for (const p of incoming) { if (p && (p as any).id != null && !byId.has((p as any).id)) byId.set((p as any).id, p); }
+                      const merged = Array.from(byId.values()).sort((a: any, b: any) => (Number(b?.id) || 0) - (Number(a?.id) || 0));
+                      safeSetItem('communityPosts', merged);
+                      return merged as Post[];
+                    } catch {
+                      safeSetItem('communityPosts', full.posts);
+                      return full.posts as Post[];
+                    }
+                  });
+                }
+                if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
+                if (Array.isArray(full.communityStories)) {
+                  try {
+                    const localRaw = localStorage.getItem('communityStories');
+                    const localParsed = localRaw ? JSON.parse(localRaw) : [];
+                    const existing = Array.isArray(localParsed) ? localParsed : [];
+                    const incoming = Array.isArray(full.communityStories) ? full.communityStories : [];
+                    if (incoming.length > 0 || existing.length === 0) {
+                      const byId = new Map<any, any>();
+                      for (const s of existing) { if (s && (s as any).id != null) byId.set((s as any).id, s); }
+                      for (const s of incoming) { if (s && (s as any).id != null && !byId.has((s as any).id)) byId.set((s as any).id, s); }
+                      const merged = Array.from(byId.values()).sort((a: any, b: any) => {
+                        const at = Number((a as any)?.createdAt || (a as any)?.id) || 0;
+                        const bt = Number((b as any)?.createdAt || (b as any)?.id) || 0;
+                        return bt - at;
+                      });
+                      safeSetItem('communityStories', merged);
+                      try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
+                    }
+                  } catch {
+                    try { if (full.communityStories.length > 0) { safeSetItem('communityStories', full.communityStories); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
+                  }
+                }
                 localStorage.setItem('lastSyncTime', Date.now().toString());
                 syncOk = true;
                 anyFetchOk = true;
@@ -745,9 +782,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   if (Array.isArray(full.prayerRequests)) { setPrayerRequests(full.prayerRequests as PrayerRequest[]); localStorage.setItem('prayerRequests', JSON.stringify(full.prayerRequests)); }
                   if (Array.isArray(full.bibleStudies)) { setBibleStudies(full.bibleStudies as BibleStudy[]); localStorage.setItem('bibleStudies', JSON.stringify(full.bibleStudies)); }
                   if (Array.isArray(full.chatMessages)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
-                  if (Array.isArray(full.posts)) { setPosts(full.posts as Post[]); safeSetItem('communityPosts', full.posts); }
-                  if (Array.isArray(full.comments)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
-                  if (Array.isArray(full.communityStories)) { try { safeSetItem('communityStories', full.communityStories); } catch {} }
+                  if (Array.isArray(full.posts) && (full.posts.length > 0 || posts.length === 0)) {
+                    setPosts(prev => {
+                      try {
+                        const existing = Array.isArray(prev) ? prev : [];
+                        const incoming = full.posts as Post[];
+                        const byId = new Map<any, any>();
+                        for (const p of existing) { if (p && (p as any).id != null) byId.set((p as any).id, p); }
+                        for (const p of incoming) { if (p && (p as any).id != null && !byId.has((p as any).id)) byId.set((p as any).id, p); }
+                        const merged = Array.from(byId.values()).sort((a: any, b: any) => (Number(b?.id) || 0) - (Number(a?.id) || 0));
+                        safeSetItem('communityPosts', merged);
+                        return merged as Post[];
+                      } catch {
+                        safeSetItem('communityPosts', full.posts);
+                        return full.posts as Post[];
+                      }
+                    });
+                  }
+                  if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
+                  if (Array.isArray(full.communityStories)) {
+                    try {
+                      const localRaw = localStorage.getItem('communityStories');
+                      const localParsed = localRaw ? JSON.parse(localRaw) : [];
+                      const existing = Array.isArray(localParsed) ? localParsed : [];
+                      const incoming = Array.isArray(full.communityStories) ? full.communityStories : [];
+                      if (incoming.length > 0 || existing.length === 0) {
+                        const byId = new Map<any, any>();
+                        for (const s of existing) { if (s && (s as any).id != null) byId.set((s as any).id, s); }
+                        for (const s of incoming) { if (s && (s as any).id != null && !byId.has((s as any).id)) byId.set((s as any).id, s); }
+                        const merged = Array.from(byId.values()).sort((a: any, b: any) => {
+                          const at = Number((a as any)?.createdAt || (a as any)?.id) || 0;
+                          const bt = Number((b as any)?.createdAt || (b as any)?.id) || 0;
+                          return bt - at;
+                        });
+                        safeSetItem('communityStories', merged);
+                        try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
+                      }
+                    } catch {
+                      try { if (full.communityStories.length > 0) { safeSetItem('communityStories', full.communityStories); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
+                    }
+                  }
                   localStorage.setItem('lastSyncTime', Date.now().toString());
                   syncOk = true;
                   anyFetchOk = true;
@@ -796,7 +870,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (Array.isArray(full.posts) && (full.posts.length > 0 || posts.length === 0)) { setPosts(full.posts as Post[]); safeSetItem('communityPosts', full.posts); }
               if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
               if (Array.isArray(full.communityStories)) {
-                try { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); } catch {}
+                try {
+                  const localRaw = localStorage.getItem('communityStories');
+                  const localParsed = localRaw ? JSON.parse(localRaw) : [];
+                  const localLen = Array.isArray(localParsed) ? localParsed.length : 0;
+                  if (full.communityStories.length > 0 || localLen === 0) {
+                    localStorage.setItem('communityStories', JSON.stringify(full.communityStories));
+                    try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
+                  }
+                } catch {
+                  try { if (full.communityStories.length > 0) { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
+                }
               }
             }
           } catch {}

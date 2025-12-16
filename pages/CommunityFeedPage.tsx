@@ -102,6 +102,48 @@ const CommunityFeedPage: React.FC = () => {
     }
   });
 
+  // Refresh stories when they are updated elsewhere in the app (same-tab)
+  useEffect(() => {
+    const reloadFromLocalStorage = () => {
+      try {
+        const stored = localStorage.getItem('communityStories');
+        if (!stored) return;
+        const parsed = JSON.parse(stored);
+        if (!Array.isArray(parsed)) return;
+        const now = Date.now();
+        const dayMs = 24 * 60 * 60 * 1000;
+        const toTs = (s: any): number | undefined => {
+          if (typeof s?.createdAt === 'number') return s.createdAt;
+          if (typeof s?.createdAt === 'string') { const t = Date.parse(s.createdAt); if (!isNaN(t)) return t; }
+          if (typeof s?.id === 'number') return s.id;
+          if (typeof s?.id === 'string' && /^\d{10,}$/.test(s.id)) return parseInt(s.id, 10);
+          return undefined;
+        };
+        const norm = parsed.map((s: any) => { const ts = toTs(s); return ts ? { ...s, createdAt: ts } : null; }).filter(Boolean) as Story[];
+        const filtered = norm.filter((s: any) => now - (s.createdAt || now) <= dayMs);
+        const byId = new Map<string, any>();
+        for (const s of filtered) {
+          const k = String((s as any).id);
+          const prev = byId.get(k);
+          if (!prev) byId.set(k, s); else {
+            const prefer = ((s as any).media && !(prev as any).media) ? s : (((s as any).type === 'video' && (prev as any).type !== 'video') ? s : ((s as any).createdAt > (prev as any).createdAt ? s : prev));
+            byId.set(k, prefer);
+          }
+        }
+        const deduped = Array.from(byId.values()).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+        setStories(deduped as Story[]);
+      } catch {}
+    };
+    const onCustom = () => reloadFromLocalStorage();
+    const onStorage = (e: StorageEvent) => { if (!e || e.key === 'communityStories') reloadFromLocalStorage(); };
+    window.addEventListener('communityStories-changed', onCustom as any);
+    window.addEventListener('storage', onStorage);
+    return () => {
+      window.removeEventListener('communityStories-changed', onCustom as any);
+      window.removeEventListener('storage', onStorage);
+    };
+  }, []);
+
   // Migrate stories to include authorId when possible using users list
   useEffect(() => {
     try {

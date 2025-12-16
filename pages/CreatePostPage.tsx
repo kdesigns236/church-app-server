@@ -124,7 +124,8 @@ const CreatePostPage: React.FC = () => {
   const handlePost = async () => {
     if (!user) return;
     const trimmed = postContent.trim();
-    if (!trimmed) return;
+    const hasMedia = !!selectedMedia;
+    if (!trimmed && !hasMedia) return;
 
     if (isStoryMode) {
       try {
@@ -150,6 +151,7 @@ const CreatePostPage: React.FC = () => {
           stories.unshift(newStory);
           try {
             localStorage.setItem('communityStories', JSON.stringify(stories));
+            try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
           } catch (e) {
             const slim = stories.slice(0, 50).map((s: any) => ({
               id: s.id,
@@ -162,7 +164,7 @@ const CreatePostPage: React.FC = () => {
               type: s.type,
               media: s.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s.media,
             }));
-            try { localStorage.setItem('communityStories', JSON.stringify(slim)); } catch {}
+            try { localStorage.setItem('communityStories', JSON.stringify(slim)); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } catch {}
           }
         } catch {}
 
@@ -207,7 +209,7 @@ const CreatePostPage: React.FC = () => {
     } else {
       let mediaForPost: { url: string; type: 'image' | 'video' } | undefined = undefined;
       try {
-        mediaForPost = await uploadSelectedMedia('post');
+        mediaForPost = selectedMedia ? await uploadSelectedMedia('post') : undefined;
       } catch (e) {
         console.error('Media upload failed, posting without media', e);
         mediaForPost = undefined;
@@ -484,15 +486,15 @@ const CreatePostPage: React.FC = () => {
 
           <button
             onClick={handlePost}
-            disabled={!postContent.trim()}
+            disabled={!postContent.trim() && !selectedMedia}
             style={{
               width: '100%',
-              backgroundColor: postContent.trim() ? '#1877f2' : '#d1d5db',
+              backgroundColor: (postContent.trim() || selectedMedia) ? '#1877f2' : '#d1d5db',
               color: 'white',
               padding: '10px 0',
               borderRadius: '8px',
               border: 'none',
-              cursor: postContent.trim() ? 'pointer' : 'not-allowed',
+              cursor: (postContent.trim() || selectedMedia) ? 'pointer' : 'not-allowed',
               fontWeight: 'bold',
               fontSize: '15px',
               marginTop: '16px',

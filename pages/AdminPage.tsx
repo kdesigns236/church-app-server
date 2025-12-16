@@ -467,28 +467,51 @@ const AdminPage: React.FC = () => {
                     } catch (error) {
                         console.error('[Admin] ❌ Firebase upload failed:', error);
                         console.error('[Admin] Full error:', JSON.stringify(error, null, 2));
-                        setUploadingVideo(false);
-                        setUploadProgress(0);
+                        const code = (error as any)?.code || (error as any)?.name || 'unknown';
+                        const message = (error as any)?.message || 'Unknown error';
                         
-                        // Detailed error message with full error details
-                        let errorMsg = '🔥 Firebase Upload Failed\n\n';
-                        if (error instanceof Error) {
-                            errorMsg += `Error: ${error.message}\n\n`;
-                            if (error.stack) {
-                                errorMsg += `Stack: ${error.stack.substring(0, 200)}\n\n`;
+                        // Attempt server fallback upload
+                        try {
+                            console.log('[Admin] ⚠️ Falling back to server upload...');
+                            setUploadProgress(1);
+                            const uploadedUrl = await uploadService.uploadFile(data.videoUrl as File);
+                            setUploadProgress(70);
+                            // Save sermon to API with uploadedUrl
+                            const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+                            const token = localStorage.getItem('authToken');
+                            if (!token) throw new Error('No authentication token found for server save');
+                            const resp = await fetch(`${apiUrl}/sermons`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({
+                                    title: data.title,
+                                    pastor: data.pastor,
+                                    scripture: data.scripture,
+                                    date: data.date || new Date().toISOString(),
+                                    videoUrl: uploadedUrl,
+                                    uploadedAt: new Date().toISOString()
+                                })
+                            });
+                            if (!resp.ok) {
+                                const t = await resp.text();
+                                throw new Error(`Server save failed (${resp.status}): ${t.substring(0,120)}...`);
                             }
-                        } else {
-                            errorMsg += `Error: ${JSON.stringify(error)}\n\n`;
+                            setUploadProgress(100);
+                            setUploadingVideo(false);
+                            alert('✅ Sermon uploaded via server and saved to database!');
+                            handleCloseModal();
+                            return;
+                        } catch (fallbackErr) {
+                            console.error('[Admin] ❌ Fallback server upload failed:', fallbackErr);
+                            setUploadingVideo(false);
+                            setUploadProgress(0);
+                            let msg = '🔥 Firebase Upload Failed\n\n';
+                            msg += `Code: ${code}\nMessage: ${message}\n\n`;
+                            msg += 'Fallback upload also failed. Please verify API and Firebase configuration.\n\n';
+                            msg += `File size: ${fileSizeMB.toFixed(2)}MB`;
+                            alert(msg);
+                            return;
                         }
-                        errorMsg += `Troubleshooting:\n`;
-                        errorMsg += `1. Check Firebase Console for errors\n`;
-                        errorMsg += `2. Verify Storage Rules are set\n`;
-                        errorMsg += `3. Verify Anonymous Auth is enabled\n`;
-                        errorMsg += `4. Check internet connection\n\n`;
-                        errorMsg += `File size: ${fileSizeMB.toFixed(2)}MB`;
-                        
-                        alert(errorMsg);
-                        return; // Don't continue if upload failed
                     }
                 } else {
                     console.log('[Admin] Video URL is not a File object, using existing URL');
