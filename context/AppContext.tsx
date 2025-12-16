@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
-import { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStudy, ChatMessage, User, SermonComment, Post, Comment } from '../types';
+import type { Sermon, Announcement, Event, SiteContent, PrayerRequest, BibleStudy, ChatMessage, User, SermonComment, Post, Comment } from '../types';
 import { websocketService } from '../services/websocketService';
 import { notificationService } from '../services/notificationService';
 import { localNotificationService } from '../services/localNotificationService';
