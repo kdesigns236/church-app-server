@@ -116,14 +116,11 @@ export async function uploadMediaToFirebase(
             clearStall();
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
             const rawBucket = (uploadTask.snapshot.ref as any).bucket || (storage as any)?.app?.options?.storageBucket || '';
-            const appspotBucket = typeof rawBucket === 'string' ? rawBucket.replace('.firebasestorage.app', '.appspot.com') : rawBucket;
-            const optimizedURL = typeof downloadURL === 'string'
-              ? downloadURL.replace(`/b/${rawBucket}/o/`, `/b/${appspotBucket}/o/`)
-              : downloadURL;
+            const optimizedURL = downloadURL;
             if (!settled) {
               settled = true;
               try { keepAwakeService.release('media-upload'); } catch {}
-              resolve({ success: true, url: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)), storagePath: uploadTask.snapshot.ref.fullPath, bucket: appspotBucket });
+              resolve({ success: true, url: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)), storagePath: uploadTask.snapshot.ref.fullPath, bucket: rawBucket });
             }
           } catch (e: any) {
             if (!settled) {
@@ -262,10 +259,7 @@ export async function uploadVideoToFirebase(
 
             // Prefer the appspot.com bucket form to avoid an extra redirect in some environments
             const rawBucket = (uploadTask.snapshot.ref as any).bucket || (storage as any)?.app?.options?.storageBucket || '';
-            const appspotBucket = typeof rawBucket === 'string' ? rawBucket.replace('.firebasestorage.app', '.appspot.com') : rawBucket;
-            const optimizedURL = typeof downloadURL === 'string'
-              ? downloadURL.replace(`/b/${rawBucket}/o/`, `/b/${appspotBucket}/o/`)
-              : downloadURL;
+            const optimizedURL = downloadURL;
 
             console.log('[Firebase] ✅ Upload successful!');
             console.log('[Firebase] Video URL:', (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)));
@@ -277,7 +271,7 @@ export async function uploadVideoToFirebase(
                 success: true,
                 videoUrl: (typeof optimizedURL === 'string' ? optimizedURL : String(optimizedURL)),
                 storagePath: uploadTask.snapshot.ref.fullPath,
-                bucket: appspotBucket
+                bucket: rawBucket
               });
             }
           } catch (error: any) {

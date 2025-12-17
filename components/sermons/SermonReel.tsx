@@ -82,7 +82,7 @@ export const SermonReel: React.FC<SermonReelProps> = ({
 
   const normalizeBucketName = (b: string): string => {
     try {
-      return String(b || '').replace('.firebasestorage.app', '.appspot.com');
+      return String(b || '').trim();
     } catch {
       return String(b || '');
     }
@@ -207,7 +207,6 @@ export const SermonReel: React.FC<SermonReelProps> = ({
       if (u.includes('firebasestorage.googleapis.com')) {
         const replaced = u.replace(/\/(b)\/([^/]+)\//, (_m, g1, bucket) => {
           let b = String(bucket);
-          b = b.replace('.firebasestorage.app', '.appspot.com');
           if (b.endsWith('appspot.com') && !b.includes('.appspot.com')) {
             b = b.replace('appspot.com', '.appspot.com');
           }

@@ -23,7 +23,7 @@ function toAppspotBucketName(b) {
   try {
     if (!b) return b;
     if (typeof b !== 'string') return b;
-    return b.replace('.firebasestorage.app', '.appspot.com');
+    return b;
   } catch { return b; }
 }
 function buildDownloadUrl(bucket, filePath, token) {

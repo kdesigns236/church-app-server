@@ -26,7 +26,7 @@ function getFirebaseAdmin() {
     firebaseAdmin = require('firebase-admin');
     if (!firebaseAdmin.apps || firebaseAdmin.apps.length === 0) {
       const privateKey = String(privateKeyRaw).replace(/\\n/g, '\n');
-      const storageBucket = normalizeFirebaseBucketName(process.env.FIREBASE_STORAGE_BUCKET || projectId || `${projectId}.appspot.com`);
+      const storageBucket = normalizeFirebaseBucketName(process.env.FIREBASE_STORAGE_BUCKET || projectId || `${projectId}.firebasestorage.app`);
       firebaseAdmin.initializeApp({
         credential: firebaseAdmin.credential.cert({ projectId, clientEmail, privateKey }),
         projectId,
@@ -64,15 +64,45 @@ function normalizeFirebaseBucketName(bucket) {
     if (b.includes('/')) {
       b = b.split('/')[0];
     }
-    b = b.replace('.firebasestorage.app', '.appspot.com');
     b = b.replace(/(\.appspot\.com)\.appspot\.com$/i, '$1');
     if (!b.includes('.')) {
-      b = `${b}.appspot.com`;
+      b = `${b}.firebasestorage.app`;
     }
     return b;
   } catch {
     return '';
   }
+}
+
+function swapFirebaseBucketDomain(bucketName) {
+  try {
+    const b = String(bucketName || '').trim();
+    if (!b) return '';
+    if (/\.appspot\.com$/i.test(b)) return b.replace(/\.appspot\.com$/i, '.firebasestorage.app');
+    if (/\.firebasestorage\.app$/i.test(b)) return b.replace(/\.firebasestorage\.app$/i, '.appspot.com');
+    return '';
+  } catch {
+    return '';
+  }
+}
+
+function getFirebaseBucketCandidates(inputBucket, projectId) {
+  const out = [];
+  const add = (v) => {
+    try {
+      const s = String(v || '').trim();
+      if (!s) return;
+      if (!out.includes(s)) out.push(s);
+    } catch {}
+  };
+  const normalized = normalizeFirebaseBucketName(inputBucket);
+  add(normalized);
+  add(swapFirebaseBucketDomain(normalized));
+  if ((!normalized || !normalized.includes('.')) && projectId) {
+    add(`${projectId}.firebasestorage.app`);
+    add(`${projectId}.appspot.com`);
+  }
+  return out;
 }
 
 function generateFirebaseStorageDownloadToken() {
@@ -1191,14 +1221,24 @@ app.get('/api/firebase-storage/download-url', async (req, res) => {
 
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
-    const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
-    if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
+    const candidates = getFirebaseBucketCandidates((requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket), projectId);
+    if (!candidates || candidates.length === 0) return res.status(500).json({ error: 'Missing bucket' });
 
-    const bucket = admin.storage().bucket(bucketName);
-    const file = bucket.file(p);
-
-    const ensured = await ensureFirebaseAltMediaTokenUrl(file, bucketName, p);
-    return res.json({ url: ensured.url, bucket: bucketName, path: p, token: ensured.token || null, signed: false });
+    let lastErr = null;
+    for (const bucketName of candidates) {
+      try {
+        const bucket = admin.storage().bucket(bucketName);
+        const file = bucket.file(p);
+        const ensured = await ensureFirebaseAltMediaTokenUrl(file, bucketName, p);
+        return res.json({ url: ensured.url, bucket: bucketName, path: p, token: ensured.token || null, signed: false });
+      } catch (e) {
+        const m = (e && e.message) ? String(e.message) : String(e);
+        lastErr = e;
+        if (/bucket does not exist/i.test(m)) continue;
+        throw e;
+      }
+    }
+    throw lastErr || new Error('Failed to resolve bucket');
   } catch (error) {
     const msg = (error && error.message) ? String(error.message) : String(error);
     let debug = null;
@@ -1207,9 +1247,9 @@ app.get('/api/firebase-storage/download-url', async (req, res) => {
       const requestedBucket = String(req.query.bucket || '').trim();
       const projectId = process.env.FIREBASE_PROJECT_ID;
       const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
-      const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
-      debug = { path: p, requestedBucket, bucketName };
-      console.error('[Server] firebase-storage/download-url failed:', { msg, path: p, requestedBucket, bucketName, defaultBucket });
+      const candidates = getFirebaseBucketCandidates((requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket), projectId);
+      debug = { path: p, requestedBucket, bucketCandidates: candidates };
+      console.error('[Server] firebase-storage/download-url failed:', { msg, path: p, requestedBucket, bucketCandidates: candidates, defaultBucket });
     } catch {
       console.error('[Server] firebase-storage/download-url failed:', msg);
     }
@@ -1233,22 +1273,38 @@ app.get('/api/firebase-storage/find-sermon-by-prefix', async (req, res) => {
 
     const projectId = process.env.FIREBASE_PROJECT_ID;
     const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
-    const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
-    if (!bucketName) return res.status(500).json({ error: 'Missing bucket' });
+    const candidates = getFirebaseBucketCandidates((requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket), projectId);
+    if (!candidates || candidates.length === 0) return res.status(500).json({ error: 'Missing bucket' });
 
     const prefix = `sermons/${ts}_`;
-    const [files] = await admin.storage().bucket(bucketName).getFiles({ prefix, maxResults: 25 });
+    let selectedBucket = '';
+    let files = null;
+    let lastErr = null;
+    for (const bucketName of candidates) {
+      try {
+        const resp = await admin.storage().bucket(bucketName).getFiles({ prefix, maxResults: 25 });
+        files = Array.isArray(resp) ? resp[0] : null;
+        selectedBucket = bucketName;
+        break;
+      } catch (e) {
+        const m = (e && e.message) ? String(e.message) : String(e);
+        lastErr = e;
+        if (/bucket does not exist/i.test(m)) continue;
+        throw e;
+      }
+    }
+    if (!selectedBucket) throw lastErr || new Error('Failed to resolve bucket');
     const mp4 = (files || []).find((f) => {
       const name = f && f.name ? String(f.name) : '';
       return /^sermons\//i.test(name) && /\.mp4$/i.test(name);
     });
     if (!mp4 || !mp4.name) return res.status(404).json({ error: 'Not found' });
 
-    const bucket = admin.storage().bucket(bucketName);
+    const bucket = admin.storage().bucket(selectedBucket);
     const file = bucket.file(mp4.name);
 
-    const ensured = await ensureFirebaseAltMediaTokenUrl(file, bucketName, mp4.name);
-    return res.json({ url: ensured.url, bucket: bucketName, path: mp4.name, token: ensured.token || null, signed: false });
+    const ensured = await ensureFirebaseAltMediaTokenUrl(file, selectedBucket, mp4.name);
+    return res.json({ url: ensured.url, bucket: selectedBucket, path: mp4.name, token: ensured.token || null, signed: false });
   } catch (error) {
     const msg = (error && error.message) ? String(error.message) : String(error);
     let debug = null;
@@ -1257,9 +1313,9 @@ app.get('/api/firebase-storage/find-sermon-by-prefix', async (req, res) => {
       const requestedBucket = String(req.query.bucket || '').trim();
       const projectId = process.env.FIREBASE_PROJECT_ID;
       const defaultBucket = projectId ? normalizeFirebaseBucketName(projectId) : undefined;
-      const bucketName = normalizeFirebaseBucketName(requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket);
-      debug = { ts, requestedBucket, bucketName };
-      console.error('[Server] firebase-storage/find-sermon-by-prefix failed:', { msg, ts, requestedBucket, bucketName, defaultBucket });
+      const candidates = getFirebaseBucketCandidates((requestedBucket || process.env.FIREBASE_STORAGE_BUCKET || defaultBucket), projectId);
+      debug = { ts, requestedBucket, bucketCandidates: candidates };
+      console.error('[Server] firebase-storage/find-sermon-by-prefix failed:', { msg, ts, requestedBucket, bucketCandidates: candidates, defaultBucket });
     } catch {
       console.error('[Server] firebase-storage/find-sermon-by-prefix failed:', msg);
     }
