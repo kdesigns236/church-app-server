@@ -13,6 +13,37 @@ const multer = require('multer');
 const facebookLiveRoutes = require('./routes/facebookLiveRoutes');
 const youtubeLiveRoutes = require('./routes/youtubeLiveRoutes');
 
+function isTransientMediaUrl(u) {
+  try {
+    return typeof u === 'string' && (u.startsWith('blob:') || u.startsWith('data:'));
+  } catch {
+    return false;
+  }
+}
+
+function sanitizeMediaInObject(obj) {
+  try {
+    if (!obj || typeof obj !== 'object') return obj;
+    const mediaUrl = obj && obj.media && obj.media.url;
+    if (isTransientMediaUrl(mediaUrl)) {
+      const clone = { ...obj };
+      delete clone.media;
+      return clone;
+    }
+    return obj;
+  } catch {
+    return obj;
+  }
+}
+
+function sanitizeArrayMedia(arr) {
+  try {
+    return Array.isArray(arr) ? arr.map((x) => sanitizeMediaInObject(x)) : arr;
+  } catch {
+    return arr;
+  }
+}
+
 let firebaseAdmin;
 let firebaseAdminInitAttempted = false;
 function getFirebaseAdmin() {
@@ -155,7 +186,7 @@ function nextStoryId() {
   return Number(`${now}${suffix}`);
 }
 
-async function pruneExpiredStories(options = { save: true, broadcast: false }) {
+async function pruneExpiredStories(options = { save: true, broadcast: true }) {
   try {
     const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
     if (list.length === 0) return;
@@ -1189,41 +1220,45 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
       return res.status(400).json({ error: `Invalid data type: ${type}` });
     }
 
+    // Prevent storing/broadcasting transient client-only URLs (blob:/data:)
+    const safeData = (type === 'posts' || type === 'communityStories') ? sanitizeMediaInObject(data) : data;
+    const safeSyncData = (type === 'posts' || type === 'communityStories') ? { ...syncData, data: safeData } : syncData;
+
     // Process based on action
     if (action === 'add') {
       // Add new item
       if (Array.isArray(dataStore[type])) {
-        dataStore[type].unshift(data);
-        console.log(`[Server] ✅ Added ${type}: ${data && data.id ? data.id : ''}`);
+        dataStore[type].unshift(safeData);
+        console.log(`[Server] ✅ Added ${type}: ${safeData && safeData.id ? safeData.id : ''}`);
       } else {
         // For object types (e.g., siteContent), merge-in fields
         const current = dataStore[type] && typeof dataStore[type] === 'object' ? dataStore[type] : {};
-        const next = data && typeof data === 'object' ? { ...current, ...data } : current;
+        const next = safeData && typeof safeData === 'object' ? { ...current, ...safeData } : current;
         dataStore[type] = next;
         console.log(`[Server] ✅ Merged object ${type}`);
       }
     } else if (action === 'update') {
       // Update existing item
       if (Array.isArray(dataStore[type])) {
-        const index = dataStore[type].findIndex(item => item.id === data.id);
+        const index = dataStore[type].findIndex(item => item.id === safeData.id);
         if (index !== -1) {
-          dataStore[type][index] = data;
-          console.log(`[Server] ✅ Updated ${type}: ${data && data.id ? data.id : ''}`);
+          dataStore[type][index] = safeData;
+          console.log(`[Server] ✅ Updated ${type}: ${safeData && safeData.id ? safeData.id : ''}`);
         } else {
-          console.warn(`[Server] Item not found for update: ${type} ${data && data.id ? data.id : ''}`);
+          console.warn(`[Server] Item not found for update: ${type} ${safeData && safeData.id ? safeData.id : ''}`);
         }
       } else {
         // For object types (e.g., siteContent), replace the object
-        dataStore[type] = data;
+        dataStore[type] = safeData;
         console.log(`[Server] ✅ Updated object ${type}`);
       }
     } else if (action === 'delete') {
       // Delete item
       if (Array.isArray(dataStore[type])) {
-        const index = dataStore[type].findIndex(item => item.id === data.id);
+        const index = dataStore[type].findIndex(item => item.id === safeData.id);
         if (index !== -1) {
           dataStore[type].splice(index, 1);
-          console.log(`[Server] ✅ Deleted ${type}: ${data && data.id ? data.id : ''}`);
+          console.log(`[Server] ✅ Deleted ${type}: ${safeData && safeData.id ? safeData.id : ''}`);
         }
       } else {
         // For object types, clear the object
@@ -1236,7 +1271,7 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
     await saveData();
 
     // Broadcast update to all connected clients
-    broadcastUpdate(syncData);
+    broadcastUpdate(safeSyncData);
 
     res.json({ success: true, message: `${action} ${type} completed` });
   } catch (error) {
@@ -1247,7 +1282,16 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
 
 app.get('/api/sync/data', (req, res) => {
   console.log('[Server] Fetching all data for sync');
-  res.json(dataStore);
+  try {
+    const sanitized = {
+      ...dataStore,
+      posts: sanitizeArrayMedia(dataStore.posts || []),
+      communityStories: sanitizeArrayMedia(dataStore.communityStories || []),
+    };
+    res.json(sanitized);
+  } catch {
+    res.json(dataStore);
+  }
 });
 
 app.get('/api/sermons', (req, res) => {

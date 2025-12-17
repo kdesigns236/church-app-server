@@ -20,6 +20,56 @@ interface SyncData {
   adminId?: string;
 }
 
+const isTransientMediaUrl = (u: any): boolean => {
+  try {
+    return typeof u === 'string' && (u.startsWith('blob:') || u.startsWith('data:'));
+  } catch {
+    return false;
+  }
+};
+
+const sanitizeMediaInObject = (obj: any): any => {
+  try {
+    if (!obj || typeof obj !== 'object') return obj;
+    const mediaUrl = (obj as any)?.media?.url;
+    if (isTransientMediaUrl(mediaUrl)) {
+      const clone: any = { ...(obj as any) };
+      delete clone.media;
+      return clone;
+    }
+    return obj;
+  } catch {
+    return obj;
+  }
+};
+
+const sanitizeArrayForStorageKey = (storageKey: string, arr: any[]): any[] => {
+  try {
+    const list = Array.isArray(arr) ? arr : [];
+    if (storageKey === 'communityPosts') {
+      return list.slice(0, 200).map((p: any) => sanitizeMediaInObject(p));
+    }
+    if (storageKey === 'communityStories') {
+      return list.slice(0, 100).map((s: any) => sanitizeMediaInObject(s));
+    }
+    return list;
+  } catch {
+    return Array.isArray(arr) ? arr : [];
+  }
+};
+
+const sanitizeOutgoingSyncData = (syncData: Omit<SyncData, 'timestamp'>): Omit<SyncData, 'timestamp'> => {
+  try {
+    if (!syncData || typeof syncData !== 'object') return syncData;
+    if (syncData.type === 'posts' || syncData.type === 'communityStories') {
+      return { ...syncData, data: sanitizeMediaInObject((syncData as any).data) } as any;
+    }
+    return syncData;
+  } catch {
+    return syncData;
+  }
+};
+
 class WebSocketService {
   private socket: Socket | null = null;
   private serverUrl: string;
@@ -164,6 +214,10 @@ class WebSocketService {
         break;
     }
 
+    const incoming = (storageKey === 'communityPosts' || storageKey === 'communityStories')
+      ? sanitizeMediaInObject(syncData.data)
+      : syncData.data;
+
     try {
       if (syncData.action === 'clear') {
         localStorage.removeItem(storageKey);
@@ -180,23 +234,24 @@ class WebSocketService {
       switch (syncData.action) {
         case 'add':
           // Check if already exists to avoid duplicates
-          if (!dataArray.find((item: any) => item.id === syncData.data.id)) {
-            updatedData = [...dataArray, syncData.data];
+          if (!dataArray.find((item: any) => item.id === incoming.id)) {
+            updatedData = [...dataArray, incoming];
           }
           break;
         case 'update':
           updatedData = dataArray.map((item: any) => 
-            item.id === syncData.data.id ? syncData.data : item
+            item.id === incoming.id ? incoming : item
           );
           break;
         case 'delete':
           updatedData = dataArray.filter((item: any) => 
-            item.id !== syncData.data.id
+            item.id !== incoming.id
           );
           break;
       }
 
-      localStorage.setItem(storageKey, JSON.stringify(updatedData));
+      const safeToStore = sanitizeArrayForStorageKey(storageKey, updatedData);
+      localStorage.setItem(storageKey, JSON.stringify(safeToStore));
       console.log(`[WebSocket] Updated ${storageKey} in localStorage`);
     } catch (error) {
       console.error('[WebSocket] Error applying local update:', error);
@@ -206,8 +261,9 @@ class WebSocketService {
   // Push update to server
   async pushUpdate(syncData: Omit<SyncData, 'timestamp'>): Promise<void> {
     this.refreshUrls();
+    const sanitized = sanitizeOutgoingSyncData(syncData);
     const dataWithTimestamp = {
-      ...syncData,
+      ...sanitized,
       timestamp: Date.now()
     };
 

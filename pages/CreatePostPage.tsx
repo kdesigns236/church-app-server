@@ -133,6 +133,7 @@ const CreatePostPage: React.FC = () => {
 
     const mediaSnapshot = selectedMedia;
     const optimisticStoryContent = trimmed || (mediaSnapshot ? 'Uploading...' : '');
+    const shouldKeepBlobPreview = !isStoryMode && !isEditing && !!(mediaSnapshot && typeof mediaSnapshot.url === 'string' && mediaSnapshot.url.startsWith('blob:'));
 
     if (isStoryMode) {
       try {
@@ -252,6 +253,14 @@ const CreatePostPage: React.FC = () => {
             try {
               updatePost({ ...(created as any), media: uploadedMedia } as any);
             } catch {}
+            try {
+              if (typeof mediaSnapshot.url === 'string' && mediaSnapshot.url.startsWith('blob:')) {
+                URL.revokeObjectURL(mediaSnapshot.url);
+                if (prevObjectUrlRef.current === mediaSnapshot.url) {
+                  prevObjectUrlRef.current = null;
+                }
+              }
+            } catch {}
           })
           .catch(() => {});
       }
@@ -259,7 +268,7 @@ const CreatePostPage: React.FC = () => {
 
     setPostContent('');
     // Revoke preview URL to free memory
-    try { if (prevObjectUrlRef.current) { URL.revokeObjectURL(prevObjectUrlRef.current); prevObjectUrlRef.current = null; } } catch {}
+    try { if (!shouldKeepBlobPreview && prevObjectUrlRef.current) { URL.revokeObjectURL(prevObjectUrlRef.current); prevObjectUrlRef.current = null; } } catch {}
     setSelectedMedia(null);
     setRemovedExistingMedia(false);
     navigate('/chat');
