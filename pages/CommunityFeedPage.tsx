@@ -561,6 +561,8 @@ const CommunityFeedPage: React.FC = () => {
   useEffect(() => {
     if (stories.length > 0) return;
     let cancelled = false;
+    let controller: AbortController | null = null;
+    let timeoutId: number | null = null;
     const resolveApiUrl = (): string => {
       try {
         const w: any = (typeof window !== 'undefined') ? window : {};
@@ -577,10 +579,15 @@ const CommunityFeedPage: React.FC = () => {
     const apiUrl = resolveApiUrl();
     const fetchInitialStories = async () => {
       try {
-        const controller = new AbortController();
-        const id = window.setTimeout(() => controller.abort(), 10000);
+        controller = new AbortController();
+        timeoutId = window.setTimeout(() => {
+          try { controller?.abort(); } catch {}
+        }, 20000);
         const res = await fetch(`${apiUrl}/community-stories`, { signal: controller.signal });
-        window.clearTimeout(id);
+        if (timeoutId != null) {
+          window.clearTimeout(timeoutId);
+          timeoutId = null;
+        }
         if (!res.ok) return;
         const data = await res.json();
         if (cancelled) return;
@@ -608,11 +615,26 @@ const CommunityFeedPage: React.FC = () => {
           try { saveStoriesSafe(merged as Story[]); } catch {}
         }
       } catch (e) {
+        if (cancelled) return;
+        const err: any = e;
+        if (err && err.name === 'AbortError') return;
         console.error('[CommunityFeed] Failed to fetch community stories from server', e);
+      } finally {
+        if (timeoutId != null) {
+          try { window.clearTimeout(timeoutId); } catch {}
+          timeoutId = null;
+        }
       }
     };
     fetchInitialStories();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (timeoutId != null) {
+        try { window.clearTimeout(timeoutId); } catch {}
+        timeoutId = null;
+      }
+      try { controller?.abort(); } catch {}
+    };
   }, []);
 
   // Persist stories when they change (e.g. when new stories are added or marked viewed)
