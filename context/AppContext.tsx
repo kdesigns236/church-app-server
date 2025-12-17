@@ -37,7 +37,7 @@ interface AppContextType {
     deleteBibleStudy: (id: string) => void;
     addChatMessage: (messageData: { content?: string; media?: { url: string; type: 'image' | 'video' | 'audio'; }; replyTo?: ChatMessage; }, user: User) => void;
     deleteChatMessage: (messageId: string) => void;
-    createPost: (content: string, user: User, media?: { url: string; type: 'image' | 'video' }) => void;
+    createPost: (content: string, user: User, media?: { url: string; type: 'image' | 'video' }) => Post | undefined;
     updatePost: (post: Post) => void;
     handlePostInteraction: (postId: number, type: 'like' | 'share') => void;
     addPostComment: (postId: number, commentText: string, user: User) => void;
@@ -78,8 +78,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         // Restore preserved data
         if (authUser) localStorage.setItem('authUser', authUser);
         if (authToken) localStorage.setItem('authToken', authToken);
-        if (communityPosts) localStorage.setItem('communityPosts', communityPosts);
-        if (communityStories) localStorage.setItem('communityStories', communityStories);
+        if (communityPosts) {
+          try {
+            const parsed = JSON.parse(communityPosts);
+            if (Array.isArray(parsed)) {
+              const safe = (parsed || []).slice(0, 200).map((p: any) => ({
+                ...p,
+                media: p?.media && typeof p.media.url === 'string' && (p.media.url.startsWith('data:') || p.media.url.startsWith('blob:')) ? undefined : p?.media,
+              }));
+              localStorage.setItem('communityPosts', JSON.stringify(safe));
+            } else {
+              localStorage.setItem('communityPosts', communityPosts);
+            }
+          } catch {
+            localStorage.setItem('communityPosts', communityPosts);
+          }
+        }
+        if (communityStories) {
+          try {
+            const parsed = JSON.parse(communityStories);
+            if (Array.isArray(parsed)) {
+              const safe = (parsed || []).slice(0, 100).map((s: any) => ({
+                ...s,
+                media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
+              }));
+              localStorage.setItem('communityStories', JSON.stringify(safe));
+            } else {
+              localStorage.setItem('communityStories', communityStories);
+            }
+          } catch {
+            localStorage.setItem('communityStories', communityStories);
+          }
+        }
         if (sermonsLS) localStorage.setItem('sermons', sermonsLS);
         if (announcementsLS) localStorage.setItem('announcements', announcementsLS);
         if (eventsLS) localStorage.setItem('events', eventsLS);
@@ -375,7 +405,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const limit = 200;
       const sanitized = (arr || []).map((p: any) => ({
         ...p,
-        media: p?.media && typeof p.media.url === 'string' && p.media.url.startsWith('data:') ? undefined : p?.media,
+        media: p?.media && typeof p.media.url === 'string' && (p.media.url.startsWith('data:') || p.media.url.startsWith('blob:')) ? undefined : p?.media,
       }));
       return sanitized.slice(0, limit);
     };
@@ -384,14 +414,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const limit = 100;
       const sanitized = (arr || []).map((s: any) => ({
         ...s,
-        media: s?.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s?.media,
+        media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
       }));
       return sanitized.slice(0, limit);
     };
 
     const safeSetItem = (key: string, value: any) => {
+      const toStore = key === 'communityPosts'
+        ? slimPosts(Array.isArray(value) ? value : [])
+        : key === 'communityStories'
+          ? slimStories(Array.isArray(value) ? value : [])
+          : value;
       try {
-        localStorage.setItem(key, JSON.stringify(value));
+        localStorage.setItem(key, JSON.stringify(toStore));
       } catch (_e) {
         try {
           if (key === 'communityPosts') {
@@ -906,11 +941,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   const localParsed = localRaw ? JSON.parse(localRaw) : [];
                   const localLen = Array.isArray(localParsed) ? localParsed.length : 0;
                   if (full.communityStories.length > 0 || localLen === 0) {
-                    localStorage.setItem('communityStories', JSON.stringify(full.communityStories));
+                    safeSetItem('communityStories', full.communityStories);
                     try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
                   }
                 } catch {
-                  try { if (full.communityStories.length > 0) { localStorage.setItem('communityStories', JSON.stringify(full.communityStories)); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
+                  try { if (full.communityStories.length > 0) { safeSetItem('communityStories', full.communityStories); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
                 }
               }
             }
@@ -1279,7 +1314,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.setItem('communityComments', JSON.stringify(comments));
     }, [comments]);
 
-    const createPost = (content: string, user: User, media?: { url: string; type: 'image' | 'video' }) => {
+    const createPost = (content: string, user: User, media?: { url: string; type: 'image' | 'video' }): Post | undefined => {
       if (!user) return;
 
       const basePost: Post = {
@@ -1308,6 +1343,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         action: 'add',
         data: newPost,
       });
+
+      return newPost;
     };
 
     const updatePost = (post: Post) => {

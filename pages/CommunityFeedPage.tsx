@@ -47,14 +47,14 @@ const CommunityFeedPage: React.FC = () => {
     try {
       const slim = (arr || []).slice(0, 100).map((s: any) => ({
         ...s,
-        media: s?.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s?.media,
+        media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
       }));
       localStorage.setItem('communityStories', JSON.stringify(slim));
     } catch (e) {
       try {
         const slimmer = (arr || []).slice(0, 50).map((s: any) => ({
           ...s,
-          media: s?.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s?.media,
+          media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
         }));
         localStorage.setItem('communityStories', JSON.stringify(slimmer));
       } catch {}
@@ -162,7 +162,7 @@ const CommunityFeedPage: React.FC = () => {
       });
       if (changed) {
         setStories(withIds);
-        try { localStorage.setItem('communityStories', JSON.stringify(withIds)); } catch {}
+        try { saveStoriesSafe(withIds); } catch {}
       }
     } catch {}
   }, [users, stories]);

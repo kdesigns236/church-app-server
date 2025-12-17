@@ -289,13 +289,21 @@ class WebSocketService {
           localStorage.setItem('churchUserList', JSON.stringify(data.users));
         }
         if (data.posts && Array.isArray(data.posts) && data.posts.length > 0) {
-          localStorage.setItem('communityPosts', JSON.stringify(data.posts));
+          const safePosts = (data.posts || []).slice(0, 200).map((p: any) => ({
+            ...p,
+            media: p?.media && typeof p.media.url === 'string' && (p.media.url.startsWith('data:') || p.media.url.startsWith('blob:')) ? undefined : p?.media,
+          }));
+          localStorage.setItem('communityPosts', JSON.stringify(safePosts));
         }
         if (data.comments && Array.isArray(data.comments) && data.comments.length > 0) {
           localStorage.setItem('communityComments', JSON.stringify(data.comments));
         }
         if (data.communityStories && Array.isArray(data.communityStories) && data.communityStories.length > 0) {
-          localStorage.setItem('communityStories', JSON.stringify(data.communityStories));
+          const safeStories = (data.communityStories || []).slice(0, 100).map((s: any) => ({
+            ...s,
+            media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
+          }));
+          localStorage.setItem('communityStories', JSON.stringify(safeStories));
         }
       }
       

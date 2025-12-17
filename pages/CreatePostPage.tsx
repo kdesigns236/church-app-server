@@ -80,41 +80,45 @@ const CreatePostPage: React.FC = () => {
     return new File([u8arr], filename, { type: mime });
   };
 
-  const uploadSelectedMedia = async (kind: 'story' | 'post'): Promise<{ url: string; type: 'image' | 'video' } | undefined> => {
-    if (!selectedMedia) return undefined;
+  const uploadSelectedMedia = async (
+    kind: 'story' | 'post',
+    mediaOverride?: { url: string; type: 'image' | 'video'; file?: File } | null,
+  ): Promise<{ url: string; type: 'image' | 'video' } | undefined> => {
+    const media = typeof mediaOverride !== 'undefined' ? mediaOverride : selectedMedia;
+    if (!media) return undefined;
     try {
       // Prefer uploading the File directly when available (reliable on mobile, avoids base64 memory pressure)
-      if (selectedMedia.file instanceof File) {
+      if (media.file instanceof File) {
         try {
-          const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', selectedMedia.file);
+          const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', media.file);
           if (fb.success && fb.url) {
-            return { url: fb.url, type: selectedMedia.type };
+            return { url: fb.url, type: media.type };
           }
         } catch {}
         try {
-          const remoteUrl = await uploadService.uploadFile(selectedMedia.file);
-          return { url: remoteUrl, type: selectedMedia.type };
+          const remoteUrl = await uploadService.uploadFile(media.file);
+          return { url: remoteUrl, type: media.type };
         } catch {}
         return undefined;
       }
-      if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:')) {
-        const ext = selectedMedia.type === 'video' ? 'mp4' : 'png';
-        const file = dataUrlToFile(selectedMedia.url, `${kind}-${Date.now()}.${ext}`);
+      if (typeof media.url === 'string' && media.url.startsWith('data:')) {
+        const ext = media.type === 'video' ? 'mp4' : 'png';
+        const file = dataUrlToFile(media.url, `${kind}-${Date.now()}.${ext}`);
         // Try Firebase first
         try {
           const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', file);
           if (fb.success && fb.url) {
-            return { url: fb.url, type: selectedMedia.type };
+            return { url: fb.url, type: media.type };
           }
         } catch {}
         // Fallback to server upload endpoint
         try {
           const remoteUrl = await uploadService.uploadFile(file);
-          return { url: remoteUrl, type: selectedMedia.type };
+          return { url: remoteUrl, type: media.type };
         } catch {}
         return undefined;
       } else {
-        return selectedMedia;
+        return media;
       }
     } catch {
       return undefined;
@@ -127,30 +131,32 @@ const CreatePostPage: React.FC = () => {
     const hasMedia = !!selectedMedia;
     if (!trimmed && !hasMedia) return;
 
+    const mediaSnapshot = selectedMedia;
+    const optimisticStoryContent = trimmed || (mediaSnapshot ? 'Uploading...' : '');
+
     if (isStoryMode) {
       try {
-        const uploadedMedia = await uploadSelectedMedia('story');
         const newStory = {
           id: Date.now(),
           createdAt: Date.now(),
           authorId: user.id,
           author: user.name,
           avatar: user.name.trim().charAt(0).toUpperCase(),
-          content: trimmed,
-          media: uploadedMedia,
+          content: optimisticStoryContent,
+          media: undefined,
           viewed: false,
-          type: selectedMedia
-            ? selectedMedia.type === 'video'
-              ? 'video'
-              : 'photo'
-            : 'text',
+          type: 'text',
         };
         try {
           const existing = localStorage.getItem('communityStories');
           const stories = existing ? JSON.parse(existing) : [];
           stories.unshift(newStory);
           try {
-            localStorage.setItem('communityStories', JSON.stringify(stories));
+            const safeStories = (Array.isArray(stories) ? stories : []).slice(0, 100).map((s: any) => ({
+              ...s,
+              media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
+            }));
+            localStorage.setItem('communityStories', JSON.stringify(safeStories));
             try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
           } catch (e) {
             const slim = stories.slice(0, 50).map((s: any) => ({
@@ -162,7 +168,7 @@ const CreatePostPage: React.FC = () => {
               content: s.content,
               viewed: !!s.viewed,
               type: s.type,
-              media: s.media && typeof s.media.url === 'string' && s.media.url.startsWith('data:') ? undefined : s.media,
+              media: s.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s.media,
             }));
             try { localStorage.setItem('communityStories', JSON.stringify(slim)); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } catch {}
           }
@@ -173,6 +179,36 @@ const CreatePostPage: React.FC = () => {
           action: 'add',
           data: newStory,
         });
+
+        if (mediaSnapshot) {
+          uploadSelectedMedia('story', mediaSnapshot)
+            .then((uploadedMedia) => {
+              if (!uploadedMedia) return;
+              const updatedStory = {
+                ...newStory,
+                content: trimmed,
+                media: uploadedMedia,
+                type: uploadedMedia.type === 'video' ? 'video' : 'photo',
+              };
+              try {
+                const existing = localStorage.getItem('communityStories');
+                const stories = existing ? JSON.parse(existing) : [];
+                const next = Array.isArray(stories)
+                  ? stories.map((s: any) => (String(s?.id) === String(updatedStory.id) ? updatedStory : s))
+                  : [updatedStory];
+                const safeNext = (Array.isArray(next) ? next : []).slice(0, 100).map((s: any) => ({
+                  ...s,
+                  media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
+                }));
+                localStorage.setItem('communityStories', JSON.stringify(safeNext));
+                try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
+              } catch {}
+              try {
+                websocketService.pushUpdate({ type: 'communityStories', action: 'update', data: updatedStory });
+              } catch {}
+            })
+            .catch(() => {});
+        }
       } catch (error) {
         console.error('Error saving story to localStorage', error);
       }
@@ -207,14 +243,18 @@ const CreatePostPage: React.FC = () => {
         updatePost(updated as any);
       } catch {}
     } else {
-      let mediaForPost: { url: string; type: 'image' | 'video' } | undefined = undefined;
-      try {
-        mediaForPost = selectedMedia ? await uploadSelectedMedia('post') : undefined;
-      } catch (e) {
-        console.error('Media upload failed, posting without media', e);
-        mediaForPost = undefined;
+      const optimisticMedia = mediaSnapshot ? { url: mediaSnapshot.url, type: mediaSnapshot.type } : undefined;
+      const created = createPost(trimmed, user, optimisticMedia);
+      if (created && mediaSnapshot) {
+        uploadSelectedMedia('post', mediaSnapshot)
+          .then((uploadedMedia) => {
+            if (!uploadedMedia) return;
+            try {
+              updatePost({ ...(created as any), media: uploadedMedia } as any);
+            } catch {}
+          })
+          .catch(() => {});
       }
-      createPost(trimmed, user, mediaForPost);
     }
 
     setPostContent('');
