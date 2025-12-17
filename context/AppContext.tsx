@@ -1747,11 +1747,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     })
                     .catch(() => {});
                 } catch {}
-              }, 2000);
+              }, 4000);
               const failTimer = window.setTimeout(() => {
                 try { pendingChatTimersRef.current.delete(String(clientId)); } catch {}
-                setChatMessages(prev => (prev || []).map(m => String(m.id) === String(clientId) ? { ...m, status: 'failed' } : m));
-              }, 8000);
+                setChatMessages(prev => (prev || []).map(m => {
+                  if (String(m.id) !== String(clientId)) return m;
+                  if (m.status && m.status !== 'sending') return m;
+                  return { ...m, status: 'failed' };
+                }));
+              }, 30000);
               pendingChatRestTimersRef.current.set(clientId, restTimer);
               pendingChatTimersRef.current.set(clientId, failTimer);
               // clear restTimer on ack via socket handler does not know restTimer; acceptable to let it fire safely (idempotent)
@@ -1763,8 +1767,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         try {
           const failTimer = window.setTimeout(() => {
             try { pendingChatTimersRef.current.delete(String(clientId)); } catch {}
-            setChatMessages(prev => (prev || []).map(m => String(m.id) === String(clientId) ? { ...m, status: 'failed' } : m));
-          }, 8000);
+            setChatMessages(prev => (prev || []).map(m => {
+              if (String(m.id) !== String(clientId)) return m;
+              if (m.status && m.status !== 'sending') return m;
+              return { ...m, status: 'failed' };
+            }));
+          }, 30000);
           pendingChatTimersRef.current.set(clientId, failTimer);
         } catch {}
         try {
