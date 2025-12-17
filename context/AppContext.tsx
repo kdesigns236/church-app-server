@@ -239,10 +239,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Clean up any legacy demo community posts that may be in localStorage
     useEffect(() => {
       setPosts(prev => {
-        if (!Array.isArray(prev) || prev.length === 0) {
-          return prev;
-        }
-
         const filtered = prev.filter(post => {
           if (!post || typeof post !== 'object') {
             return true;
@@ -299,6 +295,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         sock.on('chat:ack', ({ id }: any) => {
           if (!id) return;
+          const rt = pendingChatRestTimersRef.current.get(String(id));
+          if (typeof rt === 'number') { try { window.clearTimeout(rt); } catch {} pendingChatRestTimersRef.current.delete(String(id)); }
           const t = pendingChatTimersRef.current.get(String(id));
           if (typeof t === 'number') { try { window.clearTimeout(t); } catch {} pendingChatTimersRef.current.delete(String(id)); }
           setChatMessages(prev => (prev || []).map(m => String(m.id) === String(id) ? { ...m, status: 'sent' } : m));
@@ -452,6 +450,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const prefetchInFlightRef = useRef<Set<string>>(new Set());
     const pendingChatTimersRef = useRef<Map<string, number>>(new Map());
+    const pendingChatRestTimersRef = useRef<Map<string, number>>(new Map());
 
     // Background prefetch: automatically download sermon videos into IndexedDB
     const prefetchSermonVideos = async (sermonsToPrefetch: Sermon[]) => {
@@ -1738,11 +1737,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             // Fallback: if no ack in 2s, push via REST; mark failed after 8s
             try {
               const restTimer = window.setTimeout(() => {
-                try { websocketService.pushUpdate({ type: 'chatMessages', action: 'add', data: newMessage }); } catch {}
+                try {
+                  try { pendingChatRestTimersRef.current.delete(String(clientId)); } catch {}
+                  websocketService.pushUpdate({ type: 'chatMessages', action: 'add', data: newMessage })
+                    .then(() => {
+                      const t = pendingChatTimersRef.current.get(String(clientId));
+                      if (typeof t === 'number') { try { window.clearTimeout(t); } catch {} pendingChatTimersRef.current.delete(String(clientId)); }
+                      setChatMessages(prev => (prev || []).map(m => String(m.id) === String(clientId) ? { ...m, status: 'sent' } : m));
+                    })
+                    .catch(() => {});
+                } catch {}
               }, 2000);
               const failTimer = window.setTimeout(() => {
+                try { pendingChatTimersRef.current.delete(String(clientId)); } catch {}
                 setChatMessages(prev => (prev || []).map(m => String(m.id) === String(clientId) ? { ...m, status: 'failed' } : m));
               }, 8000);
+              pendingChatRestTimersRef.current.set(clientId, restTimer);
               pendingChatTimersRef.current.set(clientId, failTimer);
               // clear restTimer on ack via socket handler does not know restTimer; acceptable to let it fire safely (idempotent)
             } catch {}
@@ -1750,7 +1760,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
         } catch {}
         // Fallback to sync push if socket not ready
-        websocketService.pushUpdate({ type: 'chatMessages', action: 'add', data: newMessage });
+        try {
+          const failTimer = window.setTimeout(() => {
+            try { pendingChatTimersRef.current.delete(String(clientId)); } catch {}
+            setChatMessages(prev => (prev || []).map(m => String(m.id) === String(clientId) ? { ...m, status: 'failed' } : m));
+          }, 8000);
+          pendingChatTimersRef.current.set(clientId, failTimer);
+        } catch {}
+        try {
+          websocketService.pushUpdate({ type: 'chatMessages', action: 'add', data: newMessage })
+            .then(() => {
+              const t = pendingChatTimersRef.current.get(String(clientId));
+              if (typeof t === 'number') { try { window.clearTimeout(t); } catch {} pendingChatTimersRef.current.delete(String(clientId)); }
+              setChatMessages(prev => (prev || []).map(m => String(m.id) === String(clientId) ? { ...m, status: 'sent' } : m));
+            })
+            .catch(() => {});
+        } catch {}
     };
 
     const deleteChatMessage = (messageId: string) => {
