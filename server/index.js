@@ -220,6 +220,12 @@ const io = socketIo(server, {
 const PORT = process.env.PORT || 3001;
 
 // Middleware
+app.use((req, res, next) => {
+  try {
+    res.setHeader('Alt-Svc', 'clear');
+  } catch {}
+  next();
+});
 app.use(cors());
 app.use(compression());
 app.use('/api/facebook/live', facebookLiveRoutes);
@@ -256,6 +262,10 @@ const staticOptions = {
   setHeaders: (res, p) => {
     if (p.endsWith('index.html')) {
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    } else if (/\\bible\\/i.test(p) && /\.json$/i.test(p)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    } else if (/logo\.jpg$/i.test(p)) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     } else if (p.includes(path.sep + 'assets' + path.sep)) {
       res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     } else {
@@ -297,6 +307,7 @@ app.get('/bible/en.json', (req, res) => {
     return res.status(404).send('Bible EN file not found');
   }
 
+  try { res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); } catch {}
   res.sendFile(filePath);
 });
 
@@ -311,6 +322,7 @@ app.get('/bible/sw.json', (req, res) => {
     return res.status(404).send('Bible SW file not found');
   }
 
+  try { res.setHeader('Cache-Control', 'public, max-age=31536000, immutable'); } catch {}
   res.sendFile(filePath);
 });
 

@@ -181,6 +181,40 @@ const ProtectedRoutes: React.FC = () => {
         setVisitedPaths(prev => (prev.includes(p) ? prev : [...prev, p]));
     }, [location.pathname]);
 
+    useEffect(() => {
+        let cancelled = false;
+        const getApiBase = (): string => {
+            try {
+                const w: any = (typeof window !== 'undefined') ? window : {};
+                const fromWindow = w.__APP_RUNTIME_CONFIG__?.apiUrl;
+                const fromStorage = (typeof localStorage !== 'undefined') ? localStorage.getItem('apiBaseUrl') : null;
+                const fromEnv = (import.meta as any).env?.VITE_API_URL;
+                const fallback = 'https://church-app-server.onrender.com/api';
+                const apiUrl = (fromStorage || fromWindow || fromEnv || fallback) as string;
+                return String(apiUrl || fallback).replace(/\/api\/?$/, '');
+            } catch {
+                return 'https://church-app-server.onrender.com';
+            }
+        };
+        const ping = async () => {
+            try {
+                if (cancelled) return;
+                if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+                const base = getApiBase();
+                await fetch(`${base}/api/health`, { method: 'GET', cache: 'no-store' });
+            } catch {}
+        };
+        const onVis = () => { if (document.visibilityState === 'visible') { ping().catch(() => {}); } };
+        try { document.addEventListener('visibilitychange', onVis); } catch {}
+        ping().catch(() => {});
+        const id = window.setInterval(() => { ping().catch(() => {}); }, 240000);
+        return () => {
+            cancelled = true;
+            try { document.removeEventListener('visibilitychange', onVis); } catch {}
+            try { window.clearInterval(id); } catch {}
+        };
+    }, []);
+
     return (
         <>
             <PageLayout>
