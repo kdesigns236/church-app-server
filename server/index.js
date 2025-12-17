@@ -349,15 +349,51 @@ app.post('/api/upload', verifyToken, upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
-    const host = req.get('host');
-    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
-    const fileUrl = `${proto}://${host}/uploads/${req.file.filename}`;
-    return res.json({
-      success: true,
-      filename: req.file.filename,
-      url: fileUrl,
-      size: req.file.size,
-      mimetype: req.file.mimetype,
+    (async () => {
+      try {
+        const admin = getFirebaseAdmin();
+        if (admin && typeof admin.storage === 'function') {
+          const bucket = admin.storage().bucket();
+          const objectPath = `uploads/${req.file.filename}`;
+          const token = generateFirebaseStorageDownloadToken();
+          await bucket.upload(req.file.path, {
+            destination: objectPath,
+            metadata: {
+              contentType: req.file.mimetype || 'application/octet-stream',
+              cacheControl: 'public, max-age=31536000',
+              metadata: {
+                firebaseStorageDownloadTokens: token,
+              },
+            },
+          });
+
+          try { fs.unlink(req.file.path, () => {}); } catch {}
+
+          const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+          return res.json({
+            success: true,
+            filename: req.file.filename,
+            url,
+            size: req.file.size,
+            mimetype: req.file.mimetype,
+            firebaseBucket: bucket.name,
+            firebaseStoragePath: objectPath,
+          });
+        }
+      } catch {}
+
+      const host = req.get('host');
+      const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
+      const fileUrl = `${proto}://${host}/uploads/${req.file.filename}`;
+      return res.json({
+        success: true,
+        filename: req.file.filename,
+        url: fileUrl,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      });
+    })().catch(() => {
+      return res.status(500).json({ success: false, error: 'Upload failed' });
     });
   } catch (e) {
     return res.status(500).json({ success: false, error: 'Upload failed' });

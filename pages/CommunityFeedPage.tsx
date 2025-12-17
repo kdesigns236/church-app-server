@@ -1610,6 +1610,8 @@ const CommunityFeedPage: React.FC = () => {
                   <img
                     src={fixMediaUrl(post.media.url)}
                     alt="Post media"
+                    loading="lazy"
+                    decoding="async"
                     style={{
                       width: '100%',
                       maxHeight: '360px',
@@ -1622,6 +1624,7 @@ const CommunityFeedPage: React.FC = () => {
                   <video
                     controls
                     src={fixMediaUrl(post.media.url)}
+                    preload="metadata"
                     style={{
                       width: '100%',
                       maxHeight: '360px',
@@ -2229,6 +2232,8 @@ const CommunityFeedPage: React.FC = () => {
                   <img
                     src={fixMediaUrl(viewingStory.media.url)}
                     alt="Story media"
+                    loading="eager"
+                    decoding="async"
                     style={{
                       maxWidth: '100%',
                       maxHeight: '80%',
@@ -2243,7 +2248,7 @@ const CommunityFeedPage: React.FC = () => {
                     src={fixMediaUrl(viewingStory.media.url)}
                     autoPlay
                     playsInline
-                    preload="auto"
+                    preload="metadata"
                     onLoadedMetadata={(e) => {
                       try {
                         const v = e.currentTarget as HTMLVideoElement;
