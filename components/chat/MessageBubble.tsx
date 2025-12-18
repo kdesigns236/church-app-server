@@ -127,9 +127,6 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, 
                 <div className="flex items-center justify-end gap-1 text-xs text-gray-500 dark:text-gray-400/80 mt-auto px-3 pb-2">
                   {isCurrentUser && (
                     <>
-                      {message.status === 'sending' && (
-                        <span className="inline-block align-middle opacity-70">sending…</span>
-                      )}
                       {message.status === 'failed' && (
                         <button
                           className="text-red-500 font-semibold hover:underline"
@@ -141,8 +138,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onReply, 
                           }}
                         >Failed · Retry</button>
                       )}
-                      {(!message.status || message.status === 'sent') && (
-                        <CheckIcon className="w-3.5 h-3.5 opacity-70" />
+                      {(!message.status || message.status === 'sent' || message.status === 'sending') && (
+                        <CheckIcon className={`w-3.5 h-3.5 ${message.status === 'sending' ? 'opacity-40' : 'opacity-70'}`} />
                       )}
                       {message.status === 'delivered' && (
                         <span className="inline-flex -space-x-1">

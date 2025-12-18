@@ -234,18 +234,18 @@ class WebSocketService {
       switch (syncData.action) {
         case 'add':
           // Check if already exists to avoid duplicates
-          if (!dataArray.find((item: any) => item.id === incoming.id)) {
+          if (!dataArray.find((item: any) => String(item?.id) === String((incoming as any)?.id))) {
             updatedData = [...dataArray, incoming];
           }
           break;
         case 'update':
-          updatedData = dataArray.map((item: any) => 
-            item.id === incoming.id ? incoming : item
+          updatedData = dataArray.map((item: any) =>
+            String(item?.id) === String((incoming as any)?.id) ? incoming : item
           );
           break;
         case 'delete':
-          updatedData = dataArray.filter((item: any) => 
-            item.id !== incoming.id
+          updatedData = dataArray.filter((item: any) =>
+            String(item?.id) !== String((incoming as any)?.id)
           );
           break;
       }

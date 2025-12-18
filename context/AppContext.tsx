@@ -991,7 +991,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           console.error('[AppContext] WebSocket connection failed:', error);
           // App continues to work without real-time sync
         }
-      }, 2000); // Wait 2 seconds after app loads before connecting
+      }, 200); // Wait 2 seconds after app loads before connecting
       
       // Start listening for server updates
       websocketService.addListener('sync_update', (syncData: any) => {
@@ -1004,7 +1004,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (syncData.action === 'add') {
                 setChatMessages(prev => {
                   // Prevent duplicates
-                  if (prev.find(msg => msg.id === syncData.data.id)) {
+                  if (prev.find(msg => String(msg?.id) === String((syncData as any)?.data?.id))) {
                     return prev;
                   }
 
@@ -1039,13 +1039,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 });
               } else if (syncData.action === 'update') {
                 setChatMessages(prev => {
-                  const updated = prev.map(msg => msg.id === syncData.data.id ? syncData.data : msg);
+                  const updated = prev.map(msg => String(msg?.id) === String((syncData as any)?.data?.id) ? syncData.data : msg);
                   localStorage.setItem('chatMessages', JSON.stringify(updated));
                   return updated;
                 });
               } else if (syncData.action === 'delete') {
                 setChatMessages(prev => {
-                  const updated = prev.filter(msg => msg.id !== syncData.data.id);
+                  const updated = prev.filter(msg => String(msg?.id) !== String((syncData as any)?.data?.id));
                   localStorage.setItem('chatMessages', JSON.stringify(updated));
                   return updated;
                 });
@@ -1283,10 +1283,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     useEffect(() => {
       // Ensure chatMessages is an array before mapping
       if (Array.isArray(chatMessages)) {
+        const isTransientMediaUrl = (u: any): boolean => {
+          try {
+            return typeof u === 'string' && (u.startsWith('blob:') || u.startsWith('data:'));
+          } catch {
+            return false;
+          }
+        };
         const messagesToStore = chatMessages.map(msg => {
           if (msg.media) {
-            // Don't store the media URL in localStorage
-            return { ...msg, media: { ...msg.media, url: '' } };
+            const u: any = (msg.media as any)?.url;
+            // Never persist transient local preview URLs
+            if (isTransientMediaUrl(u)) {
+              return { ...msg, media: { ...msg.media, url: '' } };
+            }
+            return msg;
           }
           return msg;
         });
