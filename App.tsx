@@ -266,16 +266,6 @@ const ProtectedRoutes: React.FC = () => {
                     </div>
                     {/* Video Call (no keep-alive) */}
                     {/* Camera Client (no keep-alive) */}
-                    <AdminRoute>
-                        <div style={{ display: path === '/admin/json-converter' ? 'block' : 'none' }}>
-                            <JsonConverterPage />
-                        </div>
-                    </AdminRoute>
-                    <AdminRoute>
-                        <div style={{ display: path === '/admin' ? 'block' : 'none' }}>
-                            <AdminPage />
-                        </div>
-                    </AdminRoute>
                     <Routes>
                         <Route path="/" element={<></>} />
                         <Route path="/sermons" element={<></>} />
@@ -295,8 +285,8 @@ const ProtectedRoutes: React.FC = () => {
                         <Route path="/pastor-ai" element={<></>} />
                         <Route path="/video-call" element={<VideoCallPage />} />
                         <Route path="/camera-client" element={<CameraClientPage />} />
-                        <Route path="/admin/json-converter" element={<></>} />
-                        <Route path="/admin" element={<></>} />
+                        <Route path="/admin/json-converter" element={<AdminRoute><JsonConverterPage /></AdminRoute>} />
+                        <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
                         <Route path="*" element={<Navigate to="/" />} />
                     </Routes>
                 </Suspense>

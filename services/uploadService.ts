@@ -6,6 +6,7 @@ interface UploadResponse {
   url: string;
   size: number;
   mimetype: string;
+  error?: string;
 }
 
 class UploadService {
@@ -16,13 +17,118 @@ class UploadService {
   }
 
   // Upload a file to the server
-  async uploadFile(file: File): Promise<string> {
+  async uploadFile(file: File, onProgress?: (progress: number) => void): Promise<string> {
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      const token = localStorage.getItem('authToken') || 'admin-token';
+      const token = localStorage.getItem('authToken') || '';
+      if (!token) {
+        throw new Error('No authentication token found. Please log in again.');
+      }
 
+      // Prefer XHR to support upload progress events (especially important on mobile)
+      if (typeof XMLHttpRequest !== 'undefined') {
+        return await new Promise<string>((resolve, reject) => {
+          const setT: any = (globalThis as any)?.setTimeout ? (globalThis as any).setTimeout.bind(globalThis) : setTimeout;
+          const clearT: any = (globalThis as any)?.clearTimeout ? (globalThis as any).clearTimeout.bind(globalThis) : clearTimeout;
+
+          const xhr = new XMLHttpRequest();
+          const url = `${this.apiUrl}/upload`;
+          let settled = false;
+          let lastLoaded = 0;
+          let stallTimer: any = null;
+
+          const clearStall = () => {
+            if (!stallTimer) return;
+            try { clearT(stallTimer); } catch {}
+            stallTimer = null;
+          };
+
+          const armStall = (ms: number) => {
+            clearStall();
+            stallTimer = setT(() => {
+              if (settled) return;
+              settled = true;
+              try { xhr.abort(); } catch {}
+              reject(new Error('Upload stalled'));
+            }, ms);
+          };
+
+          // If we don't see any upload progress for 60s, assume it's stuck.
+          // After first progress, allow longer gaps.
+          armStall(60000);
+          try { if (onProgress) onProgress(0); } catch {}
+
+          xhr.open('POST', url, true);
+          try { xhr.setRequestHeader('Authorization', `Bearer ${token}`); } catch {}
+          try { xhr.responseType = 'json'; } catch {}
+
+          xhr.upload.onprogress = (evt) => {
+            try {
+              if (!evt) return;
+              const totalRaw = Number((evt as any).total) || 0;
+              const loaded = Number((evt as any).loaded) || 0;
+              const total = totalRaw > 0 ? totalRaw : (Number((file as any)?.size) || 0);
+              const pct = total > 0 ? (loaded / total) * 100 : 0;
+              if (onProgress) onProgress(Math.max(0, Math.min(100, pct)));
+              if (loaded > lastLoaded) {
+                lastLoaded = loaded;
+                armStall(180000);
+              }
+            } catch {}
+          };
+
+          xhr.onerror = () => {
+            clearStall();
+            if (settled) return;
+            settled = true;
+            reject(new Error('Upload failed'));
+          };
+
+          xhr.onabort = () => {
+            clearStall();
+            if (settled) return;
+            settled = true;
+            reject(new Error('Upload aborted'));
+          };
+
+          xhr.onload = () => {
+            clearStall();
+            if (settled) return;
+            try {
+              const status = Number(xhr.status) || 0;
+              const ok = status >= 200 && status < 300;
+              const data: any = (xhr as any).response || (() => {
+                try { return JSON.parse(xhr.responseText || '{}'); } catch { return null; }
+              })();
+              if (!ok) {
+                const msg = (data && (data.error || data.message)) || `Upload failed (${status})`;
+                settled = true;
+                reject(new Error(msg));
+                return;
+              }
+              if (!data || !data.success || !data.url) {
+                const msg = (data && (data.error || data.message)) || 'Upload failed';
+                settled = true;
+                reject(new Error(msg));
+                return;
+              }
+              try { if (onProgress) onProgress(100); } catch {}
+              settled = true;
+              console.log('[Upload] File uploaded successfully:', data.filename);
+              resolve(String(data.url));
+            } catch (e: any) {
+              settled = true;
+              reject(e);
+            }
+          };
+
+          xhr.send(formData);
+        });
+      }
+
+      // Fallback to fetch (no progress events)
       const response = await fetch(`${this.apiUrl}/upload`, {
         method: 'POST',
         headers: {
@@ -37,7 +143,7 @@ class UploadService {
 
       const data: UploadResponse = await response.json();
       console.log('[Upload] File uploaded successfully:', data.filename);
-      
+
       return data.url;
     } catch (error) {
       console.error('[Upload] Error uploading file:', error);

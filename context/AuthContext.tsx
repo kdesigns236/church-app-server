@@ -76,44 +76,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         // One-time cleanup: remove any legacy users from churchUserList, keeping only admin
         const storedUserList = localStorage.getItem('churchUserList');
-        const cleanupFlag = localStorage.getItem('churchUserListCleaned_v1');
-
-        if (!cleanupFlag) {
-          let initialList: User[] = [defaultAdminUser];
-
-          if (storedUserList) {
-            try {
-              const parsed = JSON.parse(storedUserList);
-              if (Array.isArray(parsed) && parsed.length > 0) {
-                const filtered = parsed.filter((u: any) =>
-                  u && (u.id === 'admin-user-001' || u.email === 'admin@church.com' || u.role === 'admin'),
-                );
-                initialList = filtered.length > 0 ? filtered : [defaultAdminUser];
-              }
-            } catch {
-              initialList = [defaultAdminUser];
+        let initialList: User[] = [defaultAdminUser];
+        if (storedUserList) {
+          try {
+            const parsed = JSON.parse(storedUserList);
+            if (Array.isArray(parsed)) {
+              initialList = parsed as User[];
             }
-          }
-
-          const cleaned = dedupeUsers(initialList);
-          localStorage.setItem('churchUserList', JSON.stringify(cleaned));
-          localStorage.setItem('churchUserListCleaned_v1', 'true');
-          setUsers(cleaned);
-        } else {
-          // Normal initialization path after cleanup has already run once
-          if (storedUserList) {
-            try {
-              const parsed = JSON.parse(storedUserList);
-              const cleaned = dedupeUsers(Array.isArray(parsed) ? parsed : []);
-              setUsers(cleaned);
-              localStorage.setItem('churchUserList', JSON.stringify(cleaned));
-            } catch {
-              setUsers([defaultAdminUser]);
-            }
-          } else {
-            localStorage.setItem('churchUserList', JSON.stringify([defaultAdminUser]));
+          } catch {
+            initialList = [defaultAdminUser];
           }
         }
+
+        try {
+          const hasAdmin = (initialList || []).some((u: any) =>
+            u && (
+              u.id === 'admin-user-001' ||
+              String(u.email || '').toLowerCase() === 'admin@church.com' ||
+              u.role === 'admin'
+            )
+          );
+          if (!hasAdmin) {
+            initialList = [defaultAdminUser, ...(initialList || [])];
+          }
+        } catch {}
+
+        const cleaned = dedupeUsers(initialList);
+        localStorage.setItem('churchUserList', JSON.stringify(cleaned));
+        setUsers(cleaned);
 
         // Check for a currently logged-in user
         const storedUser = localStorage.getItem('authUser');

@@ -474,7 +474,11 @@ const AdminPage: React.FC = () => {
                         try {
                             console.log('[Admin] ⚠️ Falling back to server upload...');
                             setUploadProgress(1);
-                            const uploadedUrl = await uploadService.uploadFile(data.videoUrl as File);
+                            const uploadedUrl = await uploadService.uploadFile(data.videoUrl as File, (p) => {
+                                const clamped = Math.max(0, Math.min(100, Number(p) || 0));
+                                const mapped = 1 + (clamped * 69) / 100;
+                                setUploadProgress(Math.min(70, Math.max(1, mapped)));
+                            });
                             setUploadProgress(70);
                             // Save sermon to API with uploadedUrl
                             const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
@@ -938,11 +942,11 @@ const AdminPage: React.FC = () => {
                                 style={{ width: `${uploadProgress}%` }}
                             />
                             <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-800 dark:text-white">
-                                {uploadProgress}%
+                                {Math.round(uploadProgress)}%
                             </span>
                         </div>
                         <p className="text-sm text-gray-600 dark:text-gray-400 text-center mb-2">
-                            {uploadProgress < 100 ? 'Uploading to Firebase Storage...' : 'Processing video...'}
+                            {uploadProgress < 100 ? 'Uploading video...' : 'Processing video...'}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-500 text-center">
                             Please don't close this page.

@@ -9,6 +9,32 @@ import { storage, auth } from '../config/firebase';
 import { keepAwakeService } from './keepAwakeService';
 import { signInAnonymously } from 'firebase/auth';
 
+const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+  const setT: any = (globalThis as any)?.setTimeout ? (globalThis as any).setTimeout.bind(globalThis) : setTimeout;
+  const clearT: any = (globalThis as any)?.clearTimeout ? (globalThis as any).clearTimeout.bind(globalThis) : clearTimeout;
+  return await new Promise<T>((resolve, reject) => {
+    let done = false;
+    const t = setT(() => {
+      if (done) return;
+      done = true;
+      reject(new Error('timeout'));
+    }, Math.max(0, Number(timeoutMs) || 0));
+    promise
+      .then((v) => {
+        if (done) return;
+        done = true;
+        try { clearT(t); } catch {}
+        resolve(v);
+      })
+      .catch((e) => {
+        if (done) return;
+        done = true;
+        try { clearT(t); } catch {}
+        reject(e);
+      });
+  });
+};
+
 interface UploadProgress {
   progress: number;
   bytesTransferred: number;
@@ -43,7 +69,11 @@ export async function uploadMediaToFirebase(
   onProgress?: (progress: UploadMediaProgress) => void
 ): Promise<UploadMediaResult> {
   try {
-    try { await signInAnonymously(auth); } catch {}
+    try {
+      if (!auth.currentUser) {
+        await withTimeout(signInAnonymously(auth), 8000);
+      }
+    } catch {}
     const ts = Date.now();
     // Derive extension from file name or MIME type
     const namePart = (file.name || 'media').replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -65,7 +95,7 @@ export async function uploadMediaToFirebase(
 
     return await new Promise<UploadMediaResult>(async (resolve, reject) => {
       // Prevent device sleep during upload (mobile)
-      try { await keepAwakeService.request('media-upload'); } catch {}
+      try { await withTimeout(keepAwakeService.request('media-upload'), 2000); } catch {}
 
       let settled = false;
       let lastTransferred = 0;
@@ -150,7 +180,11 @@ export async function uploadVideoToFirebase(
   onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
   try {
-    try { await signInAnonymously(auth); } catch {}
+    try {
+      if (!auth.currentUser) {
+        await withTimeout(signInAnonymously(auth), 8000);
+      }
+    } catch {}
     console.log('[Firebase] Starting upload:', videoFile.name);
     console.log('[Firebase] File size:', (videoFile.size / 1024 / 1024).toFixed(2), 'MB');
 
@@ -180,7 +214,7 @@ export async function uploadVideoToFirebase(
     // Return promise that resolves when upload completes
     return new Promise(async (resolve, reject) => {
       // Keep device awake during potentially long sermon upload
-      try { await keepAwakeService.request('sermon-upload'); } catch {}
+      try { await withTimeout(keepAwakeService.request('sermon-upload'), 2000); } catch {}
       let settled = false;
       let lastTransferred = 0;
       let stallTimer: number | null = null;
