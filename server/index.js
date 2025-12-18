@@ -1723,7 +1723,6 @@ app.post('/api/mobile-log', (req, res) => {
       
       // Initialize data, clean legacy users, and create admin user in background
       initializeData()
-        .then(() => cleanupLegacyUsers())
         .then(() => ensureAdminUser())
         .catch(err => {
           console.error('[Server] Background initialization error:', err);

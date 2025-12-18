@@ -173,6 +173,7 @@ const CommunityFeedPage: React.FC = () => {
   const [currentStoryAuthor, setCurrentStoryAuthor] = useState<string | null>(null);
   const [currentStoryAuthorId, setCurrentStoryAuthorId] = useState<string | undefined>(undefined);
   const [activePostMenuId, setActivePostMenuId] = useState<number | null>(null);
+  const postMenuRef = useRef<HTMLDivElement | null>(null);
   const [editingPostId, setEditingPostId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState<string>('');
   const [editMedia, setEditMedia] = useState<{ url: string; type: 'image' | 'video' } | null>(null);
@@ -254,6 +255,41 @@ const CommunityFeedPage: React.FC = () => {
 
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  useEffect(() => {
+    if (activePostMenuId === null) return;
+    const onPointerDown = (e: any) => {
+      try {
+        const el = postMenuRef.current;
+        const target = e?.target as Node | null;
+        if (!el || !target) {
+          setActivePostMenuId(null);
+          return;
+        }
+        if (!el.contains(target)) {
+          setActivePostMenuId(null);
+        }
+      } catch {
+        setActivePostMenuId(null);
+      }
+    };
+    const onScroll = () => {
+      try { setActivePostMenuId(null); } catch {}
+    };
+    document.addEventListener('mousedown', onPointerDown, true);
+    document.addEventListener('touchstart', onPointerDown, true);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown, true);
+      document.removeEventListener('touchstart', onPointerDown, true);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [activePostMenuId]);
+
+  // Close menu whenever route changes
+  useEffect(() => {
+    try { setActivePostMenuId(null); } catch {}
+  }, [location.pathname]);
 
   const currentUserName = user?.name || 'You';
   const currentUserAvatar =
@@ -1368,6 +1404,9 @@ const CommunityFeedPage: React.FC = () => {
             {/* Post Actions Menu (3-dot) */}
             {activePostMenuId === post.id && (
               <div
+                ref={postMenuRef}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 style={{
                   position: 'absolute',
                   top: 44,

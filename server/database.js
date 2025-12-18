@@ -16,6 +16,36 @@ function logError(prefix, error) {
   }
 }
 
+function stripUndefinedDeep(input) {
+  try {
+    if (input === undefined) return undefined;
+    if (input === null) return null;
+    if (Array.isArray(input)) {
+      const out = [];
+      for (const v of input) {
+        if (v === undefined) continue;
+        const cleaned = stripUndefinedDeep(v);
+        if (cleaned === undefined) continue;
+        out.push(cleaned);
+      }
+      return out;
+    }
+    if (typeof input === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(input)) {
+        if (v === undefined) continue;
+        const cleaned = stripUndefinedDeep(v);
+        if (cleaned === undefined) continue;
+        out[k] = cleaned;
+      }
+      return out;
+    }
+    return input;
+  } catch {
+    return input;
+  }
+}
+
 // Create PostgreSQL connection pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -57,9 +87,15 @@ async function initDatabase() {
         // Prefer REST to avoid gRPC transport issues on some hosts/regions
         preferRest: true,
         useRest: true,
+        ignoreUndefinedProperties: true,
         // Use regional endpoint if FIRESTORE_LOCATION is provided
         ...(apiEndpoint ? { apiEndpoint } : {}),
       });
+      try {
+        if (firestore && typeof firestore.settings === 'function') {
+          firestore.settings({ ignoreUndefinedProperties: true });
+        }
+      } catch (_) {}
       console.log('[Database] Firestore client configured', { apiEndpoint: apiEndpoint || 'global', transport: 'REST-preferred' });
       firebaseInitialized = true;
       console.log('[Database] ✅ Firebase Firestore initialized');
@@ -68,7 +104,7 @@ async function initDatabase() {
         await firestore
           .collection('app_data')
           .doc('_warmup')
-          .set({ t: new Date().toISOString() }, { merge: true });
+          .set(stripUndefinedDeep({ t: new Date().toISOString() }), { merge: true });
       } catch (e) {
         logError('[Database] Firestore warm-up write failed:', e);
       }
@@ -160,8 +196,9 @@ async function getData(key) {
 async function setData(key, value) {
   try {
     if (useFirebase && firebaseInitialized && firestore) {
+      const safeValue = stripUndefinedDeep(value);
       await firestore.collection('app_data').doc(key).set({
-        value,
+        value: safeValue,
         updated_at: new Date().toISOString(),
       }, { merge: true });
       return true;
