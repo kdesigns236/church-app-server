@@ -517,6 +517,37 @@ export async function uploadToBackendDirectly(
       const xhr = new XMLHttpRequest();
       // Avoid preflight on mobile by passing token in query (server accepts '?token=')
       const uploadUrl = `${apiUrl}/upload?token=${encodeURIComponent(token)}`;
+      const relUrl = (() => {
+        try {
+          const { origin } = window.location;
+          const abs = new URL(uploadUrl);
+          if (origin && abs.origin !== origin) {
+            return `${origin}/api/upload?token=${encodeURIComponent(token)}`;
+          }
+        } catch {}
+        return '';
+      })();
+      const tryFetchFallback = async (): Promise<boolean> => {
+        try {
+          // First try absolute URL
+          let res = await fetch(uploadUrl, { method: 'POST', body: formData, mode: 'cors' as RequestMode });
+          if (res && res.ok) {
+            const data: any = await res.json().catch(() => null);
+            const url = data?.url || data?.videoUrl;
+            if (url) { try { onProgress?.(100); } catch {} resolve(String(url)); return true; }
+          }
+          // Then try relative same-origin URL if different
+          if (relUrl) {
+            res = await fetch(relUrl, { method: 'POST', body: formData, mode: 'cors' as RequestMode });
+            if (res && res.ok) {
+              const data: any = await res.json().catch(() => null);
+              const url = data?.url || data?.videoUrl;
+              if (url) { try { onProgress?.(100); } catch {} resolve(String(url)); return true; }
+            }
+          }
+        } catch {}
+        return false;
+      };
       xhr.open('POST', uploadUrl, true);
       try { xhr.withCredentials = false; } catch {}
       try { xhr.responseType = 'json'; } catch {}
@@ -550,19 +581,31 @@ export async function uploadToBackendDirectly(
       };
 
       xhr.onerror = () => {
-        clearStall();
-        if (settled) return; settled = true;
-        reject(new Error('Network error during upload'));
+        (async () => {
+          clearStall();
+          if (settled) return;
+          const ok = await tryFetchFallback();
+          if (ok) { settled = true; return; }
+          settled = true; reject(new Error('Network error during upload'));
+        })();
       };
       xhr.ontimeout = () => {
-        clearStall();
-        if (settled) return; settled = true;
-        reject(new Error('Upload timed out'));
+        (async () => {
+          clearStall();
+          if (settled) return;
+          const ok = await tryFetchFallback();
+          if (ok) { settled = true; return; }
+          settled = true; reject(new Error('Upload timed out'));
+        })();
       };
       xhr.onabort = () => {
-        clearStall();
-        if (settled) return; settled = true;
-        reject(new Error('Upload aborted'));
+        (async () => {
+          clearStall();
+          if (settled) return;
+          const ok = await tryFetchFallback();
+          if (ok) { settled = true; return; }
+          settled = true; reject(new Error('Upload aborted'));
+        })();
       };
 
       xhr.onload = () => {
