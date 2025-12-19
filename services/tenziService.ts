@@ -1,6 +1,8 @@
 // Tenzi la Rohoni Service - Swahili Hymns Management
 // Handles hymn parsing, search, and display functionality
 
+import { persistedFetchText } from '../utils/persistedFetch';
+
 export interface HymnVerse {
   number: number;
   text: string;
@@ -54,12 +56,7 @@ class TenziService {
   private async loadHymnData(): Promise<void> {
     try {
       // Load the hymn text from the file
-      const response = await fetch('/hymns.txt');
-      if (!response.ok) {
-        throw new Error('Failed to load hymns file');
-      }
-      
-      this.rawHymnText = await response.text();
+      this.rawHymnText = await persistedFetchText('/hymns.txt', { ttlMs: 7 * 24 * 60 * 60 * 1000, cacheName: 'app-persist-cache-v1' });
       console.log('[Tenzi] Hymn data loaded successfully');
     } catch (error) {
       console.error('[Tenzi] Error loading hymn data:', error);

@@ -48,6 +48,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // App version for cache busting
 const APP_VERSION = '2.0.0'; // Increment this to clear all localStorage
+const SYNC_TTL_MS = 15 * 60 * 1000;
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const { user, users } = useAuth();
@@ -965,7 +966,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         }
       };
 
-      fetchInitialData();
+      try {
+        const lastTsRaw = localStorage.getItem('lastSyncTime');
+        const lastTs = lastTsRaw ? parseInt(lastTsRaw, 10) : 0;
+        const fresh = Number.isFinite(lastTs) && lastTs > 0 && (Date.now() - lastTs) < SYNC_TTL_MS;
+        if (fresh) {
+          console.log('[AppContext] ⏸️ Recent sync exists; skipping initial network fetch');
+        } else {
+          fetchInitialData();
+        }
+      } catch {
+        fetchInitialData();
+      }
     }, []); // Run once on mount
 
     // Refresh data when app comes to foreground (removed - causing issues with localStorage reload)

@@ -181,6 +181,7 @@ const CommunityFeedPage: React.FC = () => {
   const [showSyncHint, setShowSyncHint] = useState(false);
   const [toast, setToast] = useState<{ message: string; type?: 'success' | 'error' } | null>(null);
   const storyVideoRef = useRef<HTMLVideoElement | null>(null);
+  const feedRootRef = useRef<HTMLDivElement | null>(null);
   const [currentVideoDurationMs, setCurrentVideoDurationMs] = useState<number | null>(null);
   const editImageInputRef = useRef<HTMLInputElement | null>(null);
   const editVideoInputRef = useRef<HTMLInputElement | null>(null);
@@ -543,6 +544,23 @@ const CommunityFeedPage: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [activeStoryIndex, viewingStory, currentStoryAuthor, currentStoryAuthorId, stories, currentVideoDurationMs]);
 
+  // Pause post videos when scrolled out of view
+  useEffect(() => {
+    const rootEl = feedRootRef.current || null;
+    const videos = Array.from((feedRootRef.current || document).querySelectorAll('video[data-post-video]')) as HTMLVideoElement[];
+    if (videos.length === 0) return;
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        const v = entry.target as HTMLVideoElement;
+        if (!entry.isIntersecting || entry.intersectionRatio < 0.25) {
+          try { v.pause(); } catch {}
+        }
+      }
+    }, { root: rootEl, threshold: [0, 0.25, 0.5, 1] });
+    videos.forEach(v => io.observe(v));
+    return () => { try { io.disconnect(); } catch {} };
+  }, [posts.length]);
+
   useEffect(() => {
     const handleSyncUpdate = (syncData: any) => {
       if (!syncData || syncData.type !== 'communityStories') return;
@@ -715,6 +733,7 @@ const CommunityFeedPage: React.FC = () => {
 
   return (
     <div
+      ref={feedRootRef}
       style={{
         minHeight: '100vh',
         backgroundColor: isDark ? '#020617' : '#f0f2f5',
@@ -861,15 +880,20 @@ const CommunityFeedPage: React.FC = () => {
                   background:
                     !latestMyStory
                       ? 'linear-gradient(135deg, #1d4ed8 0%, #4f46e5 100%)'
-                      : ((latestMyStory.media && latestMyStory.media.type === 'image') || latestMyStory.type === 'photo')
-                        ? `url(${(latestMyStory.media as any)?.url || ''}) center/cover no-repeat`
-                        : 'transparent',
+                      : 'transparent',
                 }}
               >
+                {latestMyStory && ((latestMyStory.media && latestMyStory.media.type === 'image') || latestMyStory.type === 'photo') && (
+                  <img
+                    src={fixMediaUrl((((latestMyStory.media as any)?.url || '')))}
+                    alt=""
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                  />
+                )}
                 {latestMyStory && ((latestMyStory.media && latestMyStory.media.type === 'video') || latestMyStory.type === 'video') && (
                   <>
                     <video
-                      src={(latestMyStory.media as any)?.url || '' }
+                      src={fixMediaUrl((((latestMyStory.media as any)?.url || '')))}
                       muted
                       playsInline
                       preload="metadata"
@@ -1286,7 +1310,6 @@ const CommunityFeedPage: React.FC = () => {
         {posts.map((post) => (
           <div
             key={post.id}
-            onClick={() => setActiveComment(post.id)}
             style={{
               backgroundColor: isDark ? '#020617' : 'white',
               borderRadius: '8px',
@@ -1683,6 +1706,7 @@ const CommunityFeedPage: React.FC = () => {
                   />
                 ) : (
                   <video
+                    data-post-video
                     controls
                     src={fixMediaUrl(post.media.url)}
                     preload="metadata"
@@ -1743,7 +1767,7 @@ const CommunityFeedPage: React.FC = () => {
               }}
             >
               <button
-                onClick={() => handleLike(post.id)}
+                onClick={(e) => { e.stopPropagation(); handleLike(post.id); }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -1767,7 +1791,7 @@ const CommunityFeedPage: React.FC = () => {
                 <span>Like</span>
               </button>
               <button
-                onClick={() => setActiveComment(post.id)}
+                onClick={(e) => { e.stopPropagation(); setActiveComment(post.id); }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -1785,7 +1809,7 @@ const CommunityFeedPage: React.FC = () => {
                 <span>Comment</span>
               </button>
               <button
-                onClick={() => handleShare(post.id)}
+                onClick={(e) => { e.stopPropagation(); handleShare(post.id); }}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
