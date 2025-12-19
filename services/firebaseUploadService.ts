@@ -36,7 +36,6 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<
 };
 
 // --- Upload guard rails for mobile ---
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB cap for sermons on mobile networks
 const STALL_TIMEOUT = 30000; // 30s stall window before cancel
 
 // Ensure Firebase anonymous auth (counts as authenticated for Storage rules)
@@ -207,10 +206,6 @@ export async function uploadVideoToFirebase(
     }
     if (!(videoFile.type || '').startsWith('video/')) {
       return { success: false, error: `Invalid file type: ${videoFile.type || 'unknown'}` };
-    }
-    if (Number(videoFile.size || 0) > MAX_FILE_SIZE) {
-      const mb = (Number(videoFile.size) / (1024 * 1024)).toFixed(1);
-      return { success: false, error: `File too large: ${mb}MB (max 100MB)` };
     }
 
     // Ensure auth and extend retry time for mobile networks
@@ -401,10 +396,6 @@ export async function uploadSermonWithVideo(
     if (!(videoFile.type || '').startsWith('video/')) {
       return { success: false, error: `Invalid file type: ${videoFile.type || 'unknown'}` };
     }
-    if (Number(videoFile.size || 0) > MAX_FILE_SIZE) {
-      const mb = (Number(videoFile.size) / (1024 * 1024)).toFixed(1);
-      return { success: false, error: `File too large: ${mb}MB (max 100MB)` };
-    }
     console.log('[Firebase] Uploading sermon:', sermonData.title);
 
     // 1. Upload video to Firebase
@@ -498,7 +489,9 @@ export async function uploadToBackendDirectly(
   return await new Promise<string>((resolve, reject) => {
     try {
       const formData = new FormData();
+      // Some backends expect 'file', others 'video' – send both safely
       formData.append('file', file);
+      try { formData.append('video', file); } catch {}
 
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${apiUrl}/upload`, true);
