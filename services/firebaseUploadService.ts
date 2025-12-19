@@ -35,6 +35,27 @@ const withTimeout = async <T,>(promise: Promise<T>, timeoutMs: number): Promise<
   });
 };
 
+// --- Upload guard rails for mobile ---
+const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB cap for sermons on mobile networks
+const STALL_TIMEOUT = 30000; // 30s stall window before cancel
+
+// Ensure Firebase anonymous auth (counts as authenticated for Storage rules)
+const ensureAuth = async () => {
+  try {
+    if (auth.currentUser) {
+      try { console.log('[Firebase Auth] Authenticated as:', (auth.currentUser as any)?.uid || 'unknown'); } catch {}
+      return auth.currentUser;
+    }
+    console.log('[Firebase Auth] Signing in anonymously...');
+    const cred = await signInAnonymously(auth);
+    try { console.log('[Firebase Auth] Success:', (cred?.user as any)?.uid || 'unknown'); } catch {}
+    return cred.user;
+  } catch (e: any) {
+    console.error('[Firebase Auth] Failed:', e?.code, e?.message);
+    throw new Error(`Auth failed: ${e?.message || 'unknown error'}`);
+  }
+};
+
 interface UploadProgress {
   progress: number;
   bytesTransferred: number;
@@ -180,18 +201,33 @@ export async function uploadVideoToFirebase(
   onProgress?: (progress: UploadProgress) => void
 ): Promise<UploadResult> {
   try {
-    try {
-      if (!auth.currentUser) {
-        await withTimeout(signInAnonymously(auth), 8000);
-      }
-    } catch {}
+    // Basic validations for clearer user errors
+    if (!videoFile) {
+      return { success: false, error: 'No file selected' };
+    }
+    if (!(videoFile.type || '').startsWith('video/')) {
+      return { success: false, error: `Invalid file type: ${videoFile.type || 'unknown'}` };
+    }
+    if (Number(videoFile.size || 0) > MAX_FILE_SIZE) {
+      const mb = (Number(videoFile.size) / (1024 * 1024)).toFixed(1);
+      return { success: false, error: `File too large: ${mb}MB (max 100MB)` };
+    }
+
+    // Ensure auth and extend retry time for mobile networks
+    await ensureAuth();
+    // Extend retry time for flaky mobile networks if supported by this SDK
+    try { (storage as any).maxUploadRetryTime = 10 * 60 * 1000; } catch {}
     console.log('[Firebase] Starting upload:', videoFile.name);
     console.log('[Firebase] File size:', (videoFile.size / 1024 / 1024).toFixed(2), 'MB');
 
     // Create unique filename
     const timestamp = Date.now();
     const sanitizedTitle = sermonTitle.replace(/[^a-zA-Z0-9]/g, '_');
-    const fileName = `sermons/${timestamp}_${sanitizedTitle}.mp4`;
+    const namePart = (videoFile.name || 'video').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const nameExtMatch = namePart.match(/\.([a-zA-Z0-9]+)$/);
+    const mimeExt = (videoFile.type && videoFile.type.split('/')[1]) || 'mp4';
+    const ext = (nameExtMatch && nameExtMatch[1]) ? nameExtMatch[1] : mimeExt;
+    const fileName = `sermons/${timestamp}_${sanitizedTitle}.${ext}`;
     
     console.log('[Firebase] Upload path:', fileName);
 
@@ -218,6 +254,7 @@ export async function uploadVideoToFirebase(
       let settled = false;
       let lastTransferred = 0;
       let stallTimer: number | null = null;
+      let lastProgressTs = Date.now();
       const clearStall = () => { if (stallTimer) { try { window.clearTimeout(stallTimer); } catch {} stallTimer = null; } };
       const armStall = (ms: number) => {
         clearStall();
@@ -229,8 +266,8 @@ export async function uploadVideoToFirebase(
           reject({ success: false, error: 'Upload stalled' } as any);
         }, ms) as any;
       };
-      // If we don't see any bytes for 20s, assume stall; after first progress, allow 60s gaps
-      armStall(20000);
+      // If we don't see any bytes, assume stall after 30s; after first progress, allow 60s gaps
+      armStall(STALL_TIMEOUT);
       try { if (onProgress) onProgress({ progress: 0, bytesTransferred: 0, totalBytes: videoFile.size || 0 }); } catch {}
       uploadTask.on(
         'state_changed',
@@ -249,6 +286,7 @@ export async function uploadVideoToFirebase(
           }
           if (snapshot.bytesTransferred > lastTransferred) {
             lastTransferred = snapshot.bytesTransferred;
+            lastProgressTs = Date.now();
             armStall(60000);
           }
         },
@@ -356,6 +394,17 @@ export async function uploadSermonWithVideo(
         await withTimeout(signInAnonymously(auth), 8000);
       }
     } catch {}
+    // Basic validations
+    if (!videoFile) {
+      return { success: false, error: 'No file selected' };
+    }
+    if (!(videoFile.type || '').startsWith('video/')) {
+      return { success: false, error: `Invalid file type: ${videoFile.type || 'unknown'}` };
+    }
+    if (Number(videoFile.size || 0) > MAX_FILE_SIZE) {
+      const mb = (Number(videoFile.size) / (1024 * 1024)).toFixed(1);
+      return { success: false, error: `File too large: ${mb}MB (max 100MB)` };
+    }
     console.log('[Firebase] Uploading sermon:', sermonData.title);
 
     // 1. Upload video to Firebase
@@ -433,4 +482,97 @@ export async function uploadSermonWithVideo(
       error: error.message || 'Unknown error'
     };
   }
+}
+
+/**
+ * Direct backend upload with XHR progress (fallback path)
+ */
+export async function uploadToBackendDirectly(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<string> {
+  const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+  const token = localStorage.getItem('authToken');
+  if (!token) throw new Error('No authentication token found. Please log in again.');
+
+  return await new Promise<string>((resolve, reject) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${apiUrl}/upload`, true);
+      try { xhr.setRequestHeader('Authorization', `Bearer ${token}`); } catch {}
+      try { xhr.responseType = 'json'; } catch {}
+      xhr.timeout = 300000; // 5 minutes
+
+      let settled = false;
+      let lastLoaded = 0;
+      let stallTimer: any = null;
+      const clearStall = () => { if (stallTimer) { try { clearTimeout(stallTimer); } catch {} stallTimer = null; } };
+      const armStall = (ms: number) => {
+        clearStall();
+        stallTimer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          try { xhr.abort(); } catch {}
+          reject(new Error('Upload stalled'));
+        }, ms);
+      };
+      // Arm stall: 60s initially; after first progress extend to 180s
+      armStall(60000);
+      try { onProgress?.(0); } catch {}
+
+      xhr.upload.onprogress = (evt: ProgressEvent) => {
+        try {
+          const total = (evt.lengthComputable ? evt.total : (file.size || 0)) || 0;
+          const loaded = evt.loaded || 0;
+          const pct = total > 0 ? (loaded / total) * 100 : 0;
+          onProgress?.(Math.max(0, Math.min(100, pct)));
+          if (loaded > lastLoaded) { lastLoaded = loaded; armStall(180000); }
+        } catch {}
+      };
+
+      xhr.onerror = () => {
+        clearStall();
+        if (settled) return; settled = true;
+        reject(new Error('Network error during upload'));
+      };
+      xhr.ontimeout = () => {
+        clearStall();
+        if (settled) return; settled = true;
+        reject(new Error('Upload timed out'));
+      };
+      xhr.onabort = () => {
+        clearStall();
+        if (settled) return; settled = true;
+        reject(new Error('Upload aborted'));
+      };
+
+      xhr.onload = () => {
+        clearStall();
+        if (settled) return; settled = true;
+        const status = Number(xhr.status) || 0;
+        const ok = status >= 200 && status < 300;
+        let data: any = null;
+        try { data = (xhr as any).response || JSON.parse(xhr.responseText || '{}'); } catch {}
+        if (!ok) {
+          const text = (xhr.responseText || '');
+          reject(new Error(`Upload failed (${status}): ${text.substring(0,120)}...`));
+          return;
+        }
+        const url = data?.url || data?.videoUrl;
+        if (!url) {
+          reject(new Error('Invalid server response'));
+          return;
+        }
+        try { onProgress?.(100); } catch {}
+        resolve(String(url));
+      };
+
+      xhr.send(formData);
+    } catch (e: any) {
+      reject(e);
+    }
+  });
 }

@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
 import { CapacitorHttp } from '@capacitor/core';
 import { uploadService } from '../services/uploadService';
-import { uploadSermonWithVideo } from '../services/firebaseUploadService';
+import { uploadSermonWithVideo, uploadToBackendDirectly } from '../services/firebaseUploadService';
 import { BackgroundFetchSettings } from '../components/BackgroundFetchSettings';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
@@ -482,13 +482,13 @@ const AdminPage: React.FC = () => {
                         const code = (error as any)?.code || (error as any)?.name || 'unknown';
                         const message = (error as any)?.message || 'Unknown error';
                         
-                        // Attempt server fallback upload
+                        // Attempt server fallback upload (XHR with progress)
                         try {
                             console.log('[Admin] ⚠️ Falling back to server upload...');
                             setUploadProgress(1);
-                            const uploadedUrl = await uploadService.uploadFile(data.videoUrl as File, (p) => {
+                            const uploadedUrl = await uploadToBackendDirectly(data.videoUrl as File, (p) => {
                                 const clamped = Math.max(0, Math.min(100, Number(p) || 0));
-                                const mapped = 1 + (clamped * 69) / 100;
+                                const mapped = 1 + (clamped * 69) / 100; // map 0..100 -> 1..70
                                 setUploadProgress(Math.min(70, Math.max(1, mapped)));
                             });
                             setUploadProgress(70);
@@ -517,13 +517,14 @@ const AdminPage: React.FC = () => {
                             alert('✅ Sermon uploaded via server and saved to database!');
                             handleCloseModal();
                             return;
-                        } catch (fallbackErr) {
+                        } catch (fallbackErr: any) {
                             console.error('[Admin] ❌ Fallback server upload failed:', fallbackErr);
                             setUploadingVideo(false);
                             setUploadProgress(0);
+                            const fallbackMsg = (fallbackErr?.message || 'Unknown error');
                             let msg = '🔥 Firebase Upload Failed\n\n';
                             msg += `Code: ${code}\nMessage: ${message}\n\n`;
-                            msg += 'Fallback upload also failed. Please verify API and Firebase configuration.\n\n';
+                            msg += `Fallback upload also failed: ${fallbackMsg}\n\n`;
                             msg += `File size: ${fileSizeMB.toFixed(2)}MB`;
                             alert(msg);
                             return;
