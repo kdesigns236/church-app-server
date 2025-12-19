@@ -204,8 +204,13 @@ export async function uploadVideoToFirebase(
     if (!videoFile) {
       return { success: false, error: 'No file selected' };
     }
-    if (!(videoFile.type || '').startsWith('video/')) {
-      return { success: false, error: `Invalid file type: ${videoFile.type || 'unknown'}` };
+    const type = String(videoFile.type || '').toLowerCase();
+    const namePart = (videoFile.name || '').toLowerCase();
+    const ext = (namePart.match(/\.([a-z0-9]+)$/)?.[1]) || '';
+    const videoExts = new Set(['mp4','m4v','mov','3gp','3gpp','webm','mkv','avi']);
+    const isVideo = type.startsWith('video/') || videoExts.has(ext);
+    if (!isVideo) {
+      return { success: false, error: `Invalid file type: ${videoFile.type || ext || 'unknown'}` };
     }
 
     // Ensure auth and extend retry time for mobile networks
@@ -218,11 +223,11 @@ export async function uploadVideoToFirebase(
     // Create unique filename
     const timestamp = Date.now();
     const sanitizedTitle = sermonTitle.replace(/[^a-zA-Z0-9]/g, '_');
-    const namePart = (videoFile.name || 'video').replace(/[^a-zA-Z0-9._-]/g, '_');
-    const nameExtMatch = namePart.match(/\.([a-zA-Z0-9]+)$/);
-    const mimeExt = (videoFile.type && videoFile.type.split('/')[1]) || 'mp4';
-    const ext = (nameExtMatch && nameExtMatch[1]) ? nameExtMatch[1] : mimeExt;
-    const fileName = `sermons/${timestamp}_${sanitizedTitle}.${ext}`;
+    const safeNamePart = (videoFile.name || 'video').replace(/[^a-zA-Z0-9._-]/g, '_');
+    const nameExtMatch = safeNamePart.match(/\.([a-zA-Z0-9]+)$/);
+    const mimeExt = (videoFile.type && videoFile.type.split('/')[1]) || ext || 'mp4';
+    const finalExt = (nameExtMatch && nameExtMatch[1]) ? nameExtMatch[1] : mimeExt;
+    const fileName = `sermons/${timestamp}_${sanitizedTitle}.${finalExt}`;
     
     console.log('[Firebase] Upload path:', fileName);
 
@@ -249,8 +254,11 @@ export async function uploadVideoToFirebase(
       let settled = false;
       let lastTransferred = 0;
       let stallTimer: number | null = null;
+      let startTimer: number | null = null;
+      let started = false;
       let lastProgressTs = Date.now();
       const clearStall = () => { if (stallTimer) { try { window.clearTimeout(stallTimer); } catch {} stallTimer = null; } };
+      const clearStart = () => { if (startTimer) { try { window.clearTimeout(startTimer); } catch {} startTimer = null; } };
       const armStall = (ms: number) => {
         clearStall();
         stallTimer = window.setTimeout(() => {
@@ -263,6 +271,15 @@ export async function uploadVideoToFirebase(
       };
       // If we don't see any bytes, assume stall after 30s; after first progress, allow 60s gaps
       armStall(STALL_TIMEOUT);
+      // Quick-start watchdog: if upload doesn't begin within 8s, cancel and fallback fast
+      try { startTimer = window.setTimeout(() => {
+        if (!started && !settled) {
+          try { uploadTask.cancel(); } catch {}
+          settled = true;
+          try { keepAwakeService.release('sermon-upload'); } catch {}
+          reject({ success: false, error: 'Firebase upload did not start (timeout)' } as any);
+        }
+      }, 8000) as any; } catch {}
       try { if (onProgress) onProgress({ progress: 0, bytesTransferred: 0, totalBytes: videoFile.size || 0 }); } catch {}
       uploadTask.on(
         'state_changed',
@@ -282,11 +299,14 @@ export async function uploadVideoToFirebase(
           if (snapshot.bytesTransferred > lastTransferred) {
             lastTransferred = snapshot.bytesTransferred;
             lastProgressTs = Date.now();
+            started = started || snapshot.bytesTransferred > 0;
+            if (started) { clearStart(); }
             armStall(60000);
           }
         },
         // Error callback
         (error) => {
+          clearStart();
           console.error('[Firebase] Upload error:', error);
           console.error('[Firebase] Error code:', error.code);
           console.error('[Firebase] Error message:', error.message);
@@ -321,6 +341,7 @@ export async function uploadVideoToFirebase(
         async () => {
           try {
             clearStall();
+            clearStart();
             // Get signed download URL with custom metadata
             const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
 

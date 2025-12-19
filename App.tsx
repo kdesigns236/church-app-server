@@ -431,6 +431,21 @@ const App: React.FC = () => {
                 window.history.replaceState(null, '', href.replace(hash, newHash));
                 return;
             }
+
+            // Prefer direct upload toggle via ?preferDirect=1 or 0
+            const pd = params.get('preferDirect');
+            if (pd !== null) {
+                const enable = pd === '1' || pd === 'true';
+                try {
+                    localStorage.setItem('preferDirectUpload', enable ? '1' : '0');
+                    console.log('[App] PreferDirectUpload set via URL param:', enable);
+                } catch {}
+                params.delete('preferDirect');
+                const baseHash = hash.split('?')[0];
+                const newHash = baseHash + (params.toString() ? '?' + params.toString() : '');
+                window.history.replaceState(null, '', href.replace(hash, newHash));
+                return;
+            }
         } catch {}
     }, []);
 

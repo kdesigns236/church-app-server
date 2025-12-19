@@ -447,7 +447,55 @@ const AdminPage: React.FC = () => {
                     console.log(`[Admin] Video size: ${fileSizeMB.toFixed(2)} MB`);
                     
                     try {
-                        // Upload to Firebase Storage
+                        // Prefer direct backend upload immediately on some environments
+                        const preferDirect = (() => {
+                            try {
+                                if (localStorage.getItem('preferDirectUpload') === '1') return true;
+                                const ua = (navigator.userAgent || '').toLowerCase();
+                                const conn: any = (navigator as any).connection?.effectiveType || '';
+                                return ua.includes('android') || String(conn).includes('2g');
+                            } catch {
+                                return false;
+                            }
+                        })();
+
+                        if (preferDirect) {
+                            console.log('[Admin] 🟡 PreferDirect enabled, using server upload first...');
+                            setUploadProgress(1);
+                            const uploadedUrl = await uploadToBackendDirectly(data.videoUrl as File, (p) => {
+                                const clamped = Math.max(0, Math.min(100, Number(p) || 0));
+                                const mapped = 1 + (clamped * 89) / 100; // map 0..100 -> 1..90
+                                setUploadProgress(Math.min(90, Math.max(1, mapped)));
+                            });
+                            setUploadProgress(92);
+                            // Save sermon to API with uploadedUrl
+                            const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+                            const token = localStorage.getItem('authToken');
+                            if (!token) throw new Error('No authentication token found for server save');
+                            const resp = await fetch(`${apiUrl}/sermons`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                                body: JSON.stringify({
+                                    title: data.title,
+                                    pastor: data.pastor,
+                                    scripture: data.scripture,
+                                    date: data.date || new Date().toISOString(),
+                                    videoUrl: uploadedUrl,
+                                    uploadedAt: new Date().toISOString()
+                                })
+                            });
+                            if (!resp.ok) {
+                                const t = await resp.text();
+                                throw new Error(`Server save failed (${resp.status}): ${t.substring(0,120)}...`);
+                            }
+                            setUploadProgress(100);
+                            setUploadingVideo(false);
+                            alert('✅ Sermon uploaded via server and saved to database!');
+                            handleCloseModal();
+                            return;
+                        }
+
+                        // Upload to Firebase Storage (default)
                         const result = await uploadSermonWithVideo(
                             {
                                 title: data.title,
