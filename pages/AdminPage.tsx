@@ -5,7 +5,7 @@ import { useAppContext } from '../context/AppContext';
 import { useAuth } from '../hooks/useAuth';
 import { CapacitorHttp } from '@capacitor/core';
 import { uploadService } from '../services/uploadService';
-import { uploadSermonWithVideo, uploadToBackendDirectly } from '../services/firebaseUploadService';
+import { uploadSermonWithVideo, uploadToBackendDirectly, uploadToBackendChunked } from '../services/firebaseUploadService';
 import { BackgroundFetchSettings } from '../components/BackgroundFetchSettings';
 
 const StatCard: React.FC<{ title: string; value: string | number; icon: React.ElementType }> = ({ title, value, icon: Icon }) => (
@@ -459,11 +459,20 @@ const AdminPage: React.FC = () => {
                         if (preferDirect) {
                             console.log('[Admin] 🟡 PreferDirect enabled, using server upload first...');
                             setUploadProgress(1);
-                            const uploadedUrl = await uploadToBackendDirectly(data.videoUrl as File, (p) => {
-                                const clamped = Math.max(0, Math.min(100, Number(p) || 0));
-                                const mapped = 1 + (clamped * 89) / 100; // map 0..100 -> 1..90
-                                setUploadProgress(Math.min(90, Math.max(1, mapped)));
-                            });
+                            let uploadedUrl: string;
+                            try {
+                                uploadedUrl = await uploadToBackendChunked(data.videoUrl as File, (p) => {
+                                    const clamped = Math.max(0, Math.min(100, Number(p) || 0));
+                                    const mapped = 1 + (clamped * 89) / 100; // map 0..100 -> 1..90
+                                    setUploadProgress(Math.min(90, Math.max(1, mapped)));
+                                });
+                            } catch (_e) {
+                                uploadedUrl = await uploadToBackendDirectly(data.videoUrl as File, (p) => {
+                                    const clamped = Math.max(0, Math.min(100, Number(p) || 0));
+                                    const mapped = 1 + (clamped * 89) / 100; // map 0..100 -> 1..90
+                                    setUploadProgress(Math.min(90, Math.max(1, mapped)));
+                                });
+                            }
                             setUploadProgress(92);
                             // Save sermon to API with uploadedUrl
                             const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
@@ -527,15 +536,24 @@ const AdminPage: React.FC = () => {
                         const code = (error as any)?.code || (error as any)?.name || 'unknown';
                         const message = (error as any)?.message || 'Unknown error';
                         
-                        // Attempt server fallback upload (XHR with progress)
+                        // Attempt server fallback upload (prefer chunked, then direct)
                         try {
                             console.log('[Admin] ⚠️ Falling back to server upload...');
                             setUploadProgress(1);
-                            const uploadedUrl = await uploadToBackendDirectly(data.videoUrl as File, (p) => {
-                                const clamped = Math.max(0, Math.min(100, Number(p) || 0));
-                                const mapped = 1 + (clamped * 69) / 100; // map 0..100 -> 1..70
-                                setUploadProgress(Math.min(70, Math.max(1, mapped)));
-                            });
+                            let uploadedUrl: string;
+                            try {
+                                uploadedUrl = await uploadToBackendChunked(data.videoUrl as File, (p) => {
+                                    const clamped = Math.max(0, Math.min(100, Number(p) || 0));
+                                    const mapped = 1 + (clamped * 69) / 100; // map 0..100 -> 1..70
+                                    setUploadProgress(Math.min(70, Math.max(1, mapped)));
+                                });
+                            } catch (_e2) {
+                                uploadedUrl = await uploadToBackendDirectly(data.videoUrl as File, (p) => {
+                                    const clamped = Math.max(0, Math.min(100, Number(p) || 0));
+                                    const mapped = 1 + (clamped * 69) / 100; // map 0..100 -> 1..70
+                                    setUploadProgress(Math.min(70, Math.max(1, mapped)));
+                                });
+                            }
                             setUploadProgress(70);
                             // Save sermon to API with uploadedUrl
                             const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';

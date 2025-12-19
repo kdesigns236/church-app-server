@@ -63,6 +63,7 @@ function getFirebaseAdmin() {
         projectId,
         storageBucket,
       });
+
     }
     return firebaseAdmin;
   } catch {
@@ -271,6 +272,10 @@ const UPLOADS_DIR = path.join(__dirname, 'uploads');
 try { if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true }); } catch {}
 app.use('/uploads', express.static(UPLOADS_DIR));
 
+// Chunk upload temp directory
+const CHUNKS_DIR = path.join(__dirname, 'upload_chunks');
+try { if (!fs.existsSync(CHUNKS_DIR)) fs.mkdirSync(CHUNKS_DIR, { recursive: true }); } catch {}
+
 const uploadStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, UPLOADS_DIR);
@@ -284,6 +289,12 @@ const uploadStorage = multer.diskStorage({
 const upload = multer({
   storage: uploadStorage,
   limits: { fileSize: 500 * 1024 * 1024 },
+});
+
+// Memory-based multer for small chunk pieces to avoid extra disk IO
+const chunkUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 }, // 8MB per chunk
 });
 
 const serverPublicDir = path.join(__dirname, 'public');
@@ -386,6 +397,21 @@ app.post('/api/upload', verifyToken, upload.single('file'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
     }
+
+    const host = req.get('host');
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
+    const fileUrl = `${proto}://${host}/uploads/${req.file.filename}`;
+
+    // Respond immediately for speed; do any cloud upload in the background
+    res.json({
+      success: true,
+      filename: req.file.filename,
+      url: fileUrl,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    });
+
+    // Background Firebase upload (non-blocking). If it fails, local URL still works.
     (async () => {
       try {
         const admin = getFirebaseAdmin();
@@ -398,40 +424,17 @@ app.post('/api/upload', verifyToken, upload.single('file'), (req, res) => {
             metadata: {
               contentType: req.file.mimetype || 'application/octet-stream',
               cacheControl: 'public, max-age=31536000',
-              metadata: {
-                firebaseStorageDownloadTokens: token,
-              },
+              metadata: { firebaseStorageDownloadTokens: token },
             },
           });
-
           try { fs.unlink(req.file.path, () => {}); } catch {}
-
-          const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
-          return res.json({
-            success: true,
-            filename: req.file.filename,
-            url,
-            size: req.file.size,
-            mimetype: req.file.mimetype,
-            firebaseBucket: bucket.name,
-            firebaseStoragePath: objectPath,
-          });
+          const fbUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+          console.log('[Upload] ✅ Background Firebase stored:', fbUrl);
         }
-      } catch {}
-
-      const host = req.get('host');
-      const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
-      const fileUrl = `${proto}://${host}/uploads/${req.file.filename}`;
-      return res.json({
-        success: true,
-        filename: req.file.filename,
-        url: fileUrl,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-      });
-    })().catch(() => {
-      return res.status(500).json({ success: false, error: 'Upload failed' });
-    });
+      } catch (e) {
+        console.warn('[Upload] ⚠️ Background Firebase upload failed:', e?.message || e);
+      }
+    })();
   } catch (e) {
     return res.status(500).json({ success: false, error: 'Upload failed' });
   }
@@ -450,6 +453,90 @@ app.delete('/api/upload/:filename', verifyAdmin, (req, res) => {
     return res.status(404).json({ success: false, error: 'File not found' });
   } catch (_e) {
     return res.status(500).json({ success: false, error: 'Delete failed' });
+  }
+});
+
+app.post('/api/upload/init', verifyToken, (req, res) => {
+  try {
+    const name = (req.query.name || req.body?.name || 'file').toString();
+    const size = parseInt((req.query.size || req.body?.size || '0').toString(), 10) || 0;
+    const id = `${Date.now()}-${Math.round(Math.random()*1e9)}`;
+    const meta = { id, name, size, createdAt: Date.now(), nextIndex: 0 };
+    fs.writeFileSync(path.join(CHUNKS_DIR, `${id}.json`), JSON.stringify(meta));
+    res.json({ success: true, uploadId: id });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Init failed' });
+  }
+});
+
+app.post('/api/upload/chunk', verifyToken, chunkUpload.single('file'), async (req, res) => {
+  try {
+    const id = (req.query.uploadId || '').toString();
+    const index = parseInt((req.query.index || '0').toString(), 10) || 0;
+    const total = parseInt((req.query.total || '0').toString(), 10) || 0;
+    if (!id || !req.file) return res.status(400).json({ success: false, error: 'Missing uploadId or chunk' });
+    const metaPath = path.join(CHUNKS_DIR, `${id}.json`);
+    if (!fs.existsSync(metaPath)) return res.status(400).json({ success: false, error: 'Invalid uploadId' });
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    if (index !== meta.nextIndex) return res.status(409).json({ success: false, error: 'Out of order chunk' });
+    const partPath = path.join(CHUNKS_DIR, `${id}.part`);
+    await fs.promises.appendFile(partPath, req.file.buffer);
+    meta.nextIndex = index + 1;
+    fs.writeFileSync(metaPath, JSON.stringify(meta));
+    res.json({ success: true, received: req.file.size, index, total });
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Chunk failed' });
+  }
+});
+
+app.post('/api/upload/finish', verifyToken, async (req, res) => {
+  try {
+    const id = (req.query.uploadId || req.body?.uploadId || '').toString();
+    if (!id) return res.status(400).json({ success: false, error: 'Missing uploadId' });
+    const metaPath = path.join(CHUNKS_DIR, `${id}.json`);
+    const partPath = path.join(CHUNKS_DIR, `${id}.part`);
+    if (!fs.existsSync(metaPath) || !fs.existsSync(partPath)) return res.status(400).json({ success: false, error: 'Invalid uploadId' });
+    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const baseName = path.basename(meta.name || 'file');
+    const finalName = `${uniqueSuffix}${path.extname(baseName)}`;
+    const finalPath = path.join(UPLOADS_DIR, finalName);
+    await fs.promises.rename(partPath, finalPath);
+
+    const host = req.get('host');
+    const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
+    const url = `${proto}://${host}/uploads/${finalName}`;
+
+    // Cleanup meta
+    try { fs.unlinkSync(metaPath); } catch {}
+
+    res.json({ success: true, url, filename: finalName, size: fs.statSync(finalPath).size });
+
+    // Background copy to Firebase (non-blocking)
+    (async () => {
+      try {
+        const admin = getFirebaseAdmin();
+        if (admin && typeof admin.storage === 'function') {
+          const bucket = admin.storage().bucket();
+          const objectPath = `uploads/${finalName}`;
+          const token = generateFirebaseStorageDownloadToken();
+          await bucket.upload(finalPath, {
+            destination: objectPath,
+            metadata: {
+              contentType: 'application/octet-stream',
+              cacheControl: 'public, max-age=31536000',
+              metadata: { firebaseStorageDownloadTokens: token },
+            },
+          });
+          const fbUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+          console.log('[Upload] ✅ Background Firebase stored (chunked):', fbUrl);
+        }
+      } catch (e) {
+        console.warn('[Upload] ⚠️ Background Firebase upload failed (chunked):', e?.message || e);
+      }
+    })();
+  } catch (e) {
+    res.status(500).json({ success: false, error: 'Finalize failed' });
   }
 });
 

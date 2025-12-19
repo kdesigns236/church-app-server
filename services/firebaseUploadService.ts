@@ -635,3 +635,86 @@ export async function uploadToBackendDirectly(
     }
   });
 }
+
+/**
+ * Chunked upload to backend to improve reliability on mobile networks
+ */
+export async function uploadToBackendChunked(
+  file: File,
+  onProgress?: (progress: number) => void
+): Promise<string> {
+  const apiUrl = (import.meta as any).env?.VITE_API_URL || 'https://church-app-server.onrender.com/api';
+  const token = localStorage.getItem('authToken');
+  if (!token) throw new Error('No authentication token found. Please log in again.');
+
+  const chunkSize = 8 * 1024 * 1024; // 8MB (matches server limit)
+  const total = Math.max(1, Math.ceil((file.size || 0) / chunkSize));
+
+  const initUrl = `${apiUrl}/upload/init?token=${encodeURIComponent(token)}&name=${encodeURIComponent(file.name || 'video.mp4')}&size=${file.size || 0}`;
+  const initResp = await fetch(initUrl, { method: 'POST' });
+  if (!initResp.ok) throw new Error(`Init failed (${initResp.status})`);
+  const initData = await initResp.json();
+  const uploadId = initData?.uploadId;
+  if (!uploadId) throw new Error('No uploadId returned');
+
+  let uploadedBytes = 0;
+
+  for (let index = 0; index < total; index++) {
+    const start = index * chunkSize;
+    const end = Math.min(start + chunkSize, file.size || 0);
+    const blob = file.slice(start, end);
+
+    await new Promise<void>((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('file', new Blob([blob], { type: file.type || 'application/octet-stream' }), `${file.name}.part${index}`);
+
+      const xhr = new XMLHttpRequest();
+      const url = `${apiUrl}/upload/chunk?uploadId=${encodeURIComponent(uploadId)}&index=${index}&total=${total}&token=${encodeURIComponent(token)}`;
+      xhr.open('POST', url, true);
+      try { xhr.responseType = 'json'; } catch {}
+      xhr.timeout = 300000; // 5 minutes per chunk
+
+      let stallTimer: any = null;
+      const clearStall = () => { if (stallTimer) { try { clearTimeout(stallTimer); } catch {} stallTimer = null; } };
+      const armStall = (ms: number) => { clearStall(); stallTimer = setTimeout(() => { try { xhr.abort(); } catch {}; reject(new Error('Chunk stalled')); }, ms); };
+      armStall(60000);
+
+      xhr.upload.onprogress = (evt: ProgressEvent) => {
+        try {
+          const loaded = (evt.loaded || 0);
+          const totalThis = Math.max(1, (end - start));
+          const overallLoaded = uploadedBytes + Math.min(loaded, totalThis);
+          const pct = Math.max(0, Math.min(100, (overallLoaded / (file.size || 1)) * 100));
+          onProgress?.(pct);
+          if (loaded > 0) armStall(180000);
+        } catch {}
+      };
+
+      xhr.onerror = () => { clearStall(); reject(new Error('Chunk network error')); };
+      xhr.ontimeout = () => { clearStall(); reject(new Error('Chunk timeout')); };
+      xhr.onabort = () => { clearStall(); reject(new Error('Chunk aborted')); };
+      xhr.onload = () => {
+        clearStall();
+        const status = Number(xhr.status) || 0;
+        if (status < 200 || status >= 300) {
+          return reject(new Error(`Chunk failed (${status})`));
+        }
+        uploadedBytes += (end - start);
+        const pct = Math.max(0, Math.min(100, (uploadedBytes / (file.size || 1)) * 100));
+        try { onProgress?.(pct); } catch {}
+        resolve();
+      };
+
+      xhr.send(formData);
+    });
+  }
+
+  const finishUrl = `${apiUrl}/upload/finish?uploadId=${encodeURIComponent(uploadId)}&token=${encodeURIComponent(token)}`;
+  const finResp = await fetch(finishUrl, { method: 'POST' });
+  if (!finResp.ok) throw new Error(`Finalize failed (${finResp.status})`);
+  const data = await finResp.json();
+  const url = data?.url || data?.videoUrl;
+  if (!url) throw new Error('No URL returned');
+  try { onProgress?.(100); } catch {}
+  return String(url);
+}
