@@ -967,16 +967,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       };
 
       try {
-        const lastTsRaw = localStorage.getItem('lastSyncTime');
-        const lastTs = lastTsRaw ? parseInt(lastTsRaw, 10) : 0;
+        const lastTsRaw = localStorage.getItem('lastSyncTime') || '0';
+        const lastTs = parseInt(lastTsRaw, 10);
         const fresh = Number.isFinite(lastTs) && lastTs > 0 && (Date.now() - lastTs) < SYNC_TTL_MS;
+        console.log('[Sync] LastSync:', lastTs ? new Date(lastTs).toISOString() : 'none', 'Fresh:', fresh);
         if (fresh) {
           console.log('[AppContext] ⏸️ Recent sync exists; skipping initial network fetch');
         } else {
           fetchInitialData();
         }
-      } catch {
+      } catch (err) {
+        console.error('[Sync] TTL check failed:', err);
         fetchInitialData();
+        try { localStorage.setItem('lastSyncTime', Date.now().toString()); } catch {}
       }
     }, []); // Run once on mount
 

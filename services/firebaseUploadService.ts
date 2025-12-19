@@ -350,6 +350,12 @@ export async function uploadSermonWithVideo(
   onProgress?: (progress: number) => void
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    // Ensure Firebase auth for mobile/webview environments
+    try {
+      if (!auth.currentUser) {
+        await withTimeout(signInAnonymously(auth), 8000);
+      }
+    } catch {}
     console.log('[Firebase] Uploading sermon:', sermonData.title);
 
     // 1. Upload video to Firebase
@@ -358,7 +364,9 @@ export async function uploadSermonWithVideo(
       sermonData.title,
       (progressData) => {
         if (onProgress) {
-          onProgress(progressData.progress);
+          // Map to 0..90 to leave room for DB save
+          const pct = Math.max(0, Math.min(90, progressData.progress));
+          onProgress(pct);
         }
       }
     );
@@ -368,6 +376,7 @@ export async function uploadSermonWithVideo(
     }
 
     console.log('[Firebase] Video uploaded, saving to database...');
+    if (onProgress) onProgress(95);
 
     // 2. Save sermon data with Firebase video URL to database
     // Use the shared API base URL; fall back to the Render API if not set so
@@ -413,6 +422,7 @@ export async function uploadSermonWithVideo(
 
     const result = await response.json();
     console.log('[Firebase] ✅ Sermon saved to database:', result);
+    if (onProgress) onProgress(100);
 
     return { success: true };
 

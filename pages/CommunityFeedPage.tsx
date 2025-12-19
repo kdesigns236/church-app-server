@@ -320,7 +320,10 @@ const CommunityFeedPage: React.FC = () => {
   const fixMediaUrl = (u?: string): string => {
     try {
       if (!u || typeof u !== 'string') return '';
-      let url = u.trim();
+      const t = u.trim();
+      if (!t || t === 'UPLOADING') return '';
+      if (t.startsWith('blob:') || t.startsWith('data:')) return '';
+      let url = t;
       if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http:')) {
         url = url.replace(/^http:/i, 'https:');
       }
@@ -544,7 +547,7 @@ const CommunityFeedPage: React.FC = () => {
     return () => window.clearTimeout(timer);
   }, [activeStoryIndex, viewingStory, currentStoryAuthor, currentStoryAuthorId, stories, currentVideoDurationMs]);
 
-  // Pause post videos when scrolled out of view
+  // Pause post videos when scrolled out of view (with scroll fallback)
   useEffect(() => {
     const rootEl = feedRootRef.current || null;
     const videos = Array.from((feedRootRef.current || document).querySelectorAll('video[data-post-video]')) as HTMLVideoElement[];
@@ -556,9 +559,22 @@ const CommunityFeedPage: React.FC = () => {
           try { v.pause(); } catch {}
         }
       }
-    }, { root: rootEl, threshold: [0, 0.25, 0.5, 1] });
+    }, { root: rootEl, threshold: [0, 0.25, 0.5, 0.75, 1] });
     videos.forEach(v => io.observe(v));
-    return () => { try { io.disconnect(); } catch {} };
+    const scrollHandler = () => {
+      videos.forEach(video => {
+        try {
+          const rect = video.getBoundingClientRect();
+          const visible = (rect.bottom > 0 && rect.top < window.innerHeight);
+          const visiblePercent = visible ? (Math.min(rect.bottom, window.innerHeight) - Math.max(rect.top, 0)) / Math.max(1, rect.height) : 0;
+          if (visiblePercent < 0.25) {
+            video.pause();
+          }
+        } catch {}
+      });
+    };
+    window.addEventListener('scroll', scrollHandler, { passive: true });
+    return () => { try { io.disconnect(); } catch {} window.removeEventListener('scroll', scrollHandler); };
   }, [posts.length]);
 
   useEffect(() => {
@@ -1041,9 +1057,17 @@ const CommunityFeedPage: React.FC = () => {
                     padding: '8px',
                     background: !latest
                       ? 'linear-gradient(135deg, #f97316 0%, #ec4899 100%)'
-                      : (isImage ? `url(${fixMediaUrl((((latest as any).media as any)?.url || ''))}) center/cover no-repeat` : 'transparent'),
+                      : 'transparent',
                   }}
                 >
+                  {isImage && (
+                    <img
+                      src={fixMediaUrl((((latest as any).media as any)?.url || ''))}
+                      alt=""
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                      onError={handleImgError}
+                    />
+                  )}
                   {isVideo && (
                     <>
                       <video

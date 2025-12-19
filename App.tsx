@@ -543,6 +543,39 @@ const App: React.FC = () => {
             window.removeEventListener('beforeunload', handleBeforeUnload);
         };
     }, [isAuthenticated, user]);
+
+    // Presence pings and visibility handling for more accurate lastSeen/online
+    useEffect(() => {
+        if (!isAuthenticated || !user) return;
+        const socket = websocketService.getSocket();
+        const token = localStorage.getItem('authToken');
+        if (!token) return;
+
+        const pingId = window.setInterval(() => {
+            try {
+                if (document.visibilityState === 'visible') {
+                    socket.emit('presence:ping', { token });
+                }
+            } catch {}
+        }, 30000);
+
+        const onVis = () => {
+            try {
+                if (document.visibilityState === 'visible') {
+                    socket.emit('user-online', { token });
+                } else {
+                    socket.emit('user-offline', { token });
+                }
+            } catch {}
+        };
+        document.addEventListener('visibilitychange', onVis);
+
+        return () => {
+            try { window.clearInterval(pingId); } catch {}
+            try { document.removeEventListener('visibilitychange', onVis); } catch {}
+            try { socket.emit('user-offline', { token }); } catch {}
+        };
+    }, [isAuthenticated, user]);
     
     if (isLoading) {
         return <LoadingScreen />;

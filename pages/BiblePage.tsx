@@ -37,6 +37,9 @@ function isNewFormat(data: BibleData): data is NewBibleData {
   return 'BIBLEBOOK' in data;
 }
 
+// Prefer worker parsing except in Android WebView (userAgent contains 'wv')
+const useWorker = (typeof Worker !== 'undefined') && !((typeof navigator !== 'undefined' && navigator.userAgent) || '').includes('wv');
+
 const BiblePage: React.FC = () => {
     const [language, setLanguage] = useState<Language>('en');
     const [bible, setBible] = useState<BibleData | null>(null);
@@ -113,7 +116,7 @@ const BiblePage: React.FC = () => {
     const parseWithWorker = (text: string): Promise<any> => {
         return new Promise((resolve, reject) => {
             try {
-                if (typeof Worker !== 'undefined') {
+                if (useWorker) {
                     const w = new Worker(new URL('../workers/jsonParseWorker.js', import.meta.url));
                     const timer = window.setTimeout(() => {
                         try { w.terminate(); } catch {}
@@ -147,8 +150,8 @@ const BiblePage: React.FC = () => {
             setIsLoading(true);
             setError(null);
             try {
-                const hasCaches = typeof caches !== 'undefined' && caches.open;
-                if (hasCaches) {
+                const cacheAvailable = (typeof caches !== 'undefined') && !!(caches.open);
+                if (cacheAvailable) {
                     const match = await caches.match(`/bible/${lang}.json`);
                     if (match) {
                         const txt = await match.text();
@@ -168,8 +171,8 @@ const BiblePage: React.FC = () => {
                 applyBibleData(data);
                 setIsLoading(false);
                 try {
-                    const hasCaches = typeof caches !== 'undefined' && caches.open;
-                    if (hasCaches) {
+                    const cacheAvailable = (typeof caches !== 'undefined') && !!(caches.open);
+                    if (cacheAvailable) {
                         const cache = await caches.open('bible-data-v1');
                         await cache.put(`/bible/${lang}.json`, resClone);
                     }
