@@ -417,15 +417,26 @@ const AdminPage: React.FC = () => {
     const handleSave = async (type: 'sermon' | 'announcement' | 'event' | 'bibleStudy', data: any) => {
         try {
             console.log('[Admin] handleSave called with type:', type, 'data:', data);
+            const isFileLike = (v: any): v is File => {
+                try {
+                    return !!v && typeof v === 'object'
+                        && typeof v.size === 'number'
+                        && typeof v.type === 'string'
+                        && typeof v.name === 'string'
+                        && typeof (v as any).slice === 'function';
+                } catch {
+                    return false;
+                }
+            };
             
             // Check if this is a new item BEFORE we assign an ID
             const isNewItem = !data.id;
             
             // For sermons with video File objects, upload to Cloudinary
             if (type === 'sermon' && data.videoUrl) {
-                console.log('[Admin] Video URL type:', typeof data.videoUrl, 'Is File:', data.videoUrl instanceof File);
+                console.log('[Admin] Video URL type:', typeof data.videoUrl, 'Is File:', isFileLike(data.videoUrl));
                 
-                if (typeof data.videoUrl === 'object' && data.videoUrl instanceof File) {
+                if (isFileLike(data.videoUrl)) {
                     console.log('[Admin] 🔥 Uploading video to Firebase Storage...');
                     console.log('[Admin] Video file:', data.videoUrl.name, 'Size:', data.videoUrl.size);
                     
@@ -446,8 +457,9 @@ const AdminPage: React.FC = () => {
                             },
                             data.videoUrl,
                             (progress) => {
-                                setUploadProgress(progress);
-                                console.log(`[Admin] Upload progress: ${progress.toFixed(1)}%`);
+                                const clamped = Math.max(0, Math.min(100, Number(progress) || 0));
+                                setUploadProgress(clamped > 0 && clamped < 1 ? 1 : clamped);
+                                console.log(`[Admin] Upload progress: ${clamped.toFixed(1)}%`);
                             }
                         );
                         

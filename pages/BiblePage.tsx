@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BibleIcon, ArrowLeftIcon } from '../constants/icons';
 import { useNavigate } from 'react-router-dom';
+import { bibleVerseService } from '../services/bibleVerseService';
 
 type Language = 'en' | 'sw';
 
@@ -109,49 +110,101 @@ const BiblePage: React.FC = () => {
         }
     };
 
+    const parseWithWorker = (text: string): Promise<any> => {
+        return new Promise((resolve, reject) => {
+            try {
+                if (typeof Worker !== 'undefined') {
+                    const w = new Worker(new URL('../workers/jsonParseWorker.js', import.meta.url));
+                    const timer = window.setTimeout(() => {
+                        try { w.terminate(); } catch {}
+                        reject(new Error('Worker parse timeout'));
+                    }, 15000);
+                    w.onmessage = (e: MessageEvent) => {
+                        window.clearTimeout(timer);
+                        try { w.terminate(); } catch {}
+                        const msg: any = e.data || {};
+                        if (msg.ok) resolve(msg.data);
+                        else reject(new Error(msg.error || 'Worker parse failed'));
+                    };
+                    w.onerror = () => {
+                        window.clearTimeout(timer);
+                        try { w.terminate(); } catch {}
+                        reject(new Error('Worker error'));
+                    };
+                    w.postMessage({ text });
+                } else {
+                    const data = JSON.parse(text);
+                    resolve(data);
+                }
+            } catch (err) {
+                reject(err);
+            }
+        });
+    };
+
     const loadBible = async (lang: Language) => {
         try {
             setIsLoading(true);
             setError(null);
-            let applied = false;
             try {
                 const hasCaches = typeof caches !== 'undefined' && caches.open;
                 if (hasCaches) {
                     const match = await caches.match(`/bible/${lang}.json`);
                     if (match) {
-                        const data = await match.json();
+                        const txt = await match.text();
+                        const data = await parseWithWorker(txt);
                         applyBibleData(data);
-                        applied = true;
                         setIsLoading(false);
+                        return;
                     }
                 }
             } catch {}
             try {
                 const res = await timedFetch(`/bible/${lang}.json`, 10000);
                 if (!res.ok) throw new Error('Network');
-                const data = await res.json();
+                const resClone = res.clone();
+                const txt = await res.text();
+                const data = await parseWithWorker(txt);
                 applyBibleData(data);
                 setIsLoading(false);
+                try {
+                    const hasCaches = typeof caches !== 'undefined' && caches.open;
+                    if (hasCaches) {
+                        const cache = await caches.open('bible-data-v1');
+                        await cache.put(`/bible/${lang}.json`, resClone);
+                    }
+                } catch {}
                 return;
             } catch (e: any) {
-                if (!applied) {
-                    setError('Failed to load Bible data.');
-                    setBible(null);
-                    setBooks([]);
-                    setSelectedBook(null);
-                    setIsLoading(false);
-                }
+                setError('Failed to load Bible data.');
+                setBible(null);
+                setBooks([]);
+                setSelectedBook(null);
+                setIsLoading(false);
             }
         } catch {}
     };
 
     useEffect(() => {
-        loadBible('en');
-    }, []);
-
-    useEffect(() => {
         loadBible(language);
     }, [language]);
+
+    useEffect(() => {
+        (async () => {
+            try {
+                await bibleVerseService.initialize();
+            } catch {}
+            const svcBooks = bibleVerseService.getBibleBooks();
+            if (svcBooks && svcBooks.length > 0) {
+                const mapped = svcBooks.map((b, idx) => ({ name: b.name, number: String(idx + 1) }));
+                setBooks(prev => (prev && prev.length ? prev : mapped));
+                setSelectedBook(prev => (prev ? prev : mapped[0]));
+                const firstChapters = Array.from({ length: svcBooks[0].chapters }, (_, i) => String(i + 1));
+                setChapters(prev => (prev && prev.length ? prev : firstChapters));
+                setSelectedChapter(prev => (prev && prev.length ? prev : '1'));
+            }
+        })();
+    }, []);
 
     // Update chapters when selected book changes
     useEffect(() => {
@@ -219,10 +272,6 @@ const BiblePage: React.FC = () => {
     }, [selectedChapter, selectedBook, bible]);
 
     const renderContent = () => {
-        if (isLoading) {
-            return <p className="text-center text-lg text-gray-500 dark:text-gray-400">Loading Bible...</p>;
-        }
-
         if (error) {
             return (
                 <div className="text-center text-red-500 bg-red-100 dark:bg-red-900/20 p-4 rounded-lg">
@@ -232,8 +281,11 @@ const BiblePage: React.FC = () => {
             );
         }
 
-        if (!bible || books.length === 0) {
-            return <p className="text-center text-lg text-gray-500 dark:text-gray-400">No Bible data found.</p>;
+        if (verses.length === 0) {
+            if (isLoading || !bible) {
+                return <p className="text-center text-lg text-gray-500 dark:text-gray-400">Loading verses...</p>;
+            }
+            return <p className="text-center text-lg text-gray-500 dark:text-gray-400">No content available.</p>;
         }
 
         return (
@@ -281,7 +333,7 @@ const BiblePage: React.FC = () => {
                             </button>
                         </div>
                         <select 
-                            disabled={isLoading || !!error} 
+                            disabled={!!error || books.length === 0} 
                             value={selectedBook?.number || ''} 
                             onChange={e => {
                                 const book = books.find(b => b.number === e.target.value);
@@ -296,7 +348,7 @@ const BiblePage: React.FC = () => {
                             ))}
                         </select>
                         <select 
-                            disabled={isLoading || !!error || !selectedBook} 
+                            disabled={!!error || !selectedBook || chapters.length === 0} 
                             value={selectedChapter || ''} 
                             onChange={e => setSelectedChapter(e.target.value)} 
                             className="w-full sm:w-auto pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-secondary focus:border-secondary sm:text-sm rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50"

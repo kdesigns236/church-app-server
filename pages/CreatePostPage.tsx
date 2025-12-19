@@ -88,17 +88,22 @@ const CreatePostPage: React.FC = () => {
     if (!media) return undefined;
     try {
       // Prefer uploading the File directly when available (reliable on mobile, avoids base64 memory pressure)
-      if (media.file instanceof File) {
+      if (media.file) {
         try {
           const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', media.file);
           if (fb.success && fb.url) {
             return { url: fb.url, type: media.type };
           }
-        } catch {}
+          throw new Error(fb.error || 'Firebase upload failed');
+        } catch (e) {
+          try { console.error('[CreatePost] Firebase media upload failed', e); } catch {}
+        }
         try {
           const remoteUrl = await uploadService.uploadFile(media.file);
           return { url: remoteUrl, type: media.type };
-        } catch {}
+        } catch (e) {
+          try { console.error('[CreatePost] Server media upload failed', e); } catch {}
+        }
         return undefined;
       }
       if (typeof media.url === 'string' && media.url.startsWith('data:')) {
@@ -110,15 +115,25 @@ const CreatePostPage: React.FC = () => {
           if (fb.success && fb.url) {
             return { url: fb.url, type: media.type };
           }
-        } catch {}
+          throw new Error(fb.error || 'Firebase upload failed');
+        } catch (e) {
+          try { console.error('[CreatePost] Firebase media upload failed (data url)', e); } catch {}
+        }
         // Fallback to server upload endpoint
         try {
           const remoteUrl = await uploadService.uploadFile(file);
           return { url: remoteUrl, type: media.type };
-        } catch {}
+        } catch (e) {
+          try { console.error('[CreatePost] Server media upload failed (data url)', e); } catch {}
+        }
         return undefined;
       } else {
-        return media;
+        try {
+          if (typeof media.url === 'string' && (media.url.startsWith('blob:') || media.url.startsWith('data:'))) {
+            return undefined;
+          }
+        } catch {}
+        return { url: media.url, type: media.type };
       }
     } catch {
       return undefined;
@@ -184,7 +199,32 @@ const CreatePostPage: React.FC = () => {
         if (mediaSnapshot) {
           uploadSelectedMedia('story', mediaSnapshot)
             .then((uploadedMedia) => {
-              if (!uploadedMedia) return;
+              if (!uploadedMedia) {
+                try { window.alert('Media upload failed. Please try again.'); } catch {}
+                try {
+                  const updatedStory = {
+                    ...newStory,
+                    content: trimmed,
+                    media: undefined,
+                    type: 'text',
+                  };
+                  const existing = localStorage.getItem('communityStories');
+                  const stories = existing ? JSON.parse(existing) : [];
+                  const next = Array.isArray(stories)
+                    ? stories.map((s: any) => (String(s?.id) === String(updatedStory.id) ? updatedStory : s))
+                    : [updatedStory];
+                  const safeNext = (Array.isArray(next) ? next : []).slice(0, 100).map((s: any) => ({
+                    ...s,
+                    media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
+                  }));
+                  localStorage.setItem('communityStories', JSON.stringify(safeNext));
+                  try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
+                } catch {}
+                try {
+                  websocketService.pushUpdate({ type: 'communityStories', action: 'update', data: { ...newStory, content: trimmed, media: undefined, type: 'text' } });
+                } catch {}
+                return;
+              }
               const updatedStory = {
                 ...newStory,
                 content: trimmed,
@@ -208,7 +248,32 @@ const CreatePostPage: React.FC = () => {
                 websocketService.pushUpdate({ type: 'communityStories', action: 'update', data: updatedStory });
               } catch {}
             })
-            .catch(() => {});
+            .catch((e) => {
+              try { console.error('[CreatePost] Story media upload failed', e); } catch {}
+              try { window.alert('Media upload failed. Please try again.'); } catch {}
+              try {
+                const updatedStory = {
+                  ...newStory,
+                  content: trimmed,
+                  media: undefined,
+                  type: 'text',
+                };
+                const existing = localStorage.getItem('communityStories');
+                const stories = existing ? JSON.parse(existing) : [];
+                const next = Array.isArray(stories)
+                  ? stories.map((s: any) => (String(s?.id) === String(updatedStory.id) ? updatedStory : s))
+                  : [updatedStory];
+                const safeNext = (Array.isArray(next) ? next : []).slice(0, 100).map((s: any) => ({
+                  ...s,
+                  media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
+                }));
+                localStorage.setItem('communityStories', JSON.stringify(safeNext));
+                try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
+              } catch {}
+              try {
+                websocketService.pushUpdate({ type: 'communityStories', action: 'update', data: { ...newStory, content: trimmed, media: undefined, type: 'text' } });
+              } catch {}
+            });
         }
       } catch (error) {
         console.error('Error saving story to localStorage', error);
@@ -223,14 +288,18 @@ const CreatePostPage: React.FC = () => {
         let newMedia: { url: string; type: 'image' | 'video' } | undefined = undefined;
         if (!removedExistingMedia) {
           if (selectedMedia) {
-            if (selectedMedia.file instanceof File) {
+            if (selectedMedia.file || (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:'))) {
               // Upload newly selected media when we have an actual File (mobile-friendly path)
-              newMedia = await uploadSelectedMedia('post');
-            } else if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('data:')) {
               // Upload newly selected media if it's a data URL
               newMedia = await uploadSelectedMedia('post');
+              if (!newMedia) {
+                try { window.alert('Media upload failed. Please try again.'); } catch {}
+                newMedia = original.media;
+              }
+            } else if (typeof selectedMedia.url === 'string' && selectedMedia.url.startsWith('blob:')) {
+              newMedia = undefined;
             } else {
-              newMedia = selectedMedia;
+              newMedia = { url: selectedMedia.url, type: selectedMedia.type };
             }
           } else {
             newMedia = original.media;
@@ -249,7 +318,10 @@ const CreatePostPage: React.FC = () => {
       if (created && mediaSnapshot) {
         uploadSelectedMedia('post', mediaSnapshot)
           .then((uploadedMedia) => {
-            if (!uploadedMedia) return;
+            if (!uploadedMedia) {
+              try { window.alert('Media upload failed. Please try again.'); } catch {}
+              return;
+            }
             try {
               updatePost({ ...(created as any), media: uploadedMedia } as any);
             } catch {}
@@ -262,7 +334,10 @@ const CreatePostPage: React.FC = () => {
               }
             } catch {}
           })
-          .catch(() => {});
+          .catch((e) => {
+            try { console.error('[CreatePost] Post media upload failed', e); } catch {}
+            try { window.alert('Media upload failed. Please try again.'); } catch {}
+          });
       }
     }
 

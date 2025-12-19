@@ -31,8 +31,14 @@ pro-stream-client/.env.development
 pro-stream-client/.env.production
 
 # Built frontend (served by server/index.js)
-server/public
-public
+server/public/*
+!server/public/bible/
+server/public/bible/*
+!server/public/bible/*.json
+public/*
+!public/bible/
+public/bible/*
+!public/bible/*.json
 
 
 

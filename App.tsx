@@ -453,7 +453,35 @@ const App: React.FC = () => {
     useEffect(() => {
         let cancelled = false;
         const urls = ['/bible/en.json', '/bible/sw.json'];
-        const run = () => { urls.forEach((u) => { try { fetch(u).catch(() => {}); } catch {} }); };
+        const run = async () => {
+            let cache: Cache | null = null;
+            try {
+                const hasCaches = typeof caches !== 'undefined' && caches.open;
+                if (hasCaches) {
+                    cache = await caches.open('bible-data-v1');
+                }
+            } catch {
+                cache = null;
+            }
+            urls.forEach((u) => {
+                (async () => {
+                    try {
+                        if (cancelled) return;
+                        if (cache) {
+                            try {
+                                const match = await cache.match(u);
+                                if (match) return;
+                            } catch {}
+                        }
+                        const res = await fetch(u);
+                        if (cancelled) return;
+                        if (cache && res && res.ok) {
+                            try { await cache.put(u, res.clone()); } catch {}
+                        }
+                    } catch {}
+                })();
+            });
+        };
         run();
         try {
             if ('serviceWorker' in navigator) {
