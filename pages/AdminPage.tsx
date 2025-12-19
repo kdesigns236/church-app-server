@@ -450,10 +450,7 @@ const AdminPage: React.FC = () => {
                         // Prefer direct backend upload immediately on some environments
                         const preferDirect = (() => {
                             try {
-                                if (localStorage.getItem('preferDirectUpload') === '1') return true;
-                                const ua = (navigator.userAgent || '').toLowerCase();
-                                const conn: any = (navigator as any).connection?.effectiveType || '';
-                                return ua.includes('android') || String(conn).includes('2g');
+                                return localStorage.getItem('preferDirectUpload') === '1';
                             } catch {
                                 return false;
                             }

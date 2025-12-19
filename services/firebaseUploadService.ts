@@ -515,8 +515,10 @@ export async function uploadToBackendDirectly(
       try { formData.append('video', file); } catch {}
 
       const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${apiUrl}/upload`, true);
-      try { xhr.setRequestHeader('Authorization', `Bearer ${token}`); } catch {}
+      // Avoid preflight on mobile by passing token in query (server accepts '?token=')
+      const uploadUrl = `${apiUrl}/upload?token=${encodeURIComponent(token)}`;
+      xhr.open('POST', uploadUrl, true);
+      try { xhr.withCredentials = false; } catch {}
       try { xhr.responseType = 'json'; } catch {}
       xhr.timeout = 300000; // 5 minutes
 

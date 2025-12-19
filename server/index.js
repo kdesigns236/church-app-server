@@ -258,6 +258,9 @@ app.use((req, res, next) => {
   next();
 });
 app.use(cors());
+// Explicitly handle CORS preflight for all routes and upload endpoint (mobile webviews sometimes fail on generic handling)
+try { app.options('*', cors()); } catch {}
+try { app.options('/api/upload', cors()); } catch {}
 app.use(compression());
 app.use('/api/facebook/live', facebookLiveRoutes);
 app.use('/api/youtube/live', youtubeLiveRoutes);
@@ -359,9 +362,12 @@ app.get('/bible/sw.json', (req, res) => {
 
 // JWT Middleware
 // Verify token - allows both admin and member roles
+// Accepts token in Authorization header OR as a 'token' query param for CORS-preflight-avoidance on mobile
 const verifyToken = (req, res, next) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const headerToken = req.headers.authorization?.replace('Bearer ', '');
+    const queryToken = (req.query && (req.query.token || req.query.auth)) ? String(req.query.token || req.query.auth) : '';
+    const token = headerToken || queryToken;
     if (!token) {
       return res.status(401).json({ error: 'No token provided' });
     }
