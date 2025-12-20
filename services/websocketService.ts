@@ -269,35 +269,54 @@ class WebSocketService {
 
     try {
       const token = localStorage.getItem('authToken');
-      
+
       if (!token) {
         console.error('[WebSocket] ❌ No auth token found! User might not be logged in.');
         throw new Error('Authentication required. Please log in again.');
       }
-
       console.log(`[WebSocket] Pushing ${syncData.type} update to server...`);
       console.log(`[WebSocket] API URL: ${this.apiUrl}/sync/push`);
       console.log(`[WebSocket] Has token: ${!!token}`);
 
-      const response = await fetch(`${this.apiUrl}/sync/push`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(dataWithTimestamp)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[WebSocket] ❌ Server error: ${response.status} ${response.statusText}`);
-        console.error(`[WebSocket] ❌ Error details: ${errorText}`);
-        
-        if (response.status === 401) {
-          throw new Error('Authentication failed. Please log in again.');
+      let primaryOk = false;
+      try {
+        const resp = await fetch(`${this.apiUrl}/sync/push`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(dataWithTimestamp)
+        });
+        if (resp.ok) {
+          primaryOk = true;
+        } else {
+          const errorText = await resp.text();
+          console.error(`[WebSocket] ❌ Server error: ${resp.status} ${resp.statusText}`);
+          console.error(`[WebSocket] ❌ Error details: ${errorText}`);
         }
-        
-        throw new Error(`Server error: ${response.status} - ${errorText || response.statusText}`);
+      } catch (e) {
+        console.error('[WebSocket] ❌ Primary push failed:', e instanceof Error ? e.message : String(e));
+      }
+
+      if (!primaryOk) {
+        try {
+          const qs = `?token=${encodeURIComponent(token)}`;
+          const fallbackResp = await fetch(`${this.apiUrl}/sync/push${qs}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(dataWithTimestamp)
+          });
+          if (!fallbackResp.ok) {
+            const t = await fallbackResp.text();
+            throw new Error(`Server error: ${fallbackResp.status} - ${t || fallbackResp.statusText}`);
+          }
+        } catch (e2) {
+          console.error('[WebSocket] ❌ Fallback push failed:', e2 instanceof Error ? e2.message : String(e2));
+          throw e2;
+        }
       }
 
       console.log(`[WebSocket] ✅ Update pushed successfully: ${syncData.type}`);
