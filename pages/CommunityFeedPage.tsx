@@ -191,6 +191,7 @@ const CommunityFeedPage: React.FC = () => {
   const [storyVideoStarted, setStoryVideoStarted] = useState<boolean>(false);
   const [storyVideoSource, setStoryVideoSource] = useState<string | null>(null);
   const prefetchStartedRef = useRef<boolean>(false);
+  const [storyVideoHint, setStoryVideoHint] = useState<boolean>(false);
 
   const getStoryPosterUrl = (s: Story | null): string | undefined => {
     try {
@@ -266,6 +267,7 @@ const CommunityFeedPage: React.FC = () => {
     setStoryMediaReady(false);
     setStoryVideoStarted(false);
     setStoryVideoSource(null);
+    setStoryVideoHint(false);
     try {
       if (STORY_AUTOPLAY_VIDEO && viewingStory?.media?.type === 'video') {
         setStoryVideoStarted(true);
@@ -294,6 +296,11 @@ const CommunityFeedPage: React.FC = () => {
         setTimeout(attempt, 0);
       }
     } catch {}
+    // Show fallback hint if not ready after 1500ms
+    const t = window.setTimeout(() => {
+      try { if (!storyMediaReady) setStoryVideoHint(true); } catch {}
+    }, 1500);
+    return () => window.clearTimeout(t);
   }, [viewingStory]);
 
   // Ensure autoplay resumes when page/tab gains focus or visibility changes
@@ -2515,6 +2522,7 @@ const CommunityFeedPage: React.FC = () => {
                   />
                 ) : (
                   <video
+                    key={String(viewingStory?.id || '')}
                     ref={storyVideoRef}
                     src={storyVideoSource || ''}
                     autoPlay
@@ -2522,7 +2530,7 @@ const CommunityFeedPage: React.FC = () => {
                     crossOrigin="anonymous"
                     muted
                     defaultMuted
-                    controls={false}
+                    controls={storyVideoHint}
                     disablePictureInPicture
                     controlsList="nodownload noplaybackrate nofullscreen"
                     preload={'auto'}
@@ -2567,7 +2575,9 @@ const CommunityFeedPage: React.FC = () => {
                       transition: 'opacity 150ms ease-out',
                     }}
                     onError={handleVideoError}
-                  />
+                  >
+                    {storyVideoSource ? <source src={storyVideoSource} /> : null}
+                  </video>
                 )
               ) : (
                 <p
@@ -2621,6 +2631,28 @@ const CommunityFeedPage: React.FC = () => {
                       animation: 'spin 1s linear infinite'
                     }}
                   />
+                  {storyVideoHint && viewingStory?.media?.type === 'video' && storyVideoSource && (
+                    <a
+                      href={storyVideoSource}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        position: 'absolute',
+                        bottom: 16,
+                        left: '50%',
+                        transform: 'translateX(-50%)',
+                        background: 'rgba(255,255,255,0.12)',
+                        color: '#fff',
+                        padding: '8px 12px',
+                        borderRadius: 9999,
+                        fontSize: 12,
+                        textDecoration: 'none',
+                        border: '1px solid rgba(255,255,255,0.2)'
+                      }}
+                    >
+                      Open video externally
+                    </a>
+                  )}
                   <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
                 </div>
               )}
