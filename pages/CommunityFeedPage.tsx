@@ -281,6 +281,8 @@ const CommunityFeedPage: React.FC = () => {
             el.setAttribute('playsinline','');
             el.setAttribute('autoplay','');
             el.preload = 'auto';
+            try { (el as any).playsInline = true; } catch {}
+            try { el.load(); } catch {}
             const p = el.play();
             if (p && typeof (p as any).catch === 'function') {
               (p as Promise<void>).catch(() => setTimeout(attempt, 150));
@@ -485,7 +487,7 @@ const CommunityFeedPage: React.FC = () => {
       if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http:')) {
         url = url.replace(/^http:/i, 'https:');
       }
-      if (url.includes('firebasestorage.googleapis.com')) {
+      if (url.includes('firebasestorage.googleapis.com') || url.includes('firebasestorage.app')) {
         try {
           const parsed = new URL(url);
           // Ensure direct media delivery
@@ -520,6 +522,7 @@ const CommunityFeedPage: React.FC = () => {
         (el as any).src = fixed;
         try { el.load(); el.play().catch(() => {}); } catch {}
       }
+      setStoryMediaReady(true);
     } catch {}
   };
 
@@ -2516,6 +2519,7 @@ const CommunityFeedPage: React.FC = () => {
                     src={storyVideoSource || ''}
                     autoPlay
                     playsInline
+                    crossOrigin="anonymous"
                     muted
                     defaultMuted
                     controls={false}
@@ -2530,14 +2534,21 @@ const CommunityFeedPage: React.FC = () => {
                         if (durMs && isFinite(durMs)) {
                           setCurrentVideoDurationMs(durMs);
                         }
-                        // ensure playback kicks in when metadata is ready
-                        try { v.load(); v.play().catch(() => {}); } catch {}
+                        try { v.play().catch(() => {}); } catch {}
                       } catch {}
                     }}
                     onWaiting={() => { try { storyVideoRef.current?.play(); } catch {} }}
                     onPlay={() => setStoryMediaReady(true)}
                     onLoadedData={() => setStoryMediaReady(true)}
                     onCanPlay={() => setStoryMediaReady(true)}
+                    onTimeUpdate={(e) => {
+                      try {
+                        const v = e.currentTarget as HTMLVideoElement;
+                        if (!storyMediaReady && v.currentTime > 0) setStoryMediaReady(true);
+                      } catch {}
+                    }}
+                    onStalled={() => { try { storyVideoRef.current?.play().catch(() => {}); } catch {} }}
+                    onSuspend={() => { try { storyVideoRef.current?.play().catch(() => {}); } catch {} }}
                     onEnded={() => {
                       // Advance immediately when the video ends, even if timer hasn't elapsed
                       goToNextStory();
@@ -2552,7 +2563,7 @@ const CommunityFeedPage: React.FC = () => {
                       borderRadius: 16,
                       backgroundColor: '#000',
                       objectFit: 'cover',
-                      opacity: storyMediaReady ? 1 : 0,
+                      // Always show the element so poster is visible; overlay spinner covers while loading
                       transition: 'opacity 150ms ease-out',
                     }}
                     onError={handleVideoError}
@@ -2572,6 +2583,21 @@ const CommunityFeedPage: React.FC = () => {
               )}
 
               {/* Placeholder while media is loading */}
+              {viewingStory?.media?.type === 'video' && !storyMediaReady && (
+                <img
+                  src={getStoryPosterUrl(viewingStory)}
+                  alt=""
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    borderRadius: 16,
+                    pointerEvents: 'none'
+                  }}
+                />
+              )}
               {!storyMediaReady && viewingStory?.media && (
                 <div
                   style={{

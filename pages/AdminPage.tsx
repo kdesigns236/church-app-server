@@ -331,6 +331,30 @@ const AdminPage: React.FC = () => {
         try { return localStorage.getItem('enableNativeBgFetch') === '1'; } catch { return false; }
     });
 
+    // Reorder mode for Sermons (drag-and-drop)
+    const [reorderMode, setReorderMode] = useState<boolean>(false);
+    const [reorderList, setReorderList] = useState<Sermon[] | null>(null);
+    const draggingIndexRef = useRef<number | null>(null);
+    const prepareReorderList = () => {
+        const withOrder = sortedSermons.map((sermon, idx) => ({
+            ...sermon,
+            order: typeof (sermon as any).order === 'number' ? (sermon as any).order : idx + 1,
+        }));
+        setReorderList(withOrder);
+    };
+    const saveReorder = () => {
+        if (!reorderList) return;
+        const next = reorderList.map((s, idx) => ({ ...s, order: idx + 1 }));
+        next.forEach((s) => updateSermon(s));
+        setReorderMode(false);
+        setReorderList(null);
+    };
+    const cancelReorder = () => {
+        setReorderMode(false);
+        setReorderList(null);
+        draggingIndexRef.current = null;
+    };
+
     const enableNativeBg = () => {
         try { localStorage.setItem('enableNativeBgFetch','1'); setNativeBgEnabled(true); alert('Native background fetch ENABLED. Please restart the app to initialize.'); } catch {}
     };
@@ -905,19 +929,62 @@ const AdminPage: React.FC = () => {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-8">
                         <AdminSection title="Manage Sermons">
-                            <button className="bg-secondary text-primary font-bold px-4 py-2 rounded-md hover:bg-gold-light transition-colors mb-4" onClick={() => handleOpenModal('sermon')}>Add New Sermon</button>
+                            <div className="flex items-center gap-2 mb-4">
+                                <button className="bg-secondary text-primary font-bold px-4 py-2 rounded-md hover:bg-gold-light transition-colors" onClick={() => handleOpenModal('sermon')} disabled={reorderMode}>Add New Sermon</button>
+                                {!reorderMode ? (
+                                    <button className="px-4 py-2 rounded-md border border-gray-300 dark:border-gray-600 text-text-main dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => { setReorderMode(true); prepareReorderList(); }}>
+                                        Reorder
+                                    </button>
+                                ) : (
+                                    <>
+                                        <button className="px-4 py-2 rounded-md bg-green-600 text-white font-semibold hover:bg-green-700 transition-colors" onClick={saveReorder}>Save Order</button>
+                                        <button className="px-4 py-2 rounded-md bg-gray-200 dark:bg-gray-600 text-text-main dark:text-white hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors" onClick={cancelReorder}>Cancel</button>
+                                    </>
+                                )}
+                            </div>
                             <div className="space-y-1 max-h-96 overflow-y-auto pr-2">
-                                {sortedSermons.map((sermon, index) => (
-                                    <AdminItem 
-                                        key={sermon.id} 
-                                        title={sermon.title}
-                                        orderLabel={`${index + 1}`}
-                                        onMoveUp={index === 0 ? undefined : () => handleMoveSermon(sermon.id, 'up')}
-                                        onMoveDown={index === sortedSermons.length - 1 ? undefined : () => handleMoveSermon(sermon.id, 'down')}
-                                        onEdit={() => handleOpenModal('sermon', sermon)} 
-                                        onDelete={() => handleDelete('sermon', sermon.id)} 
-                                    />
-                                ))}
+                                {reorderMode ? (
+                                    (reorderList || []).map((sermon, index) => (
+                                        <div
+                                            key={sermon.id}
+                                            draggable
+                                            onDragStart={(e) => { draggingIndexRef.current = index; (e.dataTransfer || ({} as any)).effectAllowed = 'move'; }}
+                                            onDragOver={(e) => {
+                                                e.preventDefault();
+                                                const from = draggingIndexRef.current;
+                                                if (from === null || from === index) return;
+                                                setReorderList((prev) => {
+                                                    if (!prev) return prev;
+                                                    const next = [...prev];
+                                                    const [moved] = next.splice(from, 1);
+                                                    next.splice(index, 0, moved);
+                                                    draggingIndexRef.current = index;
+                                                    return next;
+                                                });
+                                            }}
+                                            onDrop={(e) => { e.preventDefault(); }}
+                                            className="flex justify-between items-center p-3 border border-gray-200 dark:border-gray-700 rounded bg-white dark:bg-gray-700 cursor-grab"
+                                        >
+                                            <div className="flex items-center gap-3 pr-4">
+                                                <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 w-6 text-right">{index + 1}</span>
+                                                <p className="text-text-main dark:text-gray-300 truncate">{sermon.title}</p>
+                                            </div>
+                                            <span className="text-gray-400 select-none" aria-hidden>⋮⋮</span>
+                                        </div>
+                                    ))
+                                ) : (
+                                    sortedSermons.map((sermon, index) => (
+                                        <AdminItem 
+                                            key={sermon.id} 
+                                            title={sermon.title}
+                                            orderLabel={`${index + 1}`}
+                                            onMoveUp={index === 0 ? undefined : () => handleMoveSermon(sermon.id, 'up')}
+                                            onMoveDown={index === sortedSermons.length - 1 ? undefined : () => handleMoveSermon(sermon.id, 'down')}
+                                            onEdit={() => handleOpenModal('sermon', sermon)} 
+                                            onDelete={() => handleDelete('sermon', sermon.id)} 
+                                        />
+                                    ))
+                                )}
                             </div>
                         </AdminSection>
 
