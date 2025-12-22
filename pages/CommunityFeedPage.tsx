@@ -385,6 +385,8 @@ const CommunityFeedPage: React.FC = () => {
   const canDeletePost = (post: Post): boolean => {
     if (!user) return false;
     if (user.role === 'admin') return true;
+    const anyPost: any = post as any;
+    if (anyPost && anyPost.authorId && user.id) return anyPost.authorId === user.id;
     return post.author === user.name;
   };
   const canEditPost = (post: Post): boolean => canDeletePost(post);
@@ -2354,8 +2356,7 @@ const CommunityFeedPage: React.FC = () => {
               maxWidth: '448px',
               width: '100%',
               height: '100%',
-              background:
-                'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              backgroundColor: '#000',
               position: 'relative',
             }}
           >
@@ -2580,7 +2581,7 @@ const CommunityFeedPage: React.FC = () => {
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: 16,
-                    background: 'linear-gradient(135deg, rgba(31,41,55,.6), rgba(55,65,81,.6))',
+                    background: 'rgba(0,0,0,0.6)',
                     backdropFilter: 'blur(2px)',
                   }}
                 >
