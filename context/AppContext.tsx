@@ -1372,13 +1372,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return newPost;
     };
 
+    const canModifyPost = (p: Post): boolean => {
+      try {
+        if (!user) return false;
+        if ((user as any)?.role === 'admin') return true;
+        if ((p as any)?.authorId && user.id) return (p as any).authorId === user.id;
+        return p.author === user.name;
+      } catch { return false; }
+    };
+
     const updatePost = (post: Post) => {
+      let permitted = false;
       setPosts(prev => {
-        const updated = prev.map(p => (p.id === post.id ? post : p));
-        safeSetItem('communityPosts', updated);
-        return updated;
+        const existing = prev.find(p => p.id === post.id);
+        if (existing && canModifyPost(existing)) {
+          permitted = true;
+          const updated = prev.map(p => (p.id === post.id ? post : p));
+          safeSetItem('communityPosts', updated);
+          return updated;
+        }
+        console.warn('[AppContext] Blocked updatePost: not author/admin');
+        return prev;
       });
-      websocketService.pushUpdate({ type: 'posts', action: 'update', data: post });
+      if (permitted) {
+        websocketService.pushUpdate({ type: 'posts', action: 'update', data: post });
+      }
     };
 
     const handlePostInteraction = (postId: number, type: 'like' | 'share') => {
@@ -1412,17 +1430,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const deletePost = (postId: number) => {
+      let permitted = false;
       setPosts(prev => {
-        const updated = prev.filter(post => post.id !== postId);
-        safeSetItem('communityPosts', updated);
-        return updated;
+        const target = prev.find(p => p.id === postId);
+        if (target && canModifyPost(target)) {
+          permitted = true;
+          const updated = prev.filter(post => post.id !== postId);
+          safeSetItem('communityPosts', updated);
+          return updated;
+        }
+        console.warn('[AppContext] Blocked deletePost: not author/admin');
+        return prev;
       });
 
-      websocketService.pushUpdate({
-        type: 'posts',
-        action: 'delete',
-        data: { id: postId },
-      });
+      if (permitted) {
+        websocketService.pushUpdate({
+          type: 'posts',
+          action: 'delete',
+          data: { id: postId },
+        });
+      }
     };
 
     const addPostComment = (postId: number, commentText: string, user: User) => {

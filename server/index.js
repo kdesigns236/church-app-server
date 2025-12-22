@@ -1324,16 +1324,41 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
     const safeData = (type === 'posts' || type === 'communityStories') ? sanitizeMediaInObject(data) : data;
     const safeSyncData = (type === 'posts' || type === 'communityStories') ? { ...syncData, data: safeData } : syncData;
 
+    // Enforce permissions and normalize for certain types
+    const userCtx = req.user || {};
+    const isAdmin = !!(userCtx && userCtx.role === 'admin');
+    const getUserNameById = (id) => {
+      try {
+        const users = dataStore.users || [];
+        const u = users.find((x) => x && x.id === id);
+        return (u && u.name) || null;
+      } catch { return null; }
+    };
+    const ensurePostAuthorship = (postLike) => {
+      try {
+        if (!postLike || typeof postLike !== 'object') return postLike;
+        const name = getUserNameById(userCtx.id) || postLike.author || 'Member';
+        return { ...postLike, authorId: userCtx.id || postLike.authorId, author: name };
+      } catch { return postLike; }
+    };
+
     // Process based on action
     if (action === 'add') {
       // Add new item
       if (Array.isArray(dataStore[type])) {
-        dataStore[type].unshift(safeData);
+        let toAdd = safeData;
+        // posts: enforce author from token and ensure id
+        if (type === 'posts') {
+          toAdd = ensurePostAuthorship(toAdd);
+          if (!toAdd.id) { try { toAdd.id = Date.now(); } catch {} }
+        }
+        dataStore[type].unshift(toAdd);
         console.log(`[Server] ✅ Added ${type}: ${safeData && safeData.id ? safeData.id : ''}`);
       } else {
         // For object types (e.g., siteContent), merge-in fields
         const current = dataStore[type] && typeof dataStore[type] === 'object' ? dataStore[type] : {};
-        const next = safeData && typeof safeData === 'object' ? { ...current, ...safeData } : current;
+        const nextRaw = safeData && typeof safeData === 'object' ? { ...current, ...safeData } : current;
+        const next = (type === 'posts') ? ensurePostAuthorship(nextRaw) : nextRaw;
         dataStore[type] = next;
         console.log(`[Server] ✅ Merged object ${type}`);
       }
@@ -1342,14 +1367,29 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
       if (Array.isArray(dataStore[type])) {
         const index = dataStore[type].findIndex(item => item.id === safeData.id);
         if (index !== -1) {
-          dataStore[type][index] = safeData;
+          // Permission check for posts: only author or admin may update
+          if (type === 'posts') {
+            const existing = dataStore[type][index] || {};
+            const existingAuthorId = existing.authorId;
+            const existingAuthorName = existing.author;
+            const currentUserName = getUserNameById(userCtx.id) || userCtx.name || null;
+            const allowed = isAdmin || (existingAuthorId && userCtx.id && existingAuthorId === userCtx.id) || (existingAuthorName && currentUserName && existingAuthorName === currentUserName);
+            if (!allowed) {
+              return res.status(403).json({ error: 'Forbidden: cannot modify another user\'s post' });
+            }
+            // Preserve authorship fields from existing, ignore any spoofed change
+            const next = { ...safeData, authorId: existingAuthorId, author: existingAuthorName };
+            dataStore[type][index] = next;
+          } else {
+            dataStore[type][index] = safeData;
+          }
           console.log(`[Server] ✅ Updated ${type}: ${safeData && safeData.id ? safeData.id : ''}`);
         } else {
           console.warn(`[Server] Item not found for update: ${type} ${safeData && safeData.id ? safeData.id : ''}`);
         }
       } else {
         // For object types (e.g., siteContent), replace the object
-        dataStore[type] = safeData;
+        dataStore[type] = (type === 'posts') ? ensurePostAuthorship(safeData) : safeData;
         console.log(`[Server] ✅ Updated object ${type}`);
       }
     } else if (action === 'delete') {
@@ -1357,6 +1397,16 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
       if (Array.isArray(dataStore[type])) {
         const index = dataStore[type].findIndex(item => item.id === safeData.id);
         if (index !== -1) {
+          if (type === 'posts') {
+            const existing = dataStore[type][index] || {};
+            const existingAuthorId = existing.authorId;
+            const existingAuthorName = existing.author;
+            const currentUserName = getUserNameById(userCtx.id) || userCtx.name || null;
+            const allowed = isAdmin || (existingAuthorId && userCtx.id && existingAuthorId === userCtx.id) || (existingAuthorName && currentUserName && existingAuthorName === currentUserName);
+            if (!allowed) {
+              return res.status(403).json({ error: 'Forbidden: cannot delete another user\'s post' });
+            }
+          }
           dataStore[type].splice(index, 1);
           console.log(`[Server] ✅ Deleted ${type}: ${safeData && safeData.id ? safeData.id : ''}`);
         }
