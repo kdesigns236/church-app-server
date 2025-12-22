@@ -185,6 +185,50 @@ const CommunityFeedPage: React.FC = () => {
   const [currentVideoDurationMs, setCurrentVideoDurationMs] = useState<number | null>(null);
   const editImageInputRef = useRef<HTMLInputElement | null>(null);
   const editVideoInputRef = useRef<HTMLInputElement | null>(null);
+  const [storyMediaReady, setStoryMediaReady] = useState<boolean>(false);
+  const preloadedSetRef = useRef<Set<string>>(new Set());
+
+  const preloadStoryMedia = async (url?: string, type?: 'image' | 'video'): Promise<void> => {
+    try {
+      const u = fixMediaUrl(url || '');
+      if (!u) return;
+      const cache = preloadedSetRef.current;
+      if (cache.has(u)) return;
+      if (type === 'image') {
+        await new Promise<void>((resolve) => {
+          try {
+            const img = new Image();
+            (img as any).decoding = 'async';
+            img.onload = () => { cache.add(u); resolve(); };
+            img.onerror = () => resolve();
+            img.src = u;
+            if (typeof (img as any).decode === 'function') {
+              (img as any).decode().then(() => { cache.add(u); resolve(); }).catch(() => resolve());
+            }
+          } catch { resolve(); }
+        });
+        return;
+      }
+      if (type === 'video') {
+        await new Promise<void>((resolve) => {
+          try {
+            const v = document.createElement('video');
+            v.preload = 'metadata';
+            (v as any).muted = true;
+            (v as any).playsInline = true;
+            const onDone = () => { try { v.removeEventListener('loadeddata', onDone); v.removeEventListener('canplay', onDone); v.removeAttribute('src'); (v as any).load?.(); } catch {} cache.add(u); resolve(); };
+            v.addEventListener('loadeddata', onDone, { once: true } as any);
+            v.addEventListener('canplay', onDone, { once: true } as any);
+            v.onerror = () => resolve();
+            v.src = u;
+            // safety timeout
+            setTimeout(() => resolve(), 3500);
+          } catch { resolve(); }
+        });
+        return;
+      }
+    } catch {}
+  };
 
   const getStoryDurationMs = (story: Story | null): number => {
     if (!story) return 5000;
@@ -201,13 +245,39 @@ const CommunityFeedPage: React.FC = () => {
   useEffect(() => {
     const v = storyVideoRef.current;
     setCurrentVideoDurationMs(null);
+    setStoryMediaReady(false);
     if (!v) return;
     try {
-      v.muted = false;
-      v.volume = 1;
+      // Ensure immediate autoplay on mobile by starting muted
+      v.muted = true;
+      v.volume = 0;
       v.play().catch(() => {});
     } catch {}
   }, [viewingStory]);
+
+  // When story changes, preload its media first for instant display once overlay is open
+  useEffect(() => {
+    if (!viewingStory || !viewingStory.media) {
+      setStoryMediaReady(true);
+      return;
+    }
+    let cancelled = false;
+    setStoryMediaReady(false);
+    const u = viewingStory.media.url;
+    const t = viewingStory.media.type;
+    preloadStoryMedia(u, t).then(() => { if (!cancelled) setStoryMediaReady(true); });
+    return () => { cancelled = true; };
+  }, [viewingStory?.id]);
+
+  // Proactively preload the next story in sequence to avoid delays when advancing
+  useEffect(() => {
+    if (!viewingStory || activeStoryIndex === null || !currentStoryAuthor) return;
+    const authorStories = stories.filter((s) => (currentStoryAuthorId ? s.authorId === currentStoryAuthorId : s.author === currentStoryAuthor));
+    const next = authorStories[activeStoryIndex + 1];
+    if (next && next.media) {
+      preloadStoryMedia(next.media.url, next.media.type).catch(() => {});
+    }
+  }, [viewingStory?.id, activeStoryIndex, currentStoryAuthor, currentStoryAuthorId]);
 
   const formatRelativeTime = (input: string | null | undefined): string => {
     if (!input) return '';
@@ -2343,11 +2413,13 @@ const CommunityFeedPage: React.FC = () => {
                     alt="Story media"
                     loading="eager"
                     decoding="async"
+                    onLoad={() => setStoryMediaReady(true)}
                     style={{
-                      maxWidth: '100%',
-                      maxHeight: '80%',
+                      width: '100%',
+                      height: '100%',
                       borderRadius: 16,
                       objectFit: 'cover',
+                      display: storyMediaReady ? 'block' : 'none',
                     }}
                     onError={handleImgError}
                   />
@@ -2357,7 +2429,7 @@ const CommunityFeedPage: React.FC = () => {
                     src={fixMediaUrl(viewingStory.media.url)}
                     autoPlay
                     playsInline
-                    preload="metadata"
+                    preload="auto"
                     onLoadedMetadata={(e) => {
                       try {
                         const v = e.currentTarget as HTMLVideoElement;
@@ -2367,6 +2439,8 @@ const CommunityFeedPage: React.FC = () => {
                         }
                       } catch {}
                     }}
+                    onLoadedData={() => setStoryMediaReady(true)}
+                    onCanPlay={() => setStoryMediaReady(true)}
                     onEnded={() => {
                       // Advance immediately when the video ends, even if timer hasn't elapsed
                       goToNextStory();
@@ -2377,9 +2451,11 @@ const CommunityFeedPage: React.FC = () => {
                     onPointerUp={() => storyVideoRef.current?.play()}
                     style={{
                       width: '100%',
-                      maxHeight: '80%',
+                      height: '100%',
                       borderRadius: 16,
                       backgroundColor: '#000',
+                      objectFit: 'cover',
+                      display: storyMediaReady ? 'block' : 'none',
                     }}
                     onError={handleVideoError}
                   />
@@ -2395,6 +2471,34 @@ const CommunityFeedPage: React.FC = () => {
                 >
                   {viewingStory.content}
                 </p>
+              )}
+
+              {/* Placeholder while media is loading */}
+              {!storyMediaReady && viewingStory?.media && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 16,
+                    background: 'linear-gradient(135deg, rgba(31,41,55,.6), rgba(55,65,81,.6))',
+                    backdropFilter: 'blur(2px)',
+                  }}
+                >
+                  <div
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: '50%',
+                      border: '3px solid rgba(255,255,255,0.3)',
+                      borderTopColor: '#fff',
+                      animation: 'spin 1s linear infinite'
+                    }}
+                  />
+                  <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
+                </div>
               )}
 
               <div
