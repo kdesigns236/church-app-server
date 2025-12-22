@@ -33,7 +33,7 @@ interface Story {
 
 const CommunityFeedPage: React.FC = () => {
   const { user, users } = useAuth();
-  const STORY_AUTOPLAY_VIDEO = false;
+  const STORY_AUTOPLAY_VIDEO = true;
   const navigate = useNavigate();
   const location = useLocation();
   const { posts, handlePostInteraction, addPostComment, deletePost, updatePost } = useAppContext();
@@ -190,6 +190,7 @@ const CommunityFeedPage: React.FC = () => {
   const preloadedSetRef = useRef<Set<string>>(new Set());
   const [storyVideoStarted, setStoryVideoStarted] = useState<boolean>(false);
   const [storyVideoSource, setStoryVideoSource] = useState<string | null>(null);
+  const prefetchStartedRef = useRef<boolean>(false);
 
   const getStoryPosterUrl = (s: Story | null): string | undefined => {
     try {
@@ -325,6 +326,20 @@ const CommunityFeedPage: React.FC = () => {
       preloadStoryMedia(next.media.url, next.media.type).catch(() => {});
     }
   }, [viewingStory?.id, activeStoryIndex, currentStoryAuthor, currentStoryAuthorId]);
+
+  // Prefetch top stories' media on first load so opening is instant
+  useEffect(() => {
+    try {
+      if (prefetchStartedRef.current) return;
+      if (!stories || stories.length === 0) return;
+      prefetchStartedRef.current = true;
+      const top = stories.slice(0, 10);
+      top.forEach((s) => {
+        if (!s || !s.media) return;
+        preloadStoryMedia(s.media.url, s.media.type).catch(() => {});
+      });
+    } catch {}
+  }, [stories.length]);
 
   const formatRelativeTime = (input: string | null | undefined): string => {
     if (!input) return '';
