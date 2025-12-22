@@ -266,21 +266,45 @@ const CommunityFeedPage: React.FC = () => {
     setStoryMediaReady(false);
     setStoryVideoStarted(false);
     setStoryVideoSource(null);
-    if (!v) return;
     try {
       if (STORY_AUTOPLAY_VIDEO && viewingStory?.media?.type === 'video') {
-        // Ensure immediate autoplay on mobile by starting muted
-        v.muted = true;
-        v.volume = 0;
         setStoryVideoStarted(true);
-        v.preload = 'auto';
         const src = fixMediaUrl(viewingStory.media.url);
         setStoryVideoSource(src);
-        // wait a tick to set src before play
-        setTimeout(() => { try { v.play().catch(() => {}); } catch {} }, 0);
+        const attempt = () => {
+          const el = storyVideoRef.current;
+          if (!el) { setTimeout(attempt, 100); return; }
+          try {
+            el.muted = true;
+            el.volume = 0;
+            el.setAttribute('muted','');
+            el.setAttribute('playsinline','');
+            el.setAttribute('autoplay','');
+            el.preload = 'auto';
+            const p = el.play();
+            if (p && typeof (p as any).catch === 'function') {
+              (p as Promise<void>).catch(() => setTimeout(attempt, 150));
+            }
+          } catch {
+            setTimeout(attempt, 150);
+          }
+        };
+        setTimeout(attempt, 0);
       }
     } catch {}
   }, [viewingStory]);
+
+  // Ensure autoplay resumes when page/tab gains focus or visibility changes
+  useEffect(() => {
+    if (!viewingStory || viewingStory?.media?.type !== 'video') return;
+    const resume = () => { try { storyVideoRef.current?.play().catch(() => {}); } catch {} };
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('focus', resume);
+    return () => {
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('focus', resume);
+    };
+  }, [viewingStory?.id]);
 
   const startStoryVideo = () => {
     try {
@@ -2489,10 +2513,14 @@ const CommunityFeedPage: React.FC = () => {
                   <video
                     ref={storyVideoRef}
                     src={storyVideoSource || ''}
-                    autoPlay={storyVideoStarted}
+                    autoPlay
                     playsInline
                     muted
-                    preload={storyVideoStarted ? 'auto' : 'none'}
+                    defaultMuted
+                    controls={false}
+                    disablePictureInPicture
+                    controlsList="nodownload noplaybackrate nofullscreen"
+                    preload={'auto'}
                     poster={getStoryPosterUrl(viewingStory)}
                     onLoadedMetadata={(e) => {
                       try {
@@ -2501,8 +2529,12 @@ const CommunityFeedPage: React.FC = () => {
                         if (durMs && isFinite(durMs)) {
                           setCurrentVideoDurationMs(durMs);
                         }
+                        // ensure playback kicks in when metadata is ready
+                        try { v.load(); v.play().catch(() => {}); } catch {}
                       } catch {}
                     }}
+                    onWaiting={() => { try { storyVideoRef.current?.play(); } catch {} }}
+                    onPlay={() => setStoryMediaReady(true)}
                     onLoadedData={() => setStoryMediaReady(true)}
                     onCanPlay={() => setStoryMediaReady(true)}
                     onEnded={() => {
@@ -2519,7 +2551,8 @@ const CommunityFeedPage: React.FC = () => {
                       borderRadius: 16,
                       backgroundColor: '#000',
                       objectFit: 'cover',
-                      display: storyMediaReady || !storyVideoStarted ? 'block' : 'none',
+                      opacity: storyMediaReady ? 1 : 0,
+                      transition: 'opacity 150ms ease-out',
                     }}
                     onError={handleVideoError}
                   />
