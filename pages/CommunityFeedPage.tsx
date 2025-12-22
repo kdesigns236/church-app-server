@@ -33,6 +33,7 @@ interface Story {
 
 const CommunityFeedPage: React.FC = () => {
   const { user, users } = useAuth();
+  const STORY_AUTOPLAY_VIDEO = false;
   const navigate = useNavigate();
   const location = useLocation();
   const { posts, handlePostInteraction, addPostComment, deletePost, updatePost } = useAppContext();
@@ -187,6 +188,18 @@ const CommunityFeedPage: React.FC = () => {
   const editVideoInputRef = useRef<HTMLInputElement | null>(null);
   const [storyMediaReady, setStoryMediaReady] = useState<boolean>(false);
   const preloadedSetRef = useRef<Set<string>>(new Set());
+  const [storyVideoStarted, setStoryVideoStarted] = useState<boolean>(false);
+  const [storyVideoSource, setStoryVideoSource] = useState<string | null>(null);
+
+  const getStoryPosterUrl = (s: Story | null): string | undefined => {
+    try {
+      if (!s) return undefined;
+      const anyS: any = s;
+      const p = anyS?.poster || anyS?.thumbnail || anyS?.media?.poster || anyS?.media?.thumbnail;
+      const out = typeof p === 'string' ? p : undefined;
+      return out ? fixMediaUrl(out) : undefined;
+    } catch { return undefined; }
+  };
 
   const preloadStoryMedia = async (url?: string, type?: 'image' | 'video'): Promise<void> => {
     try {
@@ -199,12 +212,16 @@ const CommunityFeedPage: React.FC = () => {
           try {
             const img = new Image();
             (img as any).decoding = 'async';
-            img.onload = () => { cache.add(u); resolve(); };
             img.onerror = () => resolve();
+            img.onload = () => {
+              // Prefer decode completion if supported
+              if (typeof (img as any).decode === 'function') {
+                (img as any).decode().then(() => { cache.add(u); resolve(); }).catch(() => { cache.add(u); resolve(); });
+              } else {
+                cache.add(u); resolve();
+              }
+            };
             img.src = u;
-            if (typeof (img as any).decode === 'function') {
-              (img as any).decode().then(() => { cache.add(u); resolve(); }).catch(() => resolve());
-            }
           } catch { resolve(); }
         });
         return;
@@ -241,21 +258,45 @@ const CommunityFeedPage: React.FC = () => {
     return 5000;
   };
 
-  // Autoplay story video with sound when story changes (no controls)
+  // On story change: reset flags and optionally autoplay video (if enabled)
   useEffect(() => {
     const v = storyVideoRef.current;
     setCurrentVideoDurationMs(null);
     setStoryMediaReady(false);
+    setStoryVideoStarted(false);
+    setStoryVideoSource(null);
     if (!v) return;
     try {
-      // Ensure immediate autoplay on mobile by starting muted
-      v.muted = true;
-      v.volume = 0;
-      v.play().catch(() => {});
+      if (STORY_AUTOPLAY_VIDEO && viewingStory?.media?.type === 'video') {
+        // Ensure immediate autoplay on mobile by starting muted
+        v.muted = true;
+        v.volume = 0;
+        setStoryVideoStarted(true);
+        v.preload = 'auto';
+        const src = fixMediaUrl(viewingStory.media.url);
+        setStoryVideoSource(src);
+        // wait a tick to set src before play
+        setTimeout(() => { try { v.play().catch(() => {}); } catch {} }, 0);
+      }
     } catch {}
   }, [viewingStory]);
 
-  // When story changes, preload its media first for instant display once overlay is open
+  const startStoryVideo = () => {
+    try {
+      const v = storyVideoRef.current;
+      if (!v) return;
+      setStoryVideoStarted(true);
+      v.muted = true;
+      v.volume = 0;
+      v.preload = 'auto';
+      const srcUrl = viewingStory?.media?.url ? fixMediaUrl(viewingStory.media.url) : '';
+      if (srcUrl) setStoryVideoSource(srcUrl);
+      // ensure a new load cycle then play
+      setTimeout(() => { try { v.load(); v.play().catch(() => {}); } catch {} }, 0);
+    } catch {}
+  };
+
+  // When story changes, preload image or (if autoplay) video for instant display
   useEffect(() => {
     if (!viewingStory || !viewingStory.media) {
       setStoryMediaReady(true);
@@ -265,16 +306,22 @@ const CommunityFeedPage: React.FC = () => {
     setStoryMediaReady(false);
     const u = viewingStory.media.url;
     const t = viewingStory.media.type;
-    preloadStoryMedia(u, t).then(() => { if (!cancelled) setStoryMediaReady(true); });
+    if (t === 'video' && !STORY_AUTOPLAY_VIDEO) {
+      // don't fetch video on open; wait for user to start
+      setStoryMediaReady(false);
+    } else {
+      preloadStoryMedia(u, t).then(() => { if (!cancelled) setStoryMediaReady(true); });
+    }
     return () => { cancelled = true; };
   }, [viewingStory?.id]);
 
-  // Proactively preload the next story in sequence to avoid delays when advancing
+  // Proactively preload the next story in sequence (images always, videos only if autoplay)
   useEffect(() => {
     if (!viewingStory || activeStoryIndex === null || !currentStoryAuthor) return;
     const authorStories = stories.filter((s) => (currentStoryAuthorId ? s.authorId === currentStoryAuthorId : s.author === currentStoryAuthor));
     const next = authorStories[activeStoryIndex + 1];
     if (next && next.media) {
+      if (next.media.type === 'video' && !STORY_AUTOPLAY_VIDEO) return;
       preloadStoryMedia(next.media.url, next.media.type).catch(() => {});
     }
   }, [viewingStory?.id, activeStoryIndex, currentStoryAuthor, currentStoryAuthorId]);
@@ -2306,11 +2353,11 @@ const CommunityFeedPage: React.FC = () => {
                           : index < activeStoryIndex
                           ? '100%'
                           : index === activeStoryIndex
-                          ? '100%'
+                          ? (storyMediaReady ? '100%' : '0%')
                           : '0%',
                       backgroundColor: '#f9fafb',
                       transition:
-                        index === activeStoryIndex
+                        index === activeStoryIndex && storyMediaReady
                           ? `width ${getStoryDurationMs(story) / 1000}s linear`
                           : 'none',
                     }}
@@ -2426,10 +2473,12 @@ const CommunityFeedPage: React.FC = () => {
                 ) : (
                   <video
                     ref={storyVideoRef}
-                    src={fixMediaUrl(viewingStory.media.url)}
-                    autoPlay
+                    src={storyVideoSource || ''}
+                    autoPlay={storyVideoStarted}
                     playsInline
-                    preload="auto"
+                    muted
+                    preload={storyVideoStarted ? 'auto' : 'none'}
+                    poster={getStoryPosterUrl(viewingStory)}
                     onLoadedMetadata={(e) => {
                       try {
                         const v = e.currentTarget as HTMLVideoElement;
@@ -2455,7 +2504,7 @@ const CommunityFeedPage: React.FC = () => {
                       borderRadius: 16,
                       backgroundColor: '#000',
                       objectFit: 'cover',
-                      display: storyMediaReady ? 'block' : 'none',
+                      display: storyMediaReady || !storyVideoStarted ? 'block' : 'none',
                     }}
                     onError={handleVideoError}
                   />
@@ -2499,6 +2548,40 @@ const CommunityFeedPage: React.FC = () => {
                   />
                   <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
                 </div>
+              )}
+
+              {/* Play overlay for videos when autoplay is disabled */}
+              {viewingStory?.media?.type === 'video' && !STORY_AUTOPLAY_VIDEO && !storyVideoStarted && (
+                <button
+                  onClick={startStoryVideo}
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'transparent',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                  aria-label="Play story video"
+                >
+                  <div
+                    style={{
+                      width: 64,
+                      height: 64,
+                      borderRadius: '50%',
+                      background: 'rgba(0,0,0,0.5)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M8 5v14l11-7L8 5z" />
+                    </svg>
+                  </div>
+                </button>
               )}
 
               <div
