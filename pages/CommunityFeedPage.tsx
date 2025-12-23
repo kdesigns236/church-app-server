@@ -298,6 +298,26 @@ const CommunityFeedPage: React.FC = () => {
         }
         setStoryVideoSource(src);
         logStoryDebug(`Set source: ${src}`);
+        // Log basic support signals
+        try {
+          const vp = storyVideoRef.current;
+          if (vp && typeof vp.canPlayType === 'function') {
+            logStoryDebug(`canPlayType mp4=${vp.canPlayType('video/mp4') || ''} webm=${vp.canPlayType('video/webm') || ''}`);
+          }
+        } catch {}
+        // Probe headers (small range) to record content-type and range support
+        try {
+          (async () => {
+            try {
+              const r = await fetch(src, { method: 'GET', headers: { Range: 'bytes=0-0' } });
+              logStoryDebug(`probe headers: status=${r.status} content-type=${r.headers.get('content-type') || ''} accept-ranges=${r.headers.get('accept-ranges') || ''} content-range=${r.headers.get('content-range') || ''}`);
+            } catch {}
+          })();
+        } catch {}
+        // Watchdog: if not ready after 6s, show external open hint
+        try {
+          setTimeout(() => { try { if (!storyMediaReady) { setStoryVideoHint(true); logStoryDebug('watchdog: not ready after 6s -> enabling external open hint'); } } catch {} }, 6000);
+        } catch {}
         const attempt = () => {
           const el = storyVideoRef.current;
           if (!el) { setTimeout(attempt, 100); return; }
@@ -2594,6 +2614,7 @@ const CommunityFeedPage: React.FC = () => {
                         if (durMs && isFinite(durMs)) {
                           setCurrentVideoDurationMs(durMs);
                         }
+                        setStoryMediaReady(true);
                         logStoryDebug(`loadedmetadata duration=${String(v.duration)} video=${String(v.videoWidth)}x${String(v.videoHeight)} readyState=${String(v.readyState)} currentSrc=${v.currentSrc}`);
                         safePlay(v);
                       } catch {}
@@ -2602,6 +2623,15 @@ const CommunityFeedPage: React.FC = () => {
                     onPlay={() => { try { logStoryDebug('play'); setStoryMediaReady(true); } catch {} }}
                     onLoadedData={() => { try { logStoryDebug('loadeddata'); setStoryMediaReady(true); } catch {} }}
                     onCanPlay={() => { try { logStoryDebug('canplay'); setStoryMediaReady(true); } catch {} }}
+                    onPlaying={() => { try { logStoryDebug('playing'); setStoryMediaReady(true); } catch {} }}
+                    onProgress={(e) => {
+                      try {
+                        const v = e.currentTarget as HTMLVideoElement;
+                        if (v.buffered && v.buffered.length > 0 && v.buffered.end(0) > 0) {
+                          if (!storyMediaReady) setStoryMediaReady(true);
+                        }
+                      } catch {}
+                    }}
                     onTimeUpdate={(e) => {
                       try {
                         const v = e.currentTarget as HTMLVideoElement;
@@ -2637,7 +2667,16 @@ const CommunityFeedPage: React.FC = () => {
                     }
                     }
                   >
-                    {storyVideoSource ? <source src={storyVideoSource} /> : null}
+                    {storyVideoSource ? (
+                      <source
+                        src={storyVideoSource}
+                        {...(/\.mp4(\?|#|$)/i.test(storyVideoSource)
+                          ? { type: 'video/mp4' }
+                          : /\.webm(\?|#|$)/i.test(storyVideoSource)
+                          ? { type: 'video/webm' }
+                          : {})}
+                      />
+                    ) : null}
                   </video>
                 )
               ) : (
