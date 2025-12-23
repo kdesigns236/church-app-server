@@ -192,6 +192,16 @@ const CommunityFeedPage: React.FC = () => {
   const [storyVideoSource, setStoryVideoSource] = useState<string | null>(null);
   const prefetchStartedRef = useRef<boolean>(false);
   const [storyVideoHint, setStoryVideoHint] = useState<boolean>(false);
+  const [storyDebugLogs, setStoryDebugLogs] = useState<string[]>([]);
+  const logStoryDebug = (msg: string) => {
+    try {
+      const line = `[${new Date().toISOString()}] ${msg}`;
+      setStoryDebugLogs((prev) => {
+        const next = (prev || []).concat(line);
+        return next.length > 200 ? next.slice(-200) : next;
+      });
+    } catch {}
+  };
 
   const getStoryPosterUrl = (s: Story | null): string | undefined => {
     try {
@@ -269,10 +279,18 @@ const CommunityFeedPage: React.FC = () => {
     setStoryVideoSource(null);
     setStoryVideoHint(false);
     try {
+      const media = viewingStory?.media;
+      setStoryDebugLogs([]);
+      if (media) {
+        logStoryDebug(`Open story id=${String(viewingStory?.id || '')} type=${media.type} url=${fixMediaUrl(media.url)}`);
+      }
+    } catch {}
+    try {
       if (STORY_AUTOPLAY_VIDEO && viewingStory?.media?.type === 'video') {
         setStoryVideoStarted(true);
         const src = fixMediaUrl(viewingStory.media.url);
         setStoryVideoSource(src);
+        logStoryDebug(`Set source: ${src}`);
         const attempt = () => {
           const el = storyVideoRef.current;
           if (!el) { setTimeout(attempt, 100); return; }
@@ -289,6 +307,7 @@ const CommunityFeedPage: React.FC = () => {
             el.setAttribute('autoplay','');
             el.preload = 'auto';
             try { (el as any).playsInline = true; } catch {}
+            logStoryDebug(`Attempt play; readyState=${String((el as any).readyState)} networkState=${String((el as any).networkState)} currentSrc=${(el as any).currentSrc || ''}`);
             safeLoadThenPlay(el);
           } catch {
             setTimeout(attempt, 150);
@@ -551,8 +570,8 @@ const CommunityFeedPage: React.FC = () => {
       const src = el.currentSrc || (el as any).src || '';
       const fixed = fixMediaUrl(src);
       if (fixed && fixed !== src) {
-        (el as any).src = fixed;
-        safeLoadThenPlay(el);
+        try { setStoryVideoSource(fixed); } catch {}
+        setTimeout(() => { try { safeLoadThenPlay(storyVideoRef.current); } catch {} }, 0);
         return;
       }
       setStoryVideoHint(true);
@@ -1271,7 +1290,7 @@ const CommunityFeedPage: React.FC = () => {
                         playsInline
                         preload="metadata"
                         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-                        onError={handleVideoError}
+                        onError={(e) => { try { const v = e.currentTarget as HTMLVideoElement; const err = (v.error && (v.error as any).message) || `MediaError code=${String((v.error && (v.error as any).code) || '0')}`; logStoryDebug(`error readyState=${String(v.readyState)} networkState=${String(v.networkState)} currentTime=${String(v.currentTime)} currentSrc=${v.currentSrc} detail=${err}`); } catch {} finally { try { handleVideoError(e); } catch {} } }}
                       />
                       <div
                         style={{
@@ -2567,29 +2586,30 @@ const CommunityFeedPage: React.FC = () => {
                         if (durMs && isFinite(durMs)) {
                           setCurrentVideoDurationMs(durMs);
                         }
+                        logStoryDebug(`loadedmetadata duration=${String(v.duration)} video=${String(v.videoWidth)}x${String(v.videoHeight)} readyState=${String(v.readyState)} currentSrc=${v.currentSrc}`);
                         safePlay(v);
                       } catch {}
                     }}
-                    onWaiting={() => { try { safePlay(storyVideoRef.current); } catch {} }}
-                    onPlay={() => setStoryMediaReady(true)}
-                    onLoadedData={() => setStoryMediaReady(true)}
-                    onCanPlay={() => setStoryMediaReady(true)}
+                    onWaiting={() => { try { logStoryDebug('waiting'); safePlay(storyVideoRef.current); } catch {} }}
+                    onPlay={() => { try { logStoryDebug('play'); setStoryMediaReady(true); } catch {} }}
+                    onLoadedData={() => { try { logStoryDebug('loadeddata'); setStoryMediaReady(true); } catch {} }}
+                    onCanPlay={() => { try { logStoryDebug('canplay'); setStoryMediaReady(true); } catch {} }}
                     onTimeUpdate={(e) => {
                       try {
                         const v = e.currentTarget as HTMLVideoElement;
                         if (!storyMediaReady && v.currentTime > 0) setStoryMediaReady(true);
                       } catch {}
                     }}
-                    onStalled={() => { try { safePlay(storyVideoRef.current); } catch {} }}
-                    onSuspend={() => { try { safePlay(storyVideoRef.current); } catch {} }}
+                    onStalled={() => { try { logStoryDebug('stalled'); safePlay(storyVideoRef.current); } catch {} }}
+                    onSuspend={() => { try { logStoryDebug('suspend'); safePlay(storyVideoRef.current); } catch {} }}
                     onEnded={() => {
                       // Advance immediately when the video ends, even if timer hasn't elapsed
                       goToNextStory();
                     }}
                     onTouchStart={() => storyVideoRef.current?.pause()}
-                    onTouchEnd={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; safePlay(v); } catch {} }}
+                    onTouchEnd={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; logStoryDebug('gesture: unmute+play'); safePlay(v); } catch {} }}
                     onPointerDown={() => storyVideoRef.current?.pause()}
-                    onPointerUp={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; safePlay(v); } catch {} }}
+                    onPointerUp={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; logStoryDebug('gesture: unmute+play'); safePlay(v); } catch {} }}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -2677,6 +2697,44 @@ const CommunityFeedPage: React.FC = () => {
                     >
                       Open video externally
                     </a>
+                  )}
+                  {viewingStory?.media?.type === 'video' && storyDebugLogs.length > 0 && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        bottom: 60,
+                        left: 12,
+                        right: 12,
+                        maxHeight: 160,
+                        overflow: 'auto',
+                        background: 'rgba(0,0,0,0.55)',
+                        color: '#fff',
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        lineHeight: '16px',
+                        padding: '8px 10px',
+                        borderRadius: 8,
+                        border: '1px solid rgba(255,255,255,0.2)'
+                      }}
+                    >
+                      {storyDebugLogs.slice(-25).map((l, i) => (
+                        <div key={i}>{l}</div>
+                      ))}
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+                        <button
+                          onClick={() => { try { navigator.clipboard.writeText(storyDebugLogs.join('\n')); } catch {} }}
+                          style={{
+                            padding: '4px 8px',
+                            borderRadius: 6,
+                            background: 'rgba(255,255,255,0.12)',
+                            color: '#fff',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            fontSize: 11,
+                            cursor: 'pointer'
+                          }}
+                        >Copy logs</button>
+                      </div>
+                    </div>
                   )}
                   <style>{'@keyframes spin{to{transform:rotate(360deg)}}'}</style>
                 </div>
