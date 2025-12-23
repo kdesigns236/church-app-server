@@ -276,6 +276,11 @@ const CommunityFeedPage: React.FC = () => {
         const attempt = () => {
           const el = storyVideoRef.current;
           if (!el) { setTimeout(attempt, 100); return; }
+          // avoid play during unmount/remount race
+          if (typeof (el as any).isConnected === 'boolean' && !(el as any).isConnected) {
+            setTimeout(attempt, 100);
+            return;
+          }
           try {
             el.muted = true;
             el.volume = 0;
@@ -284,11 +289,7 @@ const CommunityFeedPage: React.FC = () => {
             el.setAttribute('autoplay','');
             el.preload = 'auto';
             try { (el as any).playsInline = true; } catch {}
-            try { el.load(); } catch {}
-            const p = el.play();
-            if (p && typeof (p as any).catch === 'function') {
-              (p as Promise<void>).catch(() => setTimeout(attempt, 150));
-            }
+            safeLoadThenPlay(el);
           } catch {
             setTimeout(attempt, 150);
           }
@@ -306,7 +307,7 @@ const CommunityFeedPage: React.FC = () => {
   // Ensure autoplay resumes when page/tab gains focus or visibility changes
   useEffect(() => {
     if (!viewingStory || viewingStory?.media?.type !== 'video') return;
-    const resume = () => { try { storyVideoRef.current?.play().catch(() => {}); } catch {} };
+    const resume = () => { try { safePlay(storyVideoRef.current); } catch {} };
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('focus', resume);
     return () => {
@@ -326,7 +327,7 @@ const CommunityFeedPage: React.FC = () => {
       const srcUrl = viewingStory?.media?.url ? fixMediaUrl(viewingStory.media.url) : '';
       if (srcUrl) setStoryVideoSource(srcUrl);
       // ensure a new load cycle then play
-      setTimeout(() => { try { v.load(); v.play().catch(() => {}); } catch {} }, 0);
+      setTimeout(() => { safeLoadThenPlay(v); }, 0);
     } catch {}
   };
 
@@ -510,6 +511,30 @@ const CommunityFeedPage: React.FC = () => {
     }
   };
 
+  // Safely call HTMLVideoElement.play(), swallowing AbortError and ignoring detached elements
+  const safePlay = (el?: HTMLVideoElement | null) => {
+    try {
+      if (!el) return;
+      const connected = typeof (el as any).isConnected === 'boolean'
+        ? (el as any).isConnected
+        : (typeof document !== 'undefined' && document.contains ? document.contains(el) : true);
+      if (!connected) return;
+      const p = el.play();
+      if (p && typeof (p as any).catch === 'function') {
+        (p as Promise<void>).catch((err: any) => {
+          if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError' || err.name === 'NotSupportedError')) {
+            return;
+          }
+        });
+      }
+    } catch {}
+  };
+
+  const safeLoadThenPlay = (el?: HTMLVideoElement | null) => {
+    try { if (!el) return; el.load(); } catch {}
+    safePlay(el);
+  };
+
   const handleImgError = (e: React.SyntheticEvent<HTMLImageElement>) => {
     try {
       const el = e.currentTarget;
@@ -527,7 +552,7 @@ const CommunityFeedPage: React.FC = () => {
       const fixed = fixMediaUrl(src);
       if (fixed && fixed !== src) {
         (el as any).src = fixed;
-        try { el.load(); el.play().catch(() => {}); } catch {}
+        safeLoadThenPlay(el);
       }
       setStoryMediaReady(true);
     } catch {}
@@ -2576,7 +2601,7 @@ const CommunityFeedPage: React.FC = () => {
                     }}
                     onError={handleVideoError}
                   >
-                    {storyVideoSource ? <source src={storyVideoSource} /> : null}
+                    {storyVideoSource ? <source src={storyVideoSource} type="video/mp4" /> : null}
                   </video>
                 )
               ) : (
