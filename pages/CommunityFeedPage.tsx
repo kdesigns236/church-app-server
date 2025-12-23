@@ -289,6 +289,13 @@ const CommunityFeedPage: React.FC = () => {
       if (STORY_AUTOPLAY_VIDEO && viewingStory?.media?.type === 'video') {
         setStoryVideoStarted(true);
         const src = fixMediaUrl(viewingStory.media.url);
+        if (!src) {
+          setStoryVideoHint(true);
+          setStoryMediaReady(false);
+          setStoryVideoStarted(false);
+          logStoryDebug('Invalid/unsupported source (blob/data or empty). Waiting for uploaded URL...');
+          return;
+        }
         setStoryVideoSource(src);
         logStoryDebug(`Set source: ${src}`);
         const attempt = () => {
@@ -1795,7 +1802,8 @@ const CommunityFeedPage: React.FC = () => {
                       ) : (
                         <video
                           controls
-                          src={(editMedia || post.media)!.url}
+                          src={fixMediaUrl((editMedia || post.media)!.url)}
+                          preload="metadata"
                           style={{ width: '100%', borderRadius: 8, maxHeight: 320, background: '#000' }}
                         />
                       )}
@@ -2619,7 +2627,15 @@ const CommunityFeedPage: React.FC = () => {
                       // Always show the element so poster is visible; overlay spinner covers while loading
                       transition: 'opacity 150ms ease-out',
                     }}
-                    onError={handleVideoError}
+                    onError={(e) => {
+                      try {
+                        const v = e.currentTarget as HTMLVideoElement;
+                        const err = (v.error && (v.error as any).message) || `MediaError code=${String((v.error && (v.error as any).code) || '0')}`;
+                        logStoryDebug(`error readyState=${String(v.readyState)} networkState=${String(v.networkState)} currentTime=${String(v.currentTime)} currentSrc=${v.currentSrc} detail=${err}`);
+                      } catch {}
+                      try { handleVideoError(e); } catch {}
+                    }
+                    }
                   >
                     {storyVideoSource ? <source src={storyVideoSource} /> : null}
                   </video>

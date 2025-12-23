@@ -922,8 +922,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
           }
           
-          // Pull full snapshot as a consistency check
-          try {
+          // Pull full snapshot as a consistency check: skip immediate duplicate pull if primary sync succeeded
+          const doPull = async () => {
             const full = await websocketService.pullFromServer();
             if (full && typeof full === 'object') {
               if (Array.isArray(full.sermons) && (full.sermons.length > 0 || sermons.length === 0)) { setSermons(full.sermons as Sermon[]); localStorage.setItem('sermons', JSON.stringify(full.sermons)); }
@@ -949,7 +949,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
               }
             }
-          } catch {}
+          };
+          if (!syncOk) {
+            try { await doPull(); } catch {}
+          } else {
+            try {
+              const ric: any = (window as any).requestIdleCallback;
+              if (typeof ric === 'function') {
+                ric(() => { doPull().catch(() => {}); }, { timeout: 12000 } as any);
+              } else {
+                setTimeout(() => { doPull().catch(() => {}); }, 6000);
+              }
+            } catch {}
+          }
 
           // Update last sync timestamp
           if (anyFetchOk) {

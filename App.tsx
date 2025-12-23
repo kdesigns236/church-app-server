@@ -542,9 +542,23 @@ const App: React.FC = () => {
         const prepare = async (lang: 'en' | 'sw') => {
             try {
                 if (cancelled) return;
-                const match = await caches.match(`/bible/${lang}.json`).catch(() => null);
-                if (!match) return;
-                const txt = await match.text();
+                let txt: string | null = null;
+                try {
+                    const match = await caches.match(`/bible/${lang}.json`).catch(() => null);
+                    if (match) txt = await match.text();
+                } catch {}
+                if (!txt) {
+                    try {
+                        const res = await fetch(`/bible/${lang}.json`);
+                        if (res && res.ok) {
+                            const clone = res.clone();
+                            txt = await res.text();
+                            try { const cache = await caches.open('bible-data-v1'); await cache.put(`/bible/${lang}.json`, clone); } catch {}
+                        }
+                    } catch {}
+                }
+                if (!txt) return;
+                
                 const data = await parseWithWorker(txt);
                 if (!data) return;
                 let payload: any = null;
