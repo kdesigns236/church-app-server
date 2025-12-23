@@ -507,12 +507,49 @@ const App: React.FC = () => {
                 })();
             });
         };
-        run();
-        try {
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then(() => { if (!cancelled) run(); }).catch(() => {});
+
+        const isSlowNetwork = () => {
+            try {
+                const conn: any = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+                if (!conn) return false;
+                if (conn.saveData) return true;
+                const et = String(conn.effectiveType || '').toLowerCase();
+                return et === '2g' || et === 'slow-2g';
+            } catch { return false; }
+        };
+
+        const defer = (cb: () => void) => {
+            try {
+                const ric: any = (window as any).requestIdleCallback;
+                if (typeof ric === 'function') {
+                    ric(() => cb(), { timeout: 10000 } as any);
+                    return;
+                }
+            } catch {}
+            setTimeout(cb, 8000);
+        };
+
+        const start = () => {
+            if (cancelled) return;
+            run();
+            try {
+                if ('serviceWorker' in navigator) {
+                    navigator.serviceWorker.ready.then(() => { if (!cancelled) run(); }).catch(() => {});
+                }
+            } catch {}
+        };
+
+        const hash = typeof window !== 'undefined' ? (window.location.hash || '') : '';
+        if (hash.startsWith('#/bible')) {
+            // If user opens Bible directly, prefetch immediately
+            start();
+        } else {
+            // Otherwise, defer to idle or 8s and skip on slow networks to improve startup
+            if (!isSlowNetwork()) {
+                defer(start);
             }
-        } catch {}
+        }
+
         return () => { cancelled = true; };
     }, []);
 
