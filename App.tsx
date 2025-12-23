@@ -218,78 +218,88 @@ const ProtectedRoutes: React.FC = () => {
     return (
         <>
             <PageLayout>
-                <Suspense fallback={<LoadingFallback />}>
-                    {/* Keep-alive pages: always mounted, simply shown/hidden by CSS */}
+                {/* Keep-alive pages: always mounted, simply shown/hidden by CSS */}
+                {(path === '/sermons' || visitedPaths.includes('/sermons')) && (
                     <div style={{ display: path === '/sermons' ? 'block' : 'none' }}>
                         <SermonsPage />
                     </div>
+                )}
+                {(path === '/chat' || visitedPaths.includes('/chat')) && (
                     <div style={{ display: path === '/chat' ? 'block' : 'none' }}>
                         <CommunityFeedPage />
                     </div>
+                )}
+                {(path === '/bible' || visitedPaths.includes('/bible')) && (
                     <div style={{ display: path === '/bible' ? 'block' : 'none' }}>
-                        <BiblePage />
+                        <Suspense fallback={<LoadingFallback />}>
+                            <BiblePage />
+                        </Suspense>
                     </div>
-                    {/* Pro Stream (no keep-alive) */}
-                    <div style={{ display: path === '' ? 'block' : 'none' }}>
-                        <HomePage />
-                    </div>
-                    <div style={{ display: path === '/announcements' ? 'block' : 'none' }}>
-                        <AnnouncementsPage />
-                    </div>
-                    <div style={{ display: path === '/events' ? 'block' : 'none' }}>
-                        <EventsPage />
-                    </div>
+                )}
+                {(path === '/bible-study' || visitedPaths.includes('/bible-study')) && (
                     <div style={{ display: path === '/bible-study' ? 'block' : 'none' }}>
-                        <BibleStudyPage />
+                        <Suspense fallback={<LoadingFallback />}>
+                            <BibleStudyPage />
+                        </Suspense>
                     </div>
-                    <div style={{ display: path === '/giving' ? 'block' : 'none' }}>
-                        <GivingPage />
-                    </div>
-                    <div style={{ display: path === '/members' ? 'block' : 'none' }}>
-                        <MembersPage />
-                    </div>
-                    {/* Go Live (no keep-alive) */}
-                    <div style={{ display: path === '/chat-room' ? 'block' : 'none' }}>
-                        <ChatPage />
-                    </div>
-                    <div style={{ display: path === '/create-post' ? 'block' : 'none' }}>
-                        <CreatePostPage />
-                    </div>
-                    <div style={{ display: path === '/contact' ? 'block' : 'none' }}>
-                        <ContactPage />
-                    </div>
-                    <div style={{ display: path === '/profile' ? 'block' : 'none' }}>
-                        <ProfilePage />
-                    </div>
-                    <div style={{ display: path === '/pastor-ai' ? 'block' : 'none' }}>
-                        <PastorAiPage />
-                    </div>
-                    {/* Video Call (no keep-alive) */}
-                    {/* Camera Client (no keep-alive) */}
-                    <Routes>
-                        <Route path="/" element={<></>} />
-                        <Route path="/sermons" element={<></>} />
-                        <Route path="/announcements" element={<></>} />
-                        <Route path="/events" element={<></>} />
-                        <Route path="/bible" element={<></>} />
-                        <Route path="/bible-study" element={<></>} />
-                        <Route path="/giving" element={<></>} />
-                        <Route path="/members" element={<></>} />
-                        <Route path="/golive" element={<GoLivePage />} />
-                        <Route path="/prostream" element={<ProStreamApp />} />
-                        <Route path="/chat" element={<></>} />
-                        <Route path="/chat-room" element={<></>} />
-                        <Route path="/create-post" element={<></>} />
-                        <Route path="/contact" element={<></>} />
-                        <Route path="/profile" element={<></>} />
-                        <Route path="/pastor-ai" element={<></>} />
-                        <Route path="/video-call" element={<VideoCallPage />} />
-                        <Route path="/camera-client" element={<CameraClientPage />} />
-                        <Route path="/admin/json-converter" element={<AdminRoute><JsonConverterPage /></AdminRoute>} />
-                        <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
-                        <Route path="*" element={<Navigate to="/" />} />
-                    </Routes>
-                </Suspense>
+                )}
+                {/* Pro Stream (no keep-alive) */}
+                <div style={{ display: path === '' ? 'block' : 'none' }}>
+                    <HomePage />
+                </div>
+                <div style={{ display: path === '/announcements' ? 'block' : 'none' }}>
+                    <AnnouncementsPage />
+                </div>
+                <div style={{ display: path === '/events' ? 'block' : 'none' }}>
+                    <EventsPage />
+                </div>
+                <div style={{ display: path === '/giving' ? 'block' : 'none' }}>
+                    <GivingPage />
+                </div>
+                <div style={{ display: path === '/members' ? 'block' : 'none' }}>
+                    <MembersPage />
+                </div>
+                {/* Go Live (no keep-alive) */}
+                <div style={{ display: path === '/chat-room' ? 'block' : 'none' }}>
+                    <ChatPage />
+                </div>
+                <div style={{ display: path === '/create-post' ? 'block' : 'none' }}>
+                    <CreatePostPage />
+                </div>
+                <div style={{ display: path === '/contact' ? 'block' : 'none' }}>
+                    <ContactPage />
+                </div>
+                <div style={{ display: path === '/profile' ? 'block' : 'none' }}>
+                    <ProfilePage />
+                </div>
+                <div style={{ display: path === '/pastor-ai' ? 'block' : 'none' }}>
+                    <PastorAiPage />
+                </div>
+                {/* Video Call (no keep-alive) */}
+                {/* Camera Client (no keep-alive) */}
+                <Routes>
+                    <Route path="/" element={<></>} />
+                    <Route path="/sermons" element={<></>} />
+                    <Route path="/announcements" element={<></>} />
+                    <Route path="/events" element={<></>} />
+                    <Route path="/bible" element={<></>} />
+                    <Route path="/bible-study" element={<></>} />
+                    <Route path="/giving" element={<></>} />
+                    <Route path="/members" element={<></>} />
+                    <Route path="/golive" element={<GoLivePage />} />
+                    <Route path="/prostream" element={<ProStreamApp />} />
+                    <Route path="/chat" element={<></>} />
+                    <Route path="/chat-room" element={<></>} />
+                    <Route path="/create-post" element={<></>} />
+                    <Route path="/contact" element={<></>} />
+                    <Route path="/profile" element={<></>} />
+                    <Route path="/pastor-ai" element={<></>} />
+                    <Route path="/video-call" element={<VideoCallPage />} />
+                    <Route path="/camera-client" element={<CameraClientPage />} />
+                    <Route path="/admin/json-converter" element={<AdminRoute><JsonConverterPage /></AdminRoute>} />
+                    <Route path="/admin" element={<AdminRoute><AdminPage /></AdminRoute>} />
+                    <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
             </PageLayout>
         </>
     );
