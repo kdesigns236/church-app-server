@@ -488,8 +488,9 @@ const App: React.FC = () => {
             } catch {
                 cache = null;
             }
+            const tasks: Promise<any>[] = [];
             urls.forEach((u) => {
-                (async () => {
+                tasks.push((async () => {
                     try {
                         if (cancelled) return;
                         if (cache) {
@@ -504,17 +505,76 @@ const App: React.FC = () => {
                             try { await cache.put(u, res.clone()); } catch {}
                         }
                     } catch {}
-                })();
+                })());
             });
+            try { await Promise.all(tasks); } catch {}
         };
 
         // Restore immediate prefetch at startup and after SW is ready
-        run();
+        (async () => { try { await run(); } catch {} try { await prepare('en'); await prepare('sw'); } catch {} })();
         try {
             if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.ready.then(() => { if (!cancelled) run(); }).catch(() => {});
+                navigator.serviceWorker.ready.then(() => {
+                    if (!cancelled) {
+                        run().then(() => { try { prepare('en'); prepare('sw'); } catch {} }).catch(() => {});
+                    }
+                }).catch(() => {});
             }
         } catch {}
+
+        const parseWithWorker = (text: string): Promise<any> => {
+            return new Promise((resolve, reject) => {
+                try {
+                    if (typeof Worker !== 'undefined') {
+                        const w = new Worker(new URL('./workers/jsonParseWorker.js', import.meta.url));
+                        const timer = window.setTimeout(() => { try { w.terminate(); } catch {} reject(new Error('Worker parse timeout')); }, 15000);
+                        w.onmessage = (e: MessageEvent) => { window.clearTimeout(timer); try { w.terminate(); } catch {} const msg: any = e.data || {}; if (msg.ok) resolve(msg.data); else reject(new Error(msg.error || 'Worker parse failed')); };
+                        w.onerror = () => { window.clearTimeout(timer); try { w.terminate(); } catch {} reject(new Error('Worker error')); };
+                        w.postMessage({ text });
+                    } else {
+                        const data = JSON.parse(text);
+                        resolve(data);
+                    }
+                } catch (err) { reject(err as any); }
+            });
+        };
+
+        const prepare = async (lang: 'en' | 'sw') => {
+            try {
+                if (cancelled) return;
+                const match = await caches.match(`/bible/${lang}.json`).catch(() => null);
+                if (!match) return;
+                const txt = await match.text();
+                const data = await parseWithWorker(txt);
+                if (!data) return;
+                let payload: any = null;
+                if ((data as any).BIBLEBOOK && Array.isArray((data as any).BIBLEBOOK)) {
+                    const books = (data as any).BIBLEBOOK.map((b: any, idx: number) => ({ name: b.book_name, number: b.book_number || String(idx + 1) }));
+                    if (books.length > 0) {
+                        const firstBook = (data as any).BIBLEBOOK[0];
+                        const chapters = (firstBook.CHAPTER || []).map((ch: any) => ch.chapter_number);
+                        const verses = (firstBook.CHAPTER?.[0]?.VERSES || []).map((v: any) => ({ number: v.verse_number, text: v.verse_text }));
+                        payload = { books, selectedBook: books[0], chapters, selectedChapter: chapters[0] || '1', verses };
+                    }
+                } else {
+                    const bookNames = Object.keys(data || {});
+                    const books = bookNames.map((name: string, idx: number) => ({ name, number: String(idx + 1) }));
+                    if (books.length > 0) {
+                        const firstName = books[0].name;
+                        const chapters = Object.keys((data as any)[firstName] || {});
+                        const firstChapter = chapters[0];
+                        const verseObj = ((data as any)[firstName] || {})[firstChapter] || {};
+                        const verses = Object.entries(verseObj).map(([num, text]) => ({ number: num as string, text: String(text) }));
+                        payload = { books, selectedBook: books[0], chapters, selectedChapter: firstChapter || '1', verses };
+                    }
+                }
+                if (payload) {
+                    try { localStorage.setItem(`bible_first_view_${lang}`, JSON.stringify(payload)); } catch {}
+                }
+            } catch {}
+        };
+
+        // initial prepare is triggered after first run above
 
         return () => { cancelled = true; };
     }, []);

@@ -188,6 +188,25 @@ const BiblePage: React.FC = () => {
         } catch {}
     };
 
+    // Fast-path: render immediately from precomputed snapshot prepared during app prefetch
+    useEffect(() => {
+        try {
+            const key = `bible_first_view_${language}`;
+            const snapRaw = localStorage.getItem(key);
+            if (snapRaw) {
+                const snap = JSON.parse(snapRaw);
+                if (snap && typeof snap === 'object') {
+                    setBooks(Array.isArray(snap.books) ? snap.books : []);
+                    setSelectedBook(snap.selectedBook || null);
+                    setChapters(Array.isArray(snap.chapters) ? snap.chapters : []);
+                    setSelectedChapter(typeof snap.selectedChapter === 'string' ? snap.selectedChapter : (Array.isArray(snap.chapters) && snap.chapters[0]) || '1');
+                    setVerses(Array.isArray(snap.verses) ? snap.verses : []);
+                    setIsLoading(false);
+                }
+            }
+        } catch {}
+    }, [language]);
+
     useEffect(() => {
         loadBible(language);
     }, [language]);

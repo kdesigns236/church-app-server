@@ -553,8 +553,10 @@ const CommunityFeedPage: React.FC = () => {
       if (fixed && fixed !== src) {
         (el as any).src = fixed;
         safeLoadThenPlay(el);
+        return;
       }
-      setStoryMediaReady(true);
+      setStoryVideoHint(true);
+      setStoryMediaReady(false);
     } catch {}
   };
 
@@ -2549,10 +2551,8 @@ const CommunityFeedPage: React.FC = () => {
                   <video
                     key={String(viewingStory?.id || '')}
                     ref={storyVideoRef}
-                    src={storyVideoSource || ''}
                     autoPlay
                     playsInline
-                    crossOrigin="anonymous"
                     muted
                     defaultMuted
                     controls={storyVideoHint}
@@ -2567,10 +2567,10 @@ const CommunityFeedPage: React.FC = () => {
                         if (durMs && isFinite(durMs)) {
                           setCurrentVideoDurationMs(durMs);
                         }
-                        try { v.play().catch(() => {}); } catch {}
+                        safePlay(v);
                       } catch {}
                     }}
-                    onWaiting={() => { try { storyVideoRef.current?.play(); } catch {} }}
+                    onWaiting={() => { try { safePlay(storyVideoRef.current); } catch {} }}
                     onPlay={() => setStoryMediaReady(true)}
                     onLoadedData={() => setStoryMediaReady(true)}
                     onCanPlay={() => setStoryMediaReady(true)}
@@ -2580,16 +2580,16 @@ const CommunityFeedPage: React.FC = () => {
                         if (!storyMediaReady && v.currentTime > 0) setStoryMediaReady(true);
                       } catch {}
                     }}
-                    onStalled={() => { try { storyVideoRef.current?.play().catch(() => {}); } catch {} }}
-                    onSuspend={() => { try { storyVideoRef.current?.play().catch(() => {}); } catch {} }}
+                    onStalled={() => { try { safePlay(storyVideoRef.current); } catch {} }}
+                    onSuspend={() => { try { safePlay(storyVideoRef.current); } catch {} }}
                     onEnded={() => {
                       // Advance immediately when the video ends, even if timer hasn't elapsed
                       goToNextStory();
                     }}
                     onTouchStart={() => storyVideoRef.current?.pause()}
-                    onTouchEnd={() => storyVideoRef.current?.play()}
+                    onTouchEnd={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; safePlay(v); } catch {} }}
                     onPointerDown={() => storyVideoRef.current?.pause()}
-                    onPointerUp={() => storyVideoRef.current?.play()}
+                    onPointerUp={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; safePlay(v); } catch {} }}
                     style={{
                       width: '100%',
                       height: '100%',
@@ -2601,7 +2601,7 @@ const CommunityFeedPage: React.FC = () => {
                     }}
                     onError={handleVideoError}
                   >
-                    {storyVideoSource ? <source src={storyVideoSource} type="video/mp4" /> : null}
+                    {storyVideoSource ? <source src={storyVideoSource} /> : null}
                   </video>
                 )
               ) : (
