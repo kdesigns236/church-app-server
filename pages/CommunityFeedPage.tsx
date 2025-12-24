@@ -17,6 +17,7 @@ import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
 import { websocketService } from '../services/websocketService';
 import { Post, Comment } from '../types';
+import StoryPlayer from '../components/stories/StoryPlayer';
 
 interface Story {
   id: number;
@@ -2595,18 +2596,13 @@ const CommunityFeedPage: React.FC = () => {
                     onError={handleImgError}
                   />
                 ) : (
-                  <video
+                  <StoryPlayer
                     key={String(viewingStory?.id || '')}
                     ref={storyVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    defaultMuted
-                    controls={storyVideoHint}
-                    disablePictureInPicture
-                    controlsList="nodownload noplaybackrate nofullscreen"
-                    preload={'auto'}
+                    src={storyVideoSource || ''}
                     poster={getStoryPosterUrl(viewingStory)}
+                    hint={storyVideoHint}
+                    preload="auto"
                     onLoadedMetadata={(e) => {
                       try {
                         const v = e.currentTarget as HTMLVideoElement;
@@ -2648,15 +2644,6 @@ const CommunityFeedPage: React.FC = () => {
                     onTouchEnd={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; logStoryDebug('gesture: unmute+play'); safePlay(v); } catch {} }}
                     onPointerDown={() => storyVideoRef.current?.pause()}
                     onPointerUp={() => { try { const v = storyVideoRef.current; if (!v) return; v.muted = false; v.volume = 1; logStoryDebug('gesture: unmute+play'); safePlay(v); } catch {} }}
-                    style={{
-                      width: '100%',
-                      height: '100%',
-                      borderRadius: 16,
-                      backgroundColor: '#000',
-                      objectFit: 'cover',
-                      // Always show the element so poster is visible; overlay spinner covers while loading
-                      transition: 'opacity 150ms ease-out',
-                    }}
                     onError={(e) => {
                       try {
                         const v = e.currentTarget as HTMLVideoElement;
@@ -2664,20 +2651,16 @@ const CommunityFeedPage: React.FC = () => {
                         logStoryDebug(`error readyState=${String(v.readyState)} networkState=${String(v.networkState)} currentTime=${String(v.currentTime)} currentSrc=${v.currentSrc} detail=${err}`);
                       } catch {}
                       try { handleVideoError(e); } catch {}
-                    }
-                    }
-                  >
-                    {storyVideoSource ? (
-                      <source
-                        src={storyVideoSource}
-                        {...(/\.mp4(\?|#|$)/i.test(storyVideoSource)
-                          ? { type: 'video/mp4' }
-                          : /\.webm(\?|#|$)/i.test(storyVideoSource)
-                          ? { type: 'video/webm' }
-                          : {})}
-                      />
-                    ) : null}
-                  </video>
+                    }}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 16,
+                      backgroundColor: '#000',
+                      objectFit: 'cover',
+                      transition: 'opacity 150ms ease-out',
+                    }}
+                  />
                 )
               ) : (
                 <p
