@@ -11,11 +11,15 @@ import {
   FiMoreHorizontal,
   FiGlobe,
   FiArrowLeft,
+  FiPlus,
 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
 import { Post } from '../types';
+import StoryViewer from '../components/stories/StoryViewer';
+import { storiesService, Story } from '../services/storiesService';
+import { uploadService } from '../services/uploadService';
 
 
 const CommunityFeedPage: React.FC = () => {
@@ -43,6 +47,12 @@ const CommunityFeedPage: React.FC = () => {
   const feedRootRef = useRef<HTMLDivElement | null>(null);
   const editImageInputRef = useRef<HTMLInputElement | null>(null);
   const editVideoInputRef = useRef<HTMLInputElement | null>(null);
+  // New Stories state
+  const [stories, setStories] = useState<Story[]>([]);
+  const storyFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerStories, setViewerStories] = useState<Story[]>([]);
+  const [viewerStartIndex, setViewerStartIndex] = useState(0);
   
 
   
@@ -351,6 +361,69 @@ const CommunityFeedPage: React.FC = () => {
     return () => { try { io.disconnect(); } catch {} window.removeEventListener('scroll', scrollHandler); };
   }, [posts.length]);
 
+  // Fetch stories on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await storiesService.fetchStories();
+        if (!cancelled) setStories(Array.isArray(list) ? list : []);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const groups = React.useMemo(() => {
+    const map = new Map<string, { author: string; authorId?: string; stories: Story[]; latestTs: number }>();
+    for (const s of stories) {
+      const key = s.authorId ? `id:${s.authorId}` : `name:${s.author}`;
+      const entry = map.get(key);
+      const ts = new Date(s.createdAt || 0).getTime() || 0;
+      if (entry) {
+        entry.stories.push(s);
+        if (ts > entry.latestTs) entry.latestTs = ts;
+      } else {
+        map.set(key, { author: s.author, authorId: s.authorId, stories: [s], latestTs: ts });
+      }
+    }
+    const arr = Array.from(map.values());
+    arr.forEach((g) => g.stories.sort((a, b) => (new Date(b.createdAt).getTime()) - (new Date(a.createdAt).getTime())));
+    arr.sort((a, b) => b.latestTs - a.latestTs);
+    return arr;
+  }, [stories]);
+
+  const openGroup = (author: string, authorId?: string) => {
+    const list = stories.filter((s) => (authorId ? s.authorId === authorId : s.author === author));
+    if (list.length === 0) return;
+    setViewerStories(list);
+    setViewerStartIndex(0);
+    setViewerOpen(true);
+  };
+
+  const onAddStoryClick = () => {
+    storyFileInputRef.current?.click();
+  };
+
+  const onStoryFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const file = e.target.files?.[0];
+      e.currentTarget.value = '';
+      if (!file) return;
+      const type: 'image' | 'video' = file.type.startsWith('video') ? 'video' : 'image';
+      showToast('Uploading...');
+      const url = await uploadService.uploadFile(file);
+      const created = await storiesService.createStory({ url, type }, '');
+      if (created) {
+        setStories((prev) => [created, ...prev]);
+        showToast('Story added');
+      } else {
+        showToast('Failed to add story');
+      }
+    } catch {
+      showToast('Upload failed');
+    }
+  };
+
   
 
   
@@ -470,7 +543,74 @@ const CommunityFeedPage: React.FC = () => {
       <div
         style={{ maxWidth: '680px', margin: '0 auto', padding: '16px 16px 32px' }}
       >
-        {/* Stories Section removed */}
+        {/* Stories */}
+        <div style={{ backgroundColor: isDark ? '#020617' : 'white', borderRadius: 10, padding: '12px', marginBottom: 16, boxShadow: '0 1px 2px rgba(0,0,0,0.08)' }}>
+          <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 6 }}>
+            {user && (
+              <div style={{ flex: '0 0 auto', width: 96 }}>
+                <button onClick={onAddStoryClick} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                  <div style={{ position: 'relative', width: 84, height: 84, margin: '0 auto' }}>
+                    <div style={{ width: 84, height: 84, borderRadius: '50%', background: '#e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {currentUserProfilePicture ? (
+                        <img src={currentUserProfilePicture} alt={currentUserName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <span style={{ color: '#111827', fontWeight: 'bold', fontSize: 20 }}>{currentUserAvatar}</span>
+                      )}
+                    </div>
+                    <div style={{ position: 'absolute', right: 0, bottom: 0, width: 28, height: 28, borderRadius: '50%', background: '#2563eb', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '3px solid white' }}>
+                      <FiPlus size={18} />
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: isDark ? '#e5e7eb' : '#111827' }}>Add story</div>
+                </button>
+                <input ref={storyFileInputRef} type="file" accept="image/*,video/*" style={{ display: 'none' }} onChange={onStoryFileSelected} />
+              </div>
+            )}
+
+            {groups.map((g) => (
+              <div key={(g.authorId || g.author)} style={{ flex: '0 0 auto', width: 96 }}>
+                <button onClick={() => openGroup(g.author, g.authorId)} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                  <div style={{ position: 'relative', width: 84, height: 84, margin: '0 auto' }}>
+                    <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: 'linear-gradient(45deg, #f59e0b, #3b82f6)' }} />
+                    <div style={{ position: 'relative', width: 84, height: 84, borderRadius: '50%', background: isDark ? '#111827' : 'white', padding: 3 }}>
+                      <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: '#e5e7eb' }}>
+                        {getUserProfilePicture(g.authorId, g.author) ? (
+                          <img src={getUserProfilePicture(g.authorId, g.author) as string} alt={g.author} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', color: '#111827', fontWeight: 'bold', fontSize: 18 }}>{g.author.charAt(0)}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: isDark ? '#e5e7eb' : '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{g.author}</div>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {viewerOpen && (
+          <StoryViewer
+            stories={viewerStories}
+            startIndex={viewerStartIndex}
+            onClose={() => setViewerOpen(false)}
+            currentUserId={user?.id}
+            isAdmin={user?.role === 'admin'}
+            onStoryUpdated={(updated) => {
+              try {
+                setStories((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+                setViewerStories((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+              } catch {}
+            }}
+            onStoryDeleted={(id) => {
+              try {
+                setStories((prev) => prev.filter((s) => s.id !== id));
+                setViewerStories((prev) => prev.filter((s) => s.id !== id));
+                setViewerOpen(false);
+              } catch {}
+            }}
+          />
+        )}
 
         {/* Create Post */}
         <div

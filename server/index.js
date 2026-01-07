@@ -403,6 +403,107 @@ app.delete('/api/upload/:filename', verifyAdmin, (req, res) => {
   }
 });
 
+app.get('/api/stories', async (_req, res) => {
+  try {
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    const list = Array.isArray(dataStore.stories) ? dataStore.stories : [];
+    const out = list.filter((s) => {
+      try {
+        const createdAt = s && s.createdAt ? new Date(s.createdAt).getTime() : 0;
+        const expAt = s && s.expiresAt ? new Date(s.expiresAt).getTime() : (createdAt ? createdAt + dayMs : 0);
+        return createdAt && expAt && now < expAt;
+      } catch { return false; }
+    }).sort((a, b) => {
+      const ta = new Date(a.createdAt || 0).getTime();
+      const tb = new Date(b.createdAt || 0).getTime();
+      return tb - ta;
+    });
+    res.json(out);
+  } catch (e) {
+    res.status(500).json([]);
+  }
+});
+
+app.post('/api/stories', verifyToken, async (req, res) => {
+  try {
+    const body = req.body || {};
+    const media = body.media && typeof body.media === 'object' ? body.media : null;
+    const text = typeof body.text === 'string' ? body.text : '';
+    if (!media || !media.url || !media.type) {
+      return res.status(400).json({ error: 'Missing media' });
+    }
+    const u = req.user || {};
+    const author = u.name || 'Member';
+    const authorId = u.id || undefined;
+    const nowIso = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const id = Date.now().toString() + '-' + Math.floor(Math.random() * 1e6);
+    const story = { id, author, authorId, content: text, media, createdAt: nowIso, expiresAt };
+    const list = Array.isArray(dataStore.stories) ? dataStore.stories : [];
+    dataStore.stories = [story, ...list].slice(0, 500);
+    await saveData();
+    try { broadcastUpdate({ type: 'stories', action: 'add', data: story }); } catch {}
+    res.json({ success: true, story });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to create story' });
+  }
+});
+
+app.put('/api/stories/:id', verifyToken, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    const list = Array.isArray(dataStore.stories) ? dataStore.stories : [];
+    const idx = list.findIndex((s) => String(s.id) === id);
+    if (idx === -1) return res.status(404).json({ error: 'Story not found' });
+
+    const s = list[idx] || {};
+    const isAdmin = req.user && req.user.role === 'admin';
+    const isOwner = s && s.authorId && req.user && req.user.id && String(s.authorId) === String(req.user.id);
+    if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Forbidden' });
+
+    const body = req.body || {};
+    const updates = {};
+    if (typeof body.text === 'string') updates.content = body.text;
+    if (body.media && typeof body.media === 'object' && body.media.url && body.media.type) {
+      updates.media = { url: String(body.media.url), type: body.media.type === 'video' ? 'video' : 'image' };
+    }
+    if (body.resetTtl === true) {
+      updates.expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    }
+
+    const updated = { ...s, ...updates };
+    dataStore.stories[idx] = updated;
+    await saveData();
+    try { broadcastUpdate({ type: 'stories', action: 'update', data: updated }); } catch {}
+    res.json({ success: true, story: updated });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update story' });
+  }
+});
+
+app.delete('/api/stories/:id', verifyToken, async (req, res) => {
+  try {
+    const id = String(req.params.id || '').trim();
+    const list = Array.isArray(dataStore.stories) ? dataStore.stories : [];
+    const idx = list.findIndex((s) => String(s.id) === id);
+    if (idx === -1) return res.status(404).json({ error: 'Story not found' });
+
+    const s = list[idx] || {};
+    const isAdmin = req.user && req.user.role === 'admin';
+    const isOwner = s && s.authorId && req.user && req.user.id && String(s.authorId) === String(req.user.id);
+    if (!isAdmin && !isOwner) return res.status(403).json({ error: 'Forbidden' });
+
+    const [removed] = list.splice(idx, 1);
+    dataStore.stories = list;
+    await saveData();
+    try { broadcastUpdate({ type: 'stories', action: 'delete', data: { id: removed.id } }); } catch {}
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to delete story' });
+  }
+});
+
 app.post('/api/upload/init', verifyToken, (req, res) => {
   try {
     const name = (req.query.name || req.body?.name || 'file').toString();
@@ -508,7 +609,7 @@ function verifyAdmin(req, res, next) {
   }
 };
 
-// In-memory data store (full default shape, including newer keys like posts/communityStories)
+// In-memory data store (full default shape)
 let dataStore = {
   sermons: [],
   announcements: [],
@@ -520,6 +621,7 @@ let dataStore = {
   users: [],
   posts: [],
   comments: [],
+  stories: [],
 };
 
 // Data file path
@@ -528,7 +630,7 @@ const DATA_FILE = path.join(__dirname, 'data.json');
 // Load data from file
 async function loadDataFromFile() {
   try {
-    // Always start from a full default shape so new keys (posts, communityStories, etc.) exist
+    // Always start from a full default shape so new keys (posts, stories, etc.) exist
     const defaultData = {
       sermons: [],
       announcements: [],
@@ -540,6 +642,7 @@ async function loadDataFromFile() {
       users: [],
       posts: [],
       comments: [],
+      stories: [],
     };
 
     if (fs.existsSync(DATA_FILE)) {
@@ -567,6 +670,7 @@ async function loadDataFromFile() {
       users: [],
       posts: [],
       comments: [],
+      stories: [],
     };
   }
 }
