@@ -12,8 +12,7 @@ interface SyncData {
     | 'chatMessages'
     | 'users'
     | 'posts'
-    | 'comments'
-    | 'communityStories';
+    | 'comments';
   action: 'add' | 'update' | 'delete' | 'clear';
   data: any;
   timestamp?: number;
@@ -49,9 +48,6 @@ const sanitizeArrayForStorageKey = (storageKey: string, arr: any[]): any[] => {
     if (storageKey === 'communityPosts') {
       return list.slice(0, 200).map((p: any) => sanitizeMediaInObject(p));
     }
-    if (storageKey === 'communityStories') {
-      return list.slice(0, 100).map((s: any) => sanitizeMediaInObject(s));
-    }
     return list;
   } catch {
     return Array.isArray(arr) ? arr : [];
@@ -61,7 +57,7 @@ const sanitizeArrayForStorageKey = (storageKey: string, arr: any[]): any[] => {
 const sanitizeOutgoingSyncData = (syncData: Omit<SyncData, 'timestamp'>): Omit<SyncData, 'timestamp'> => {
   try {
     if (!syncData || typeof syncData !== 'object') return syncData;
-    if (syncData.type === 'posts' || syncData.type === 'communityStories') {
+    if (syncData.type === 'posts') {
       return { ...syncData, data: sanitizeMediaInObject((syncData as any).data) } as any;
     }
     return syncData;
@@ -182,7 +178,6 @@ class WebSocketService {
     // - users           -> churchUserList (auth/user list)
     // - posts           -> communityPosts (community feed posts)
     // - comments        -> communityComments (community post comments)
-    // - communityStories-> communityStories (already matches)
     if (syncData.type === 'siteContent') {
       try {
         if (syncData.action === 'clear' || syncData.action === 'delete') {
@@ -214,7 +209,7 @@ class WebSocketService {
         break;
     }
 
-    const incoming = (storageKey === 'communityPosts' || storageKey === 'communityStories')
+    const incoming = (storageKey === 'communityPosts')
       ? sanitizeMediaInObject(syncData.data)
       : syncData.data;
 
@@ -373,13 +368,7 @@ class WebSocketService {
         if (data.comments && Array.isArray(data.comments) && data.comments.length > 0) {
           localStorage.setItem('communityComments', JSON.stringify(data.comments));
         }
-        if (data.communityStories && Array.isArray(data.communityStories) && data.communityStories.length > 0) {
-          const safeStories = (data.communityStories || []).slice(0, 100).map((s: any) => ({
-            ...s,
-            media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
-          }));
-          localStorage.setItem('communityStories', JSON.stringify(safeStories));
-        }
+        // stories removed
       }
       
       return data;

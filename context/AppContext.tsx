@@ -63,7 +63,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const authUser = localStorage.getItem('authUser');
         const authToken = localStorage.getItem('authToken');
         const communityPosts = localStorage.getItem('communityPosts');
-        const communityStories = localStorage.getItem('communityStories');
+        
         const sermonsLS = localStorage.getItem('sermons');
         const announcementsLS = localStorage.getItem('announcements');
         const eventsLS = localStorage.getItem('events');
@@ -93,22 +93,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
           } catch {
             localStorage.setItem('communityPosts', communityPosts);
-          }
-        }
-        if (communityStories) {
-          try {
-            const parsed = JSON.parse(communityStories);
-            if (Array.isArray(parsed)) {
-              const safe = (parsed || []).slice(0, 100).map((s: any) => ({
-                ...s,
-                media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
-              }));
-              localStorage.setItem('communityStories', JSON.stringify(safe));
-            } else {
-              localStorage.setItem('communityStories', communityStories);
-            }
-          } catch {
-            localStorage.setItem('communityStories', communityStories);
           }
         }
         if (sermonsLS) localStorage.setItem('sermons', sermonsLS);
@@ -409,29 +393,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return sanitized.slice(0, limit);
     };
 
-    const slimStories = (arr: any[]) => {
-      const limit = 100;
-      const sanitized = (arr || []).map((s: any) => ({
-        ...s,
-        media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
-      }));
-      return sanitized.slice(0, limit);
-    };
-
     const safeSetItem = (key: string, value: any) => {
       const toStore = key === 'communityPosts'
         ? slimPosts(Array.isArray(value) ? value : [])
-        : key === 'communityStories'
-          ? slimStories(Array.isArray(value) ? value : [])
-          : value;
+        : value;
       try {
         localStorage.setItem(key, JSON.stringify(toStore));
       } catch (_e) {
         try {
           if (key === 'communityPosts') {
             localStorage.setItem(key, JSON.stringify(slimPosts(value)));
-          } else if (key === 'communityStories') {
-            localStorage.setItem(key, JSON.stringify(slimStories(value)));
           }
         } catch {}
       }
@@ -802,28 +773,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   });
                 }
                 if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
-                if (Array.isArray(full.communityStories)) {
-                  try {
-                    const localRaw = localStorage.getItem('communityStories');
-                    const localParsed = localRaw ? JSON.parse(localRaw) : [];
-                    const existing = Array.isArray(localParsed) ? localParsed : [];
-                    const incoming = Array.isArray(full.communityStories) ? full.communityStories : [];
-                    if (incoming.length > 0 || existing.length === 0) {
-                      const byId = new Map<any, any>();
-                      for (const s of existing) { if (s && (s as any).id != null) byId.set((s as any).id, s); }
-                      for (const s of incoming) { if (s && (s as any).id != null && !byId.has((s as any).id)) byId.set((s as any).id, s); }
-                      const merged = Array.from(byId.values()).sort((a: any, b: any) => {
-                        const at = Number((a as any)?.createdAt || (a as any)?.id) || 0;
-                        const bt = Number((b as any)?.createdAt || (b as any)?.id) || 0;
-                        return bt - at;
-                      });
-                      safeSetItem('communityStories', merged);
-                      try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
-                    }
-                  } catch {
-                    try { if (full.communityStories.length > 0) { safeSetItem('communityStories', full.communityStories); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
-                  }
-                }
                 localStorage.setItem('lastSyncTime', Date.now().toString());
                 syncOk = true;
                 anyFetchOk = true;
@@ -866,28 +815,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     });
                   }
                   if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
-                  if (Array.isArray(full.communityStories)) {
-                    try {
-                      const localRaw = localStorage.getItem('communityStories');
-                      const localParsed = localRaw ? JSON.parse(localRaw) : [];
-                      const existing = Array.isArray(localParsed) ? localParsed : [];
-                      const incoming = Array.isArray(full.communityStories) ? full.communityStories : [];
-                      if (incoming.length > 0 || existing.length === 0) {
-                        const byId = new Map<any, any>();
-                        for (const s of existing) { if (s && (s as any).id != null) byId.set((s as any).id, s); }
-                        for (const s of incoming) { if (s && (s as any).id != null && !byId.has((s as any).id)) byId.set((s as any).id, s); }
-                        const merged = Array.from(byId.values()).sort((a: any, b: any) => {
-                          const at = Number((a as any)?.createdAt || (a as any)?.id) || 0;
-                          const bt = Number((b as any)?.createdAt || (b as any)?.id) || 0;
-                          return bt - at;
-                        });
-                        safeSetItem('communityStories', merged);
-                        try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
-                      }
-                    } catch {
-                      try { if (full.communityStories.length > 0) { safeSetItem('communityStories', full.communityStories); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
-                    }
-                  }
                   localStorage.setItem('lastSyncTime', Date.now().toString());
                   syncOk = true;
                   anyFetchOk = true;
@@ -935,19 +862,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               if (Array.isArray(full.chatMessages) && (full.chatMessages.length > 0 || chatMessages.length === 0)) { setChatMessages(full.chatMessages as ChatMessage[]); localStorage.setItem('chatMessages', JSON.stringify(full.chatMessages)); }
               if (Array.isArray(full.posts) && (full.posts.length > 0 || posts.length === 0)) { setPosts(full.posts as Post[]); safeSetItem('communityPosts', full.posts); }
               if (Array.isArray(full.comments) && (full.comments.length > 0 || comments.length === 0)) { setComments(full.comments as Comment[]); saveToLocalStorage('communityComments', full.comments); }
-              if (Array.isArray(full.communityStories)) {
-                try {
-                  const localRaw = localStorage.getItem('communityStories');
-                  const localParsed = localRaw ? JSON.parse(localRaw) : [];
-                  const localLen = Array.isArray(localParsed) ? localParsed.length : 0;
-                  if (full.communityStories.length > 0 || localLen === 0) {
-                    safeSetItem('communityStories', full.communityStories);
-                    try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
-                  }
-                } catch {
-                  try { if (full.communityStories.length > 0) { safeSetItem('communityStories', full.communityStories); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } } catch {}
-                }
-              }
             }
           };
           if (!syncOk) {

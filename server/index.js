@@ -171,68 +171,6 @@ async function ensureFirebaseAltMediaTokenUrl(file, bucketName, objectPath) {
 let database;
 let useDatabase = false;
 
-const STORY_TTL_MS = 24 * 60 * 60 * 1000;
-
-let lastStoryTs = 0;
-let lastStoryInc = 0;
-function nextStoryId() {
-  const now = Date.now();
-  if (now === lastStoryTs) {
-    lastStoryInc += 1;
-  } else {
-    lastStoryTs = now;
-    lastStoryInc = 0;
-  }
-  const suffix = String(lastStoryInc).padStart(3, '0');
-  return Number(`${now}${suffix}`);
-}
-
-async function pruneExpiredStories(options = { save: true, broadcast: true }) {
-  try {
-    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
-    if (list.length === 0) return;
-
-    const now = Date.now();
-    const removed = [];
-    const keep = [];
-
-    for (const s of list) {
-      let created = null;
-      if (s && s.expiresAt) {
-        const exp = new Date(s.expiresAt).getTime();
-        if (!isNaN(exp) && now >= exp) {
-          removed.push(s);
-          continue;
-        }
-        keep.push(s);
-        continue;
-      }
-      if (s && s.createdAt) {
-        const ct = new Date(s.createdAt).getTime();
-        if (!isNaN(ct)) created = ct;
-      }
-      if (created == null) {
-        if (typeof s?.id === 'number') created = s.id;
-        else if (typeof s?.id === 'string' && /^\d{10,}$/.test(s.id)) created = parseInt(s.id, 10);
-      }
-      if (created != null && !isNaN(created) && now - created > STORY_TTL_MS) {
-        removed.push(s);
-      } else {
-        keep.push(s);
-      }
-    }
-
-    if (removed.length > 0) {
-      dataStore.communityStories = keep;
-      if (options.save) {
-        try { await saveData(); } catch {}
-      }
-      if (options.broadcast) {
-        try { removed.forEach((r) => broadcastUpdate({ type: 'communityStories', action: 'delete', data: { id: r.id } })); } catch {}
-      }
-    }
-  } catch {}
-}
 
 const app = express();
 app.set('trust proxy', true);
@@ -582,7 +520,6 @@ let dataStore = {
   users: [],
   posts: [],
   comments: [],
-  communityStories: []
 };
 
 // Data file path
@@ -603,7 +540,6 @@ async function loadDataFromFile() {
       users: [],
       posts: [],
       comments: [],
-      communityStories: []
     };
 
     if (fs.existsSync(DATA_FILE)) {
@@ -631,7 +567,6 @@ async function loadDataFromFile() {
       users: [],
       posts: [],
       comments: [],
-      communityStories: []
     };
   }
 }
@@ -691,8 +626,7 @@ async function initializeData() {
           Array.isArray(dataStore.chatMessages) && dataStore.chatMessages.length === 0 &&
           Array.isArray(dataStore.users) && dataStore.users.length === 0 &&
           Array.isArray(dataStore.posts) && dataStore.posts.length === 0 &&
-          Array.isArray(dataStore.comments) && dataStore.comments.length === 0 &&
-          Array.isArray(dataStore.communityStories) && dataStore.communityStories.length === 0;
+          Array.isArray(dataStore.comments) && dataStore.comments.length === 0;
 
         if (empty && fs.existsSync(DATA_FILE)) {
           console.log('[Server] Firestore is empty; attempting one-time hydration from data.json');
@@ -701,8 +635,7 @@ async function initializeData() {
             (Array.isArray(dataStore.sermons) && dataStore.sermons.length > 0) ||
             (dataStore.siteContent && Object.keys(dataStore.siteContent).length > 0) ||
             (Array.isArray(dataStore.announcements) && dataStore.announcements.length > 0) ||
-            (Array.isArray(dataStore.events) && dataStore.events.length > 0) ||
-            (Array.isArray(dataStore.communityStories) && dataStore.communityStories.length > 0);
+            (Array.isArray(dataStore.events) && dataStore.events.length > 0);
           if (nonEmpty) {
             try {
               await saveData(); // Persist hydrated data into Firestore
@@ -1323,8 +1256,8 @@ app.post('/api/sync/push', verifyToken, async (req, res) => {
     }
 
     // Prevent storing/broadcasting transient client-only URLs (blob:/data:)
-    const safeData = (type === 'posts' || type === 'communityStories') ? sanitizeMediaInObject(data) : data;
-    const safeSyncData = (type === 'posts' || type === 'communityStories') ? { ...syncData, data: safeData } : syncData;
+    const safeData = (type === 'posts') ? sanitizeMediaInObject(data) : data;
+    const safeSyncData = (type === 'posts') ? { ...syncData, data: safeData } : syncData;
 
     // Enforce permissions and normalize for certain types
     const userCtx = req.user || {};
@@ -1438,7 +1371,6 @@ app.get('/api/sync/data', (req, res) => {
     const sanitized = {
       ...dataStore,
       posts: sanitizeArrayMedia(dataStore.posts || []),
-      communityStories: sanitizeArrayMedia(dataStore.communityStories || []),
     };
     res.json(sanitized);
   } catch {
@@ -1709,84 +1641,7 @@ app.get('/api/community-comments', (req, res) => {
   res.json(dataStore.comments || []);
 });
 
-app.get('/api/community-stories', async (req, res) => {
-  console.log('[Server] Fetching all community stories');
-  await pruneExpiredStories({ save: true, broadcast: false });
-  res.json(dataStore.communityStories || []);
-});
-
-// Admin: create a new community story
-app.post('/api/community-stories', verifyAdmin, async (req, res) => {
-  try {
-    const { author, content, media, type } = req.body || {};
-    const avatar = (author || 'A').toString().trim().charAt(0).toUpperCase();
-    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
-
-    const mediaItems = Array.isArray(media) ? media : (media ? [media] : []);
-
-    const storiesToAdd = (mediaItems.length > 0 ? mediaItems : [null]).map((m) => {
-      const t = m ? (m.type === 'video' ? 'video' : 'photo') : (type || 'text');
-      return {
-        id: nextStoryId(),
-        author: author || 'Admin',
-        avatar,
-        content: content || '',
-        media: m || null,
-        viewed: false,
-        type: t,
-        createdAt: new Date().toISOString(),
-        expiresAt: new Date(Date.now() + STORY_TTL_MS).toISOString(),
-      };
-    });
-
-    dataStore.communityStories = [...storiesToAdd, ...list];
-    await saveData();
-    storiesToAdd.forEach((s) => broadcastUpdate({ type: 'communityStories', action: 'add', data: s }));
-    res.json({ success: true, story: storiesToAdd[0], stories: storiesToAdd });
-  } catch (error) {
-    console.error('[Server] Error creating community story:', error);
-    res.status(500).json({ error: 'Failed to create story' });
-  }
-});
-
-// Admin: update a community story
-app.put('/api/community-stories/:id', verifyAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
-    const index = list.findIndex((s) => Number(s.id) === id);
-    if (index === -1) return res.status(404).json({ error: 'Story not found' });
-    const base = { ...list[index], ...req.body, id: list[index].id };
-    const updated = req.body && Object.prototype.hasOwnProperty.call(req.body, 'media')
-      ? { ...base, type: req.body.media ? (req.body.media.type === 'video' ? 'video' : 'photo') : base.type }
-      : base;
-    dataStore.communityStories[index] = updated;
-    await saveData();
-    broadcastUpdate({ type: 'communityStories', action: 'update', data: updated });
-    res.json({ success: true, story: updated });
-  } catch (error) {
-    console.error('[Server] Error updating community story:', error);
-    res.status(500).json({ error: 'Failed to update story' });
-  }
-});
-
-// Admin: delete a community story
-app.delete('/api/community-stories/:id', verifyAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const list = Array.isArray(dataStore.communityStories) ? dataStore.communityStories : [];
-    const index = list.findIndex((s) => Number(s.id) === id);
-    if (index === -1) return res.status(404).json({ error: 'Story not found' });
-    const [removed] = list.splice(index, 1);
-    dataStore.communityStories = list;
-    await saveData();
-    broadcastUpdate({ type: 'communityStories', action: 'delete', data: { id: removed.id } });
-    res.json({ success: true });
-  } catch (error) {
-    console.error('[Server] Error deleting community story:', error);
-    res.status(500).json({ error: 'Failed to delete story' });
-  }
-});
+// (community stories routes removed)
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

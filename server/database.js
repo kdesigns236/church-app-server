@@ -149,8 +149,7 @@ async function initDatabase() {
         chatMessages: [],
         users: [],
         posts: [],
-        comments: [],
-        communityStories: []
+        comments: []
       };
 
       for (const [key, value] of Object.entries(defaultData)) {
@@ -231,8 +230,7 @@ async function getAllData() {
       chatMessages: [],
       users: [],
       posts: [],
-      comments: [],
-      communityStories: []
+      comments: []
     };
 
     if (useFirebase && firebaseInitialized && firestore) {
@@ -268,8 +266,7 @@ async function getAllData() {
       chatMessages: [],
       users: [],
       posts: [],
-      comments: [],
-      communityStories: []
+      comments: []
     };
   }
 }

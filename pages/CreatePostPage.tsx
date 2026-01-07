@@ -3,10 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../hooks/useTheme';
 import { useAppContext } from '../context/AppContext';
-import { websocketService } from '../services/websocketService';
+ 
 import { FiX, FiImage, FiVideo, FiSmile } from 'react-icons/fi';
 import { uploadService } from '../services/uploadService';
 import { uploadMediaToFirebase } from '../services/firebaseUploadService';
+ 
 
 const CreatePostPage: React.FC = () => {
   const { user } = useAuth();
@@ -16,7 +17,7 @@ const CreatePostPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
-  const isStoryMode = searchParams.get('mode') === 'story';
+  
   const editIdStr = searchParams.get('edit');
   const editPostId = editIdStr ? parseInt(editIdStr, 10) : null;
   const isEditing = !!editPostId;
@@ -81,7 +82,7 @@ const CreatePostPage: React.FC = () => {
   };
 
   const uploadSelectedMedia = async (
-    kind: 'story' | 'post',
+    kind: 'post',
     mediaOverride?: { url: string; type: 'image' | 'video'; file?: File } | null,
   ): Promise<{ url: string; type: 'image' | 'video' } | undefined> => {
     const media = typeof mediaOverride !== 'undefined' ? mediaOverride : selectedMedia;
@@ -90,7 +91,7 @@ const CreatePostPage: React.FC = () => {
       // Prefer uploading the File directly when available (reliable on mobile, avoids base64 memory pressure)
       if (media.file) {
         try {
-          const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', media.file);
+          const fb = await uploadMediaToFirebase('posts', media.file);
           if (fb.success && fb.url) {
             return { url: fb.url, type: media.type };
           }
@@ -111,7 +112,7 @@ const CreatePostPage: React.FC = () => {
         const file = dataUrlToFile(media.url, `${kind}-${Date.now()}.${ext}`);
         // Try Firebase first
         try {
-          const fb = await uploadMediaToFirebase(kind === 'story' ? 'stories' : 'posts', file);
+          const fb = await uploadMediaToFirebase('posts', file);
           if (fb.success && fb.url) {
             return { url: fb.url, type: media.type };
           }
@@ -147,138 +148,9 @@ const CreatePostPage: React.FC = () => {
     if (!trimmed && !hasMedia) return;
 
     const mediaSnapshot = selectedMedia;
-    const optimisticStoryContent = trimmed || (mediaSnapshot ? 'Uploading...' : '');
-    const shouldKeepBlobPreview = !isStoryMode && !isEditing && !!(mediaSnapshot && typeof mediaSnapshot.url === 'string' && mediaSnapshot.url.startsWith('blob:'));
+    const shouldKeepBlobPreview = !isEditing && !!(mediaSnapshot && typeof mediaSnapshot.url === 'string' && mediaSnapshot.url.startsWith('blob:'));
 
-    if (isStoryMode) {
-      try {
-        const newStory = {
-          id: Date.now(),
-          createdAt: Date.now(),
-          authorId: user.id,
-          author: user.name,
-          avatar: user.name.trim().charAt(0).toUpperCase(),
-          content: optimisticStoryContent,
-          media: undefined,
-          viewed: false,
-          type: 'text',
-        };
-        try {
-          const existing = localStorage.getItem('communityStories');
-          const stories = existing ? JSON.parse(existing) : [];
-          stories.unshift(newStory);
-          try {
-            const safeStories = (Array.isArray(stories) ? stories : []).slice(0, 100).map((s: any) => ({
-              ...s,
-              media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
-            }));
-            localStorage.setItem('communityStories', JSON.stringify(safeStories));
-            try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
-          } catch (e) {
-            const slim = stories.slice(0, 50).map((s: any) => ({
-              id: s.id,
-              createdAt: s.createdAt,
-              authorId: s.authorId,
-              author: s.author,
-              avatar: s.avatar,
-              content: s.content,
-              viewed: !!s.viewed,
-              type: s.type,
-              media: s.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s.media,
-            }));
-            try { localStorage.setItem('communityStories', JSON.stringify(slim)); try { window.dispatchEvent(new Event('communityStories-changed')); } catch {} } catch {}
-          }
-        } catch {}
-
-        websocketService.pushUpdate({
-          type: 'communityStories',
-          action: 'add',
-          data: newStory,
-        });
-
-        if (mediaSnapshot) {
-          uploadSelectedMedia('story', mediaSnapshot)
-            .then((uploadedMedia) => {
-              if (!uploadedMedia) {
-                try { window.alert('Media upload failed. Please try again.'); } catch {}
-                try {
-                  const updatedStory = {
-                    ...newStory,
-                    content: trimmed,
-                    media: undefined,
-                    type: 'text',
-                  };
-                  const existing = localStorage.getItem('communityStories');
-                  const stories = existing ? JSON.parse(existing) : [];
-                  const next = Array.isArray(stories)
-                    ? stories.map((s: any) => (String(s?.id) === String(updatedStory.id) ? updatedStory : s))
-                    : [updatedStory];
-                  const safeNext = (Array.isArray(next) ? next : []).slice(0, 100).map((s: any) => ({
-                    ...s,
-                    media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
-                  }));
-                  localStorage.setItem('communityStories', JSON.stringify(safeNext));
-                  try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
-                } catch {}
-                try {
-                  websocketService.pushUpdate({ type: 'communityStories', action: 'update', data: { ...newStory, content: trimmed, media: undefined, type: 'text' } });
-                } catch {}
-                return;
-              }
-              const updatedStory = {
-                ...newStory,
-                content: trimmed,
-                media: uploadedMedia,
-                type: uploadedMedia.type === 'video' ? 'video' : 'photo',
-              };
-              try {
-                const existing = localStorage.getItem('communityStories');
-                const stories = existing ? JSON.parse(existing) : [];
-                const next = Array.isArray(stories)
-                  ? stories.map((s: any) => (String(s?.id) === String(updatedStory.id) ? updatedStory : s))
-                  : [updatedStory];
-                const safeNext = (Array.isArray(next) ? next : []).slice(0, 100).map((s: any) => ({
-                  ...s,
-                  media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
-                }));
-                localStorage.setItem('communityStories', JSON.stringify(safeNext));
-                try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
-              } catch {}
-              try {
-                websocketService.pushUpdate({ type: 'communityStories', action: 'update', data: updatedStory });
-              } catch {}
-            })
-            .catch((e) => {
-              try { console.error('[CreatePost] Story media upload failed', e); } catch {}
-              try { window.alert('Media upload failed. Please try again.'); } catch {}
-              try {
-                const updatedStory = {
-                  ...newStory,
-                  content: trimmed,
-                  media: undefined,
-                  type: 'text',
-                };
-                const existing = localStorage.getItem('communityStories');
-                const stories = existing ? JSON.parse(existing) : [];
-                const next = Array.isArray(stories)
-                  ? stories.map((s: any) => (String(s?.id) === String(updatedStory.id) ? updatedStory : s))
-                  : [updatedStory];
-                const safeNext = (Array.isArray(next) ? next : []).slice(0, 100).map((s: any) => ({
-                  ...s,
-                  media: s?.media && typeof s.media.url === 'string' && (s.media.url.startsWith('data:') || s.media.url.startsWith('blob:')) ? undefined : s?.media,
-                }));
-                localStorage.setItem('communityStories', JSON.stringify(safeNext));
-                try { window.dispatchEvent(new Event('communityStories-changed')); } catch {}
-              } catch {}
-              try {
-                websocketService.pushUpdate({ type: 'communityStories', action: 'update', data: { ...newStory, content: trimmed, media: undefined, type: 'text' } });
-              } catch {}
-            });
-        }
-      } catch (error) {
-        console.error('Error saving story to localStorage', error);
-      }
-    } else if (isEditing && editPostId) {
+    if (isEditing && editPostId) {
       // Permission check: only admin or author can edit
       try {
         const original = (Array.isArray(posts) ? posts : []).find(p => p.id === editPostId);
@@ -386,7 +258,7 @@ const CreatePostPage: React.FC = () => {
               margin: 0,
             }}
           >
-            {isStoryMode ? 'Create Story' : (isEditing ? 'Edit Post' : 'Create Post')}
+            {isEditing ? 'Edit Post' : 'Create Post'}
           </h1>
           <button
             onClick={() => navigate('/chat')}
