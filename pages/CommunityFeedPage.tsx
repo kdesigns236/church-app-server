@@ -182,6 +182,21 @@ const CommunityFeedPage: React.FC = () => {
       if (typeof window !== 'undefined' && window.location.protocol === 'https:' && url.startsWith('http:')) {
         url = url.replace(/^http:/i, 'https:');
       }
+      // Route legacy local uploads through a proxy that serves local files if present or redirects to Firebase if missing
+      try {
+        if (url.includes('/uploads/')) {
+          if (/^https?:/i.test(url)) {
+            const parsed = new URL(url);
+            const idx = parsed.pathname.indexOf('/uploads/');
+            if (idx >= 0) {
+              const filename = parsed.pathname.substring(idx + '/uploads/'.length);
+              if (filename) url = `${parsed.protocol}//${parsed.host}/uploads-proxy/${filename}`;
+            }
+          } else if (url.startsWith('/uploads/')) {
+            url = url.replace('/uploads/', '/uploads-proxy/');
+          }
+        }
+      } catch {}
       if (url.includes('firebasestorage.googleapis.com') || url.includes('firebasestorage.app')) {
         try {
           const parsed = new URL(url);

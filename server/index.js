@@ -339,7 +339,7 @@ const verifyToken = (req, res, next) => {
   }
 }
 
-app.post('/api/upload', verifyToken, upload.single('file'), (req, res) => {
+app.post('/api/upload', verifyToken, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, error: 'No file uploaded' });
@@ -347,41 +347,36 @@ app.post('/api/upload', verifyToken, upload.single('file'), (req, res) => {
 
     const host = req.get('host');
     const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
-    const fileUrl = `${proto}://${host}/uploads/${req.file.filename}`;
+    let urlOut = `${proto}://${host}/uploads/${req.file.filename}`;
 
-    // Respond immediately for speed; do any cloud upload in the background
-    res.json({
+    try {
+      const admin = getFirebaseAdmin();
+      if (admin && typeof admin.storage === 'function') {
+        const bucket = admin.storage().bucket();
+        const objectPath = `uploads/${req.file.filename}`;
+        const token = generateFirebaseStorageDownloadToken();
+        await bucket.upload(req.file.path, {
+          destination: objectPath,
+          metadata: {
+            contentType: req.file.mimetype || 'application/octet-stream',
+            cacheControl: 'public, max-age=31536000',
+            metadata: { firebaseStorageDownloadTokens: token },
+          },
+        });
+        urlOut = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+        console.log('[Upload] ✅ Stored on Firebase and returning direct URL');
+      }
+    } catch (e) {
+      console.warn('[Upload] ⚠️ Firebase upload failed, serving local URL:', e?.message || e);
+    }
+
+    return res.json({
       success: true,
       filename: req.file.filename,
-      url: fileUrl,
+      url: urlOut,
       size: req.file.size,
       mimetype: req.file.mimetype,
     });
-
-    // Background Firebase upload (non-blocking). If it fails, local URL still works.
-    (async () => {
-      try {
-        const admin = getFirebaseAdmin();
-        if (admin && typeof admin.storage === 'function') {
-          const bucket = admin.storage().bucket();
-          const objectPath = `uploads/${req.file.filename}`;
-          const token = generateFirebaseStorageDownloadToken();
-          await bucket.upload(req.file.path, {
-            destination: objectPath,
-            metadata: {
-              contentType: req.file.mimetype || 'application/octet-stream',
-              cacheControl: 'public, max-age=31536000',
-              metadata: { firebaseStorageDownloadTokens: token },
-            },
-          });
-          try { fs.unlink(req.file.path, () => {}); } catch {}
-          const fbUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
-          console.log('[Upload] ✅ Background Firebase stored:', fbUrl);
-        }
-      } catch (e) {
-        console.warn('[Upload] ⚠️ Background Firebase upload failed:', e?.message || e);
-      }
-    })();
   } catch (e) {
     return res.status(500).json({ success: false, error: 'Upload failed' });
   }
@@ -553,38 +548,62 @@ app.post('/api/upload/finish', verifyToken, async (req, res) => {
 
     const host = req.get('host');
     const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').toString().split(',')[0].trim();
-    const url = `${proto}://${host}/uploads/${finalName}`;
+    let urlOut = `${proto}://${host}/uploads/${finalName}`;
 
-    // Cleanup meta
     try { fs.unlinkSync(metaPath); } catch {}
 
-    res.json({ success: true, url, filename: finalName, size: fs.statSync(finalPath).size });
-
-    // Background copy to Firebase (non-blocking)
-    (async () => {
-      try {
-        const admin = getFirebaseAdmin();
-        if (admin && typeof admin.storage === 'function') {
-          const bucket = admin.storage().bucket();
-          const objectPath = `uploads/${finalName}`;
-          const token = generateFirebaseStorageDownloadToken();
-          await bucket.upload(finalPath, {
-            destination: objectPath,
-            metadata: {
-              contentType: 'application/octet-stream',
-              cacheControl: 'public, max-age=31536000',
-              metadata: { firebaseStorageDownloadTokens: token },
-            },
-          });
-          const fbUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
-          console.log('[Upload] ✅ Background Firebase stored (chunked):', fbUrl);
-        }
-      } catch (e) {
-        console.warn('[Upload] ⚠️ Background Firebase upload failed (chunked):', e?.message || e);
+    try {
+      const admin = getFirebaseAdmin();
+      if (admin && typeof admin.storage === 'function') {
+        const bucket = admin.storage().bucket();
+        const objectPath = `uploads/${finalName}`;
+        const token = generateFirebaseStorageDownloadToken();
+        await bucket.upload(finalPath, {
+          destination: objectPath,
+          metadata: {
+            contentType: 'application/octet-stream',
+            cacheControl: 'public, max-age=31536000',
+            metadata: { firebaseStorageDownloadTokens: token },
+          },
+        });
+        urlOut = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(objectPath)}?alt=media&token=${encodeURIComponent(token)}`;
+        console.log('[Upload] ✅ Stored on Firebase (chunked) and returning direct URL');
       }
-    })();
+    } catch (e) {
+      console.warn('[Upload] ⚠️ Firebase upload failed (chunked), serving local URL:', e?.message || e);
+    }
+
+    res.json({ success: true, url: urlOut, filename: finalName, size: fs.statSync(finalPath).size });
   } catch (e) {
     res.status(500).json({ success: false, error: 'Finalize failed' });
+  }
+});
+
+// Dynamic media proxy: serve local upload if present, otherwise redirect to Firebase copy if available
+app.get('/uploads-proxy/:filename', async (req, res) => {
+  try {
+    const filename = String(req.params.filename || '').trim();
+    if (!filename) return res.status(400).send('Missing filename');
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath);
+    }
+    const admin = getFirebaseAdmin();
+    if (admin && typeof admin.storage === 'function') {
+      try {
+        const bucket = admin.storage().bucket();
+        const objectPath = `uploads/${filename}`;
+        const file = bucket.file(objectPath);
+        const [exists] = await file.exists();
+        if (exists) {
+          const { url } = await ensureFirebaseAltMediaTokenUrl(file, bucket.name, objectPath);
+          return res.redirect(302, url);
+        }
+      } catch {}
+    }
+    return res.status(404).send('File not found');
+  } catch (_e) {
+    return res.status(500).send('Error');
   }
 });
 
