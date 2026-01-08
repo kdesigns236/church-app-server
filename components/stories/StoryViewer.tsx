@@ -323,7 +323,19 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, startIndex = 
             loading="eager"
             fetchPriority="high"
             style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, opacity: imageLoaded ? 1 : 0, transition: 'opacity 200ms ease' }}
-            onError={(e) => { try { (e.currentTarget as HTMLImageElement).src = fixMediaUrl((e.currentTarget as HTMLImageElement).src); } catch {} finally { setImageLoaded(true); } }}
+            onError={(e) => {
+              try {
+                const el = e.currentTarget as HTMLImageElement;
+                if (!el.dataset.retry) {
+                  el.dataset.retry = '1';
+                  el.src = fixMediaUrl(el.src);
+                } else {
+                  el.onerror = null;
+                  el.src = '/logo.jpg';
+                }
+              } catch {}
+              finally { setImageLoaded(true); }
+            }}
             onLoad={() => { setImageLoaded(true); window.setTimeout(() => goNext(), 5000); }}
           />
         ) : (

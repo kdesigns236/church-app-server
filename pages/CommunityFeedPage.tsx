@@ -243,6 +243,10 @@ const CommunityFeedPage: React.FC = () => {
       if (!el.dataset.retry) {
         el.dataset.retry = '1';
         el.src = fixMediaUrl(el.src);
+      } else {
+        // Stop retry loop and show a harmless placeholder
+        el.onerror = null;
+        el.src = '/logo.jpg';
       }
     } catch {}
   };
@@ -250,11 +254,18 @@ const CommunityFeedPage: React.FC = () => {
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
     try {
       const el = e.currentTarget;
+      const tried = (el as any).dataset?.retry || '';
       const src = el.currentSrc || (el as any).src || '';
       const fixed = fixMediaUrl(src);
-      if (fixed && fixed !== src) {
-        try { (el as any).src = fixed; } catch { try { el.setAttribute('src', fixed); } catch {} }
-        setTimeout(() => { try { safeLoadThenPlay(el); } catch {} }, 0);
+      if (!tried) {
+        (el as any).dataset.retry = '1';
+        if (fixed && fixed !== src) {
+          try { (el as any).src = fixed; } catch { try { el.setAttribute('src', fixed); } catch {} }
+          setTimeout(() => { try { safeLoadThenPlay(el); } catch {} }, 0);
+        }
+      } else {
+        // Stop retry loop
+        try { (el as any).onerror = null; } catch {}
       }
     } catch {}
   };
