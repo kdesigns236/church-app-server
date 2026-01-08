@@ -57,7 +57,14 @@ function getFirebaseAdmin() {
     firebaseAdmin = require('firebase-admin');
     if (!firebaseAdmin.apps || firebaseAdmin.apps.length === 0) {
       const privateKey = String(privateKeyRaw).replace(/\\n/g, '\n');
-      const storageBucket = normalizeFirebaseBucketName(process.env.FIREBASE_STORAGE_BUCKET || projectId || `${projectId}.firebasestorage.app`);
+      const inputBucket = process.env.FIREBASE_STORAGE_BUCKET || projectId || '';
+      let storageBucket = normalizeFirebaseBucketName(inputBucket);
+      if (/\.firebasestorage\.app$/i.test(storageBucket)) {
+        storageBucket = storageBucket.replace(/\.firebasestorage\.app$/i, '.appspot.com');
+      }
+      if (!storageBucket && projectId) {
+        storageBucket = `${projectId}.appspot.com`;
+      }
       firebaseAdmin.initializeApp({
         credential: firebaseAdmin.credential.cert({ projectId, clientEmail, privateKey }),
         projectId,
@@ -591,13 +598,24 @@ app.get('/uploads-proxy/:filename', async (req, res) => {
     const admin = getFirebaseAdmin();
     if (admin && typeof admin.storage === 'function') {
       try {
-        const bucket = admin.storage().bucket();
+        const storage = admin.storage();
+        const projectId = process.env.FIREBASE_PROJECT_ID || '';
+        const envBucket = process.env.FIREBASE_STORAGE_BUCKET || '';
+        const candidates = Array.from(new Set([
+          (storage.bucket() && storage.bucket().name) || '',
+          ...getFirebaseBucketCandidates(envBucket, projectId).map((b) => String(b).replace(/\.firebasestorage\.app$/i, '.appspot.com')),
+        ].filter(Boolean)));
         const objectPath = `uploads/${filename}`;
-        const file = bucket.file(objectPath);
-        const [exists] = await file.exists();
-        if (exists) {
-          const { url } = await ensureFirebaseAltMediaTokenUrl(file, bucket.name, objectPath);
-          return res.redirect(302, url);
+        for (const bName of candidates) {
+          try {
+            const bucket = bName ? storage.bucket(bName) : storage.bucket();
+            const file = bucket.file(objectPath);
+            const [exists] = await file.exists();
+            if (exists) {
+              const { url } = await ensureFirebaseAltMediaTokenUrl(file, bucket.name, objectPath);
+              return res.redirect(302, url);
+            }
+          } catch {}
         }
       } catch {}
     }
