@@ -30,6 +30,24 @@ const fixMediaUrl = (u?: string): string => {
   }
 };
 
+const formatRelativeTime = (input?: string | null): string => {
+  try {
+    if (!input) return '';
+    const d = new Date(input);
+    if (isNaN(d.getTime())) return '';
+    const diff = Date.now() - d.getTime();
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return 'Just now';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h`;
+    const dys = Math.floor(h / 24);
+    if (dys < 7) return `${dys}d`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' } as any);
+  } catch { return ''; }
+};
+
 interface StoryViewerProps {
   stories: Story[];
   startIndex?: number;
@@ -58,12 +76,17 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, startIndex = 
   const swipedRef = React.useRef<boolean>(false);
   const ignoreClickOnceRef = React.useRef<boolean>(false);
   const [showSoundTip, setShowSoundTip] = React.useState<boolean>(false);
+  const [imageLoaded, setImageLoaded] = React.useState<boolean>(true);
+  const lastProgressRef = React.useRef<number>(0);
+  const lastUpdateMsRef = React.useRef<number>(0);
 
   const isVideo = stories[index]?.media?.type === 'video';
 
   React.useEffect(() => {
     // Reset progress when story set or index changes forward
     setProgress((prev) => prev.map((p, i) => (i < index ? 100 : i === index ? 0 : 0)));
+    lastProgressRef.current = 0;
+    lastUpdateMsRef.current = 0;
   }, [index, stories]);
 
   React.useEffect(() => {
@@ -78,13 +101,14 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, startIndex = 
       const imgDuration = 5000; // 5s for images
       let pct = 0;
       if (isVid) {
-        const v = videoRef.current;
-        const dur = Math.max(5, Math.min(30, videoDurations[index] || (v?.duration || 0))) * 1000;
-        const t = (v?.currentTime || 0) * 1000;
-        pct = dur > 0 ? (t / dur) * 100 : 0;
-        if (v && v.ended) pct = 100;
+        // For videos, rely on onTimeUpdate to update progress; avoid per-frame state updates
+        return;
       } else {
         // Approximate using time
+        if (!imageLoaded) {
+          rafRef.current = requestAnimationFrame(step);
+          return;
+        }
         setProgress((prev) => {
           const arr = prev.slice();
           const next = clamp(arr[index] + (100 / (imgDuration / 50)), 0, 100);
@@ -103,12 +127,33 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, startIndex = 
     };
     rafRef.current = requestAnimationFrame(step);
     return () => { if (rafRef.current != null) cancelAnimationFrame(rafRef.current); };
-  }, [index, paused, videoDurations, stories]);
+  }, [index, paused, videoDurations, stories, imageLoaded]);
+
+  React.useEffect(() => {
+    const s = stories[index];
+    if (!s) return;
+    setImageLoaded(s.media.type === 'image' ? false : true);
+  }, [index, stories]);
+
+  React.useEffect(() => {
+    const preload = (i: number) => {
+      const s = stories[i];
+      if (!s || s.media.type !== 'image') return;
+      try {
+        const img = new Image();
+        img.decoding = 'async';
+        img.src = fixMediaUrl(s.media.url);
+      } catch {}
+    };
+    preload(index + 1);
+    preload(index - 1);
+  }, [index, stories]);
 
   React.useEffect(() => {
     if (!stories[index]) return;
     if (stories[index].media.type === 'video') {
       try {
+        if (videoRef.current) { try { videoRef.current.muted = false; videoRef.current.volume = 1; } catch {} }
         const p = videoRef.current?.play();
         if (p && typeof (p as any).catch === 'function') {
           (p as Promise<void>).catch(() => {
@@ -244,17 +289,27 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, startIndex = 
       </div>
 
       <div style={{ width: 'min(720px, 96vw)', height: 'min(92vh, 1280px)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 9999, background: 'rgba(255,255,255,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 600 }}>
+            {(current.author || '?').trim().charAt(0).toUpperCase()}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span style={{ color: 'white', fontWeight: 600, fontSize: 14 }}>
+              {(currentUserId && current.authorId && String(current.authorId) === String(currentUserId)) ? 'You' : (current.author || 'Unknown')}
+            </span>
+            <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>{formatRelativeTime(current.createdAt)}</span>
+          </div>
+        </div>
         {current.media.type === 'image' ? (
           <img
             src={fixMediaUrl(current.media.url)}
             alt="story"
-            style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12 }}
-            onError={(e) => { try { (e.currentTarget as HTMLImageElement).src = fixMediaUrl((e.currentTarget as HTMLImageElement).src); } catch {} }}
-            onLoad={() => {
-              // auto-advance after image duration
-              const timeout = setTimeout(() => goNext(), 5000);
-              return () => clearTimeout(timeout);
-            }}
+            decoding="async"
+            loading="eager"
+            fetchPriority="high"
+            style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, opacity: imageLoaded ? 1 : 0, transition: 'opacity 200ms ease' }}
+            onError={(e) => { try { (e.currentTarget as HTMLImageElement).src = fixMediaUrl((e.currentTarget as HTMLImageElement).src); } catch {} finally { setImageLoaded(true); } }}
+            onLoad={() => { setImageLoaded(true); window.setTimeout(() => goNext(), 5000); }}
           />
         ) : (
           <video
@@ -263,10 +318,36 @@ export const StoryViewer: React.FC<StoryViewerProps> = ({ stories, startIndex = 
             style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 12, background: 'black' }}
             playsInline
             autoPlay
-            onLoadedMetadata={() => { try { setVideoDurations((prev) => { const arr = prev.slice(); arr[index] = videoRef.current?.duration || 0; return arr; }); const p = videoRef.current?.play(); if (p && (p as any).catch) { (p as Promise<void>).catch(() => { const shown = localStorage.getItem('story_sound_tip_shown') === '1'; if (!shown) setShowSoundTip(true); }); } } catch {} }}
+            preload="auto"
+            muted={false}
+            onTimeUpdate={(e) => {
+              try {
+                const v = e.currentTarget as HTMLVideoElement;
+                const dur = v?.duration || videoDurations[index] || 0;
+                if (!dur || isNaN(dur) || !isFinite(dur)) return;
+                const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+                if (now - (lastUpdateMsRef.current || 0) < 120) return; // throttle ~8fps
+                lastUpdateMsRef.current = now;
+                const pct = clamp((v.currentTime / dur) * 100, 0, 100);
+                if (Math.abs(pct - (lastProgressRef.current || 0)) < 0.5) return;
+                lastProgressRef.current = pct;
+                setProgress((prev) => {
+                  const arr = prev.slice();
+                  arr[index] = pct;
+                  return arr;
+                });
+              } catch {}
+            }}
+            onLoadedMetadata={() => { try { setVideoDurations((prev) => { const arr = prev.slice(); arr[index] = videoRef.current?.duration || 0; return arr; }); if (videoRef.current) { try { videoRef.current.muted = false; videoRef.current.volume = 1; } catch {} } const p = videoRef.current?.play(); if (p && (p as any).catch) { (p as Promise<void>).catch(() => { const shown = localStorage.getItem('story_sound_tip_shown') === '1'; if (!shown) setShowSoundTip(true); }); } } catch {} }}
             onEnded={() => goNext()}
             onError={() => goNext()}
           />
+        )}
+
+        {current.media.type === 'image' && !imageLoaded && (
+          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: 28, height: 28, border: '3px solid rgba(255,255,255,0.35)', borderTopColor: 'white', borderRadius: 9999 }} />
+          </div>
         )}
 
         {/* Caption overlay */}

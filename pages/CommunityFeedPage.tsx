@@ -53,20 +53,9 @@ const CommunityFeedPage: React.FC = () => {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerStories, setViewerStories] = useState<Story[]>([]);
   const [viewerStartIndex, setViewerStartIndex] = useState(0);
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
-  
-
+  const preloadBinRef = useRef<HTMLDivElement | null>(null);
+  const prefetchRef = useRef<{ images: HTMLImageElement[]; videos: HTMLVideoElement[] }>({ images: [], videos: [] });
+  const didPreconnectRef = useRef<boolean>(false);
   
 
   
@@ -373,6 +362,90 @@ const CommunityFeedPage: React.FC = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // Preconnect to common storage domains used by story media
+  useEffect(() => {
+    if (didPreconnectRef.current) return;
+    try {
+      const head = document.head || document.getElementsByTagName('head')[0];
+      const urls = ['https://firebasestorage.googleapis.com', 'https://firebasestorage.app'];
+      for (const href of urls) {
+        if (!head.querySelector(`link[rel="preconnect"][href="${href}"]`)) {
+          const link = document.createElement('link');
+          link.rel = 'preconnect';
+          link.href = href;
+          link.crossOrigin = '';
+          head.appendChild(link);
+        }
+        if (!head.querySelector(`link[rel="dns-prefetch"][href="${href}"]`)) {
+          const dns = document.createElement('link');
+          dns.rel = 'dns-prefetch';
+          dns.href = href;
+          head.appendChild(dns);
+        }
+      }
+      didPreconnectRef.current = true;
+    } catch {}
+  }, []);
+
+  // Ensure an offscreen container exists for browser to actually prefetch <video> tags
+  useEffect(() => {
+    try {
+      let bin = document.getElementById('story-preload-bin') as HTMLDivElement | null;
+      if (!bin) {
+        bin = document.createElement('div');
+        bin.id = 'story-preload-bin';
+        bin.style.position = 'absolute';
+        bin.style.width = '0px';
+        bin.style.height = '0px';
+        bin.style.overflow = 'hidden';
+        bin.style.opacity = '0';
+        bin.style.pointerEvents = 'none';
+        document.body.appendChild(bin);
+      }
+      preloadBinRef.current = bin;
+    } catch {}
+  }, []);
+
+  // Background prefetch a limited number of story media assets to minimize delay when opening
+  useEffect(() => {
+    try {
+      const max = 12;
+      const items = stories.slice(0, max);
+
+      // cleanup previous
+      try {
+        prefetchRef.current.images.forEach((im) => { try { (im as any).src = ''; } catch {} });
+        prefetchRef.current.videos.forEach((v) => { try { v.pause(); v.removeAttribute('src'); v.load(); if (v.parentElement) v.parentElement.removeChild(v); } catch {} });
+      } catch {}
+      prefetchRef.current = { images: [], videos: [] };
+
+      for (const s of items) {
+        const u = fixMediaUrl(s.media?.url as any);
+        if (!u) continue;
+        if (s.media.type === 'image') {
+          try {
+            const img = new Image();
+            (img as any).decoding = 'async';
+            (img as any).loading = 'eager';
+            img.src = u;
+            prefetchRef.current.images.push(img);
+          } catch {}
+        } else {
+          try {
+            const v = document.createElement('video');
+            v.preload = 'auto';
+            (v as any).playsInline = true;
+            v.muted = true; // to satisfy autoplay policies for background preloading
+            v.src = u;
+            try { v.load(); } catch {}
+            if (preloadBinRef.current) preloadBinRef.current.appendChild(v);
+            prefetchRef.current.videos.push(v);
+          } catch {}
+        }
+      }
+    } catch {}
+  }, [stories]);
+
   const groups = React.useMemo(() => {
     const map = new Map<string, { author: string; authorId?: string; stories: Story[]; latestTs: number }>();
     for (const s of stories) {
@@ -383,19 +456,61 @@ const CommunityFeedPage: React.FC = () => {
         entry.stories.push(s);
         if (ts > entry.latestTs) entry.latestTs = ts;
       } else {
-        map.set(key, { author: s.author, authorId: s.authorId, stories: [s], latestTs: ts });
+        const displayName = (() => {
+          try {
+            const list = users || [];
+            if (s.authorId) {
+              const u = list.find((u) => u.id === s.authorId);
+              if (u && (u as any).name) return (u as any).name as string;
+            }
+          } catch {}
+          const raw = s.author || '';
+          const isGeneric = /^member$/i.test(raw) || /^user$/i.test(raw);
+          return !isGeneric && raw ? raw : 'Unknown';
+        })();
+        map.set(key, { author: displayName, authorId: s.authorId, stories: [s], latestTs: ts });
       }
     }
     const arr = Array.from(map.values());
     arr.forEach((g) => g.stories.sort((a, b) => (new Date(b.createdAt).getTime()) - (new Date(a.createdAt).getTime())));
-    arr.sort((a, b) => b.latestTs - a.latestTs);
+    const myId = user?.id;
+    const myName = user?.name;
+    arr.sort((a, b) => {
+      const aMine = (myId ? a.authorId === myId : false) || (myName ? a.author === myName : false);
+      const bMine = (myId ? b.authorId === myId : false) || (myName ? b.author === myName : false);
+      if (aMine && !bMine) return -1;
+      if (!aMine && bMine) return 1;
+      return b.latestTs - a.latestTs;
+    });
+    if (myId || myName) {
+      arr.forEach((g) => {
+        const mine = (myId ? g.authorId === myId : false) || (myName ? g.author === myName : false);
+        if (mine) g.author = 'You';
+      });
+    }
     return arr;
-  }, [stories]);
+  }, [stories, users]);
 
   const openGroup = (author: string, authorId?: string) => {
     const list = stories.filter((s) => (authorId ? s.authorId === authorId : s.author === author));
     if (list.length === 0) return;
-    setViewerStories(list);
+    const resolved = list.map((s) => {
+      const displayName = (() => {
+        try {
+          const listUsers = users || [];
+          if (s.authorId) {
+            const u = listUsers.find((u) => u.id === s.authorId);
+            if (u && (u as any).name) return (u as any).name as string;
+          }
+        } catch {}
+        const raw = s.author || '';
+        const isGeneric = /^member$/i.test(raw) || /^user$/i.test(raw);
+        return !isGeneric && raw ? raw : 'Unknown';
+      })();
+      const finalName = (user?.id && s.authorId && s.authorId === user.id) ? 'You' : displayName;
+      return { ...s, author: finalName } as Story;
+    });
+    setViewerStories(resolved);
     setViewerStartIndex(0);
     setViewerOpen(true);
   };
