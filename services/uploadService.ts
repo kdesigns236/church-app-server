@@ -34,7 +34,8 @@ class UploadService {
           const clearT: any = (globalThis as any)?.clearTimeout ? (globalThis as any).clearTimeout.bind(globalThis) : clearTimeout;
 
           const xhr = new XMLHttpRequest();
-          const url = `${this.apiUrl}/upload`;
+          const q = token ? `?token=${encodeURIComponent(token)}` : '';
+          const url = `${this.apiUrl}/upload${q}`;
           let settled = false;
           let lastLoaded = 0;
           let stallTimer: any = null;
@@ -129,7 +130,8 @@ class UploadService {
       }
 
       // Fallback to fetch (no progress events)
-      const response = await fetch(`${this.apiUrl}/upload`, {
+      const qs = token ? `?token=${encodeURIComponent(token)}` : '';
+      const response = await fetch(`${this.apiUrl}/upload${qs}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

@@ -10,15 +10,16 @@ import { getAuth, signInAnonymously } from 'firebase/auth';
 
 const envObj: any = (import.meta as any)?.env || {};
 const projectId = envObj?.VITE_FIREBASE_PROJECT_ID || 'church-app-35f50';
-const rawBucket = envObj?.VITE_FIREBASE_STORAGE_BUCKET || `${projectId}.firebasestorage.app`;
+// Firebase Storage bucket canonical name must be <projectId>.appspot.com
+const rawBucket = envObj?.VITE_FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
 const coerceBucket = (pid: string, candidate: string) => {
   const c = String(candidate || '').trim();
-  if (!c) return `${pid}.firebasestorage.app`;
+  if (!c) return `${pid}.appspot.com`;
   if (c.startsWith('gs://')) return c.replace(/^gs:\/\//, '');
-  if (c.endsWith('.firebasestorage.app')) return c;
-  if (c.endsWith('.appspot.com')) return c.replace(/\.appspot\.com$/i, '.firebasestorage.app');
-  if (c.includes('storage.googleapis.com')) return `${pid}.firebasestorage.app`;
-  return `${pid}.firebasestorage.app`;
+  if (c.endsWith('.appspot.com')) return c;
+  if (c.endsWith('.firebasestorage.app')) return c.replace(/\.firebasestorage\.app$/i, '.appspot.com');
+  if (c.includes('storage.googleapis.com')) return `${pid}.appspot.com`;
+  return `${pid}.appspot.com`;
 };
 const storageBucket = coerceBucket(projectId, rawBucket);
 const firebaseConfig = {

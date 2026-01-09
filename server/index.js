@@ -605,17 +605,19 @@ app.get('/uploads-proxy/:filename', async (req, res) => {
           (storage.bucket() && storage.bucket().name) || '',
           ...getFirebaseBucketCandidates(envBucket, projectId).map((b) => String(b).replace(/\.firebasestorage\.app$/i, '.appspot.com')),
         ].filter(Boolean)));
-        const objectPath = `uploads/${filename}`;
+        const objectPaths = [`uploads/${filename}`, `${filename}`];
         for (const bName of candidates) {
-          try {
-            const bucket = bName ? storage.bucket(bName) : storage.bucket();
-            const file = bucket.file(objectPath);
-            const [exists] = await file.exists();
-            if (exists) {
-              const { url } = await ensureFirebaseAltMediaTokenUrl(file, bucket.name, objectPath);
-              return res.redirect(302, url);
-            }
-          } catch {}
+          for (const objectPath of objectPaths) {
+            try {
+              const bucket = bName ? storage.bucket(bName) : storage.bucket();
+              const file = bucket.file(objectPath);
+              const [exists] = await file.exists();
+              if (exists) {
+                const { url } = await ensureFirebaseAltMediaTokenUrl(file, bucket.name, objectPath);
+                return res.redirect(302, url);
+              }
+            } catch {}
+          }
         }
       } catch {}
     }
