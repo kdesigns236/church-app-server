@@ -473,7 +473,7 @@ const CommunityFeedPage: React.FC = () => {
   }, [stories]);
 
   const groups = React.useMemo(() => {
-    const map = new Map<string, { author: string; authorId?: string; stories: Story[]; latestTs: number }>();
+    const map = new Map<string, { author: string; authorId?: string; rawAuthor: string; stories: Story[]; latestTs: number }>();
     for (const s of stories) {
       const key = s.authorId ? `id:${s.authorId}` : `name:${s.author}`;
       const entry = map.get(key);
@@ -494,7 +494,7 @@ const CommunityFeedPage: React.FC = () => {
           const isGeneric = /^member$/i.test(raw) || /^user$/i.test(raw);
           return !isGeneric && raw ? raw : 'Unknown';
         })();
-        map.set(key, { author: displayName, authorId: s.authorId, stories: [s], latestTs: ts });
+        map.set(key, { author: displayName, authorId: s.authorId, rawAuthor: (s.author || ''), stories: [s], latestTs: ts });
       }
     }
     const arr = Array.from(map.values());
@@ -517,8 +517,9 @@ const CommunityFeedPage: React.FC = () => {
     return arr;
   }, [stories, users]);
 
-  const openGroup = (author: string, authorId?: string) => {
-    const list = stories.filter((s) => (authorId ? s.authorId === authorId : s.author === author));
+  const openGroup = (author: string, authorId?: string, rawAuthor?: string) => {
+    const matchName = (rawAuthor && rawAuthor.trim()) || author;
+    const list = stories.filter((s) => (authorId ? s.authorId === authorId : s.author === matchName));
     if (list.length === 0) return;
     const resolved = list.map((s) => {
       const displayName = (() => {
@@ -709,8 +710,8 @@ const CommunityFeedPage: React.FC = () => {
             )}
 
             {groups.map((g) => (
-              <div key={(g.authorId || g.author)} style={{ flex: '0 0 auto', width: 96 }}>
-                <button onClick={() => openGroup(g.author, g.authorId)} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+              <div key={(g.authorId ? `id:${g.authorId}` : `name:${g.rawAuthor}`)} style={{ flex: '0 0 auto', width: 96 }}>
+                <button onClick={() => openGroup(g.author, g.authorId, g.rawAuthor)} style={{ width: '100%', background: 'transparent', border: 'none', cursor: 'pointer' }}>
                   <div style={{ position: 'relative', width: 84, height: 84, margin: '0 auto' }}>
                     <div style={{ position: 'absolute', inset: -3, borderRadius: '50%', background: 'linear-gradient(45deg, #f59e0b, #3b82f6)' }} />
                     <div style={{ position: 'relative', width: 84, height: 84, borderRadius: '50%', background: isDark ? '#111827' : 'white', padding: 3 }}>

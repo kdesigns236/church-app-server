@@ -185,32 +185,31 @@ const CreatePostPage: React.FC = () => {
         updatePost(updated as any);
       } catch {}
     } else {
-      const optimisticMedia = mediaSnapshot ? { url: mediaSnapshot.url, type: mediaSnapshot.type } : undefined;
-      const created = createPost(trimmed, user, optimisticMedia);
-      if (created && mediaSnapshot) {
-        uploadSelectedMedia('post', mediaSnapshot)
-          .then((uploadedMedia) => {
-            if (!uploadedMedia) {
-              try { window.alert('Media upload failed. Please try again.'); } catch {}
-              return;
-            }
-            try {
-              updatePost({ ...(created as any), media: uploadedMedia } as any);
-            } catch {}
-            try {
-              if (typeof mediaSnapshot.url === 'string' && mediaSnapshot.url.startsWith('blob:')) {
-                URL.revokeObjectURL(mediaSnapshot.url);
-                if (prevObjectUrlRef.current === mediaSnapshot.url) {
-                  prevObjectUrlRef.current = null;
-                }
-              }
-            } catch {}
-          })
-          .catch((e) => {
-            try { console.error('[CreatePost] Post media upload failed', e); } catch {}
+      let finalMedia: { url: string; type: 'image' | 'video' } | undefined = undefined;
+      if (mediaSnapshot) {
+        try {
+          const uploaded = await uploadSelectedMedia('post', mediaSnapshot);
+          if (!uploaded) {
             try { window.alert('Media upload failed. Please try again.'); } catch {}
-          });
+            return;
+          }
+          finalMedia = uploaded;
+        } catch (e) {
+          try { console.error('[CreatePost] Post media upload failed', e); } catch {}
+          try { window.alert('Media upload failed. Please try again.'); } catch {}
+          return;
+        }
       }
+      const created = createPost(trimmed, user, finalMedia);
+      if (!created) return;
+      try {
+        if (mediaSnapshot && typeof mediaSnapshot.url === 'string' && mediaSnapshot.url.startsWith('blob:')) {
+          URL.revokeObjectURL(mediaSnapshot.url);
+          if (prevObjectUrlRef.current === mediaSnapshot.url) {
+            prevObjectUrlRef.current = null;
+          }
+        }
+      } catch {}
     }
 
     setPostContent('');
