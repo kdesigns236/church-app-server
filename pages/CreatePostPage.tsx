@@ -6,7 +6,7 @@ import { useAppContext } from '../context/AppContext';
  
 import { FiX, FiImage, FiVideo, FiSmile } from 'react-icons/fi';
 import { uploadService } from '../services/uploadService';
-import { uploadMediaToFirebase } from '../services/firebaseUploadService';
+import { uploadMediaToFirebase, uploadToBackendChunked } from '../services/firebaseUploadService';
  
 
 const CreatePostPage: React.FC = () => {
@@ -105,6 +105,13 @@ const CreatePostPage: React.FC = () => {
         } catch (e) {
           try { console.error('[CreatePost] Server media upload failed', e); } catch {}
         }
+        // Final fallback: chunked upload (more robust on flaky mobile networks)
+        try {
+          const remoteUrl = await uploadToBackendChunked(media.file);
+          return { url: remoteUrl, type: media.type };
+        } catch (e) {
+          try { console.error('[CreatePost] Chunked media upload failed', e); } catch {}
+        }
         return undefined;
       }
       if (typeof media.url === 'string' && media.url.startsWith('data:')) {
@@ -126,6 +133,13 @@ const CreatePostPage: React.FC = () => {
           return { url: remoteUrl, type: media.type };
         } catch (e) {
           try { console.error('[CreatePost] Server media upload failed (data url)', e); } catch {}
+        }
+        // Final fallback: chunked upload (more robust on flaky mobile networks)
+        try {
+          const remoteUrl = await uploadToBackendChunked(file);
+          return { url: remoteUrl, type: media.type };
+        } catch (e) {
+          try { console.error('[CreatePost] Chunked media upload failed (data url)', e); } catch {}
         }
         return undefined;
       } else {

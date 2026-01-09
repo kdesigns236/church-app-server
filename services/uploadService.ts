@@ -62,8 +62,35 @@ class UploadService {
           try { if (onProgress) onProgress(0); } catch {}
 
           xhr.open('POST', url, true);
-          try { xhr.setRequestHeader('Authorization', `Bearer ${token}`); } catch {}
           try { xhr.responseType = 'json'; } catch {}
+
+          // Fallback via fetch without custom headers to avoid preflight issues on some mobile webviews
+          const tryFetchFallback = async (): Promise<boolean> => {
+            try {
+              // First try absolute API URL we were targeting
+              let res = await fetch(url, { method: 'POST', body: formData, mode: 'cors' as RequestMode });
+              if (res && res.ok) {
+                const data: any = await res.json().catch(() => null);
+                const u = data?.url;
+                if (u) { try { if (onProgress) onProgress(100); } catch {} resolve(String(u)); return true; }
+              }
+              // If app origin differs, try same-origin /api as a last resort
+              try {
+                const { origin } = window.location as any;
+                const abs = new URL(url);
+                if (origin && abs.origin !== origin) {
+                  const rel = `${origin}/api/upload${q}`;
+                  res = await fetch(rel, { method: 'POST', body: formData, mode: 'cors' as RequestMode });
+                  if (res && res.ok) {
+                    const data: any = await res.json().catch(() => null);
+                    const u = data?.url;
+                    if (u) { try { if (onProgress) onProgress(100); } catch {} resolve(String(u)); return true; }
+                  }
+                }
+              } catch {}
+            } catch {}
+            return false;
+          };
 
           xhr.upload.onprogress = (evt) => {
             try {
@@ -81,17 +108,25 @@ class UploadService {
           };
 
           xhr.onerror = () => {
-            clearStall();
-            if (settled) return;
-            settled = true;
-            reject(new Error('Upload failed'));
+            (async () => {
+              clearStall();
+              if (settled) return;
+              const ok = await tryFetchFallback();
+              if (ok) { settled = true; return; }
+              settled = true;
+              reject(new Error('Upload failed'));
+            })();
           };
 
           xhr.onabort = () => {
-            clearStall();
-            if (settled) return;
-            settled = true;
-            reject(new Error('Upload aborted'));
+            (async () => {
+              clearStall();
+              if (settled) return;
+              const ok = await tryFetchFallback();
+              if (ok) { settled = true; return; }
+              settled = true;
+              reject(new Error('Upload aborted'));
+            })();
           };
 
           xhr.onload = () => {
@@ -104,9 +139,13 @@ class UploadService {
                 try { return JSON.parse(xhr.responseText || '{}'); } catch { return null; }
               })();
               if (!ok) {
-                const msg = (data && (data.error || data.message)) || `Upload failed (${status})`;
-                settled = true;
-                reject(new Error(msg));
+                (async () => {
+                  const fetched = await tryFetchFallback();
+                  if (fetched) { settled = true; return; }
+                  const msg = (data && (data.error || data.message)) || `Upload failed (${status})`;
+                  settled = true;
+                  reject(new Error(msg));
+                })();
                 return;
               }
               if (!data || !data.success || !data.url) {
@@ -133,9 +172,7 @@ class UploadService {
       const qs = token ? `?token=${encodeURIComponent(token)}` : '';
       const response = await fetch(`${this.apiUrl}/upload${qs}`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
+        // Avoid custom headers to prevent preflight issues on some mobile webviews
         body: formData
       });
 
